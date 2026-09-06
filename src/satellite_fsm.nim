@@ -1,0 +1,2 @@
+import nim_esphome_satellite
+export nim_esphome_satellite

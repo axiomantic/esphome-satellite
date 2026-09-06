@@ -1,0 +1,9 @@
+nimcache/
+.cache/
+*.exe
+*.out
+*.o
+*.obj
+tests/test_fsm
+.DS_Store
+Thumbs.db
