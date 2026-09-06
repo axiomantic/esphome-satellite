@@ -324,6 +324,50 @@ var
   ctxUpdating: Updating
   mediaWasPlaying: bool = false
   micWasMuted: bool = false
+  configuredProcessingStyle* = psSpinner
+  configuredProcessingVolume* = 75.0'f32
+  wakeChimeEnabled* = true
+  wakeChimeVolume* = 80.0'f32
+  satellitePipeline* = newSatellitePipeline()
+
+esphomeControls:
+  select[ProcessingSoundStyle]("processing_sound"):
+    name = "Processing Sound"
+    default = psSpinner
+    persist = true
+    onSelect(style):
+      configuredProcessingStyle = style
+      satellitePipeline.processingLoop.style = style
+
+  number("processing_sound_volume"):
+    name = "Processing Sound Volume"
+    min = 0.0
+    max = 100.0
+    step = 5.0
+    default = 75.0
+    persist = true
+    onChange(vol):
+      configuredProcessingVolume = vol
+      satellitePipeline.processingLoop.volume = vol / 100.0
+
+  number("wake_chime_volume"):
+    name = "Wake Chime Volume"
+    min = 0.0
+    max = 100.0
+    step = 5.0
+    default = 80.0
+    persist = true
+    onChange(vol):
+      wakeChimeVolume = vol
+      satellitePipeline.wakeChimeVolume = vol / 100.0
+
+  switch("wake_chime"):
+    name = "Wake Chime"
+    default = true
+    persist = true
+    onToggle(enabled):
+      wakeChimeEnabled = enabled
+      satellitePipeline.wakeChimeEnabled = enabled
 
 proc returnFromVoiceFlow() =
   if mediaWasPlaying:
@@ -370,6 +414,7 @@ proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
   if currentState == rsListening:
     ctxThinking = onSpeechEnded(ctxListening)
     currentState = rsThinking
+    satellitePipeline.startProcessingLoop(configuredProcessingStyle)
 
 proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
   if currentState == rsListening:
@@ -381,6 +426,7 @@ proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
     returnFromVoiceFlow()
 
 proc nim_satellite_tts_start*() {.exportc, cdecl.} =
+  satellitePipeline.stopProcessingLoop()
   if currentState == rsThinking:
     ctxReplying = onTtsStarted(ctxThinking)
     currentState = rsReplying
@@ -399,6 +445,7 @@ proc nim_satellite_follow_up*() {.exportc, cdecl.} =
     currentState = rsListening
 
 proc nim_satellite_stop_word*() {.exportc, cdecl.} =
+  satellitePipeline.stopProcessingLoop()
   case currentState
   of rsListening:
     ctxIdle = onStopDuringListening(ctxListening)
@@ -557,5 +604,17 @@ proc nim_satellite_is_media_playing*(): bool {.exportc, cdecl.} =
 proc nim_satellite_is_alerting*(): bool {.exportc, cdecl.} =
   result = (currentState == rsAlerting)
 
+proc nim_satellite_is_processing*(): bool {.exportc, cdecl.} =
+  satellitePipeline.isProcessing()
+
+proc nim_satellite_get_processing_style*(): cint {.exportc, cdecl.} =
+  cint(ord(configuredProcessingStyle))
+
 esphomeSetup:
   info("SatelliteFSM", "14-state verified voice satellite state machine initialized")
+  satellitePipeline.processingLoop.onTick = proc(style: ProcessingSoundStyle, vol: float32, count: int) =
+    debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
+
+esphomeLoop:
+  satellitePipeline.tick(millis())
+

@@ -1,4 +1,5 @@
 import unittest
+import nim_esphome
 import ../src/satellite_fsm
 
 suite "Satellite Typestate FSM - Happy Path & Invariants":
@@ -202,3 +203,37 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     check nim_satellite_get_state() == 13 # Updating
     nim_satellite_ota_end(true)
     check nim_satellite_get_state() == 0 # Idle
+
+  test "Processing sound loop and Home Assistant controls":
+    check nim_satellite_get_state() == 0
+    check not nim_satellite_is_processing()
+
+    # HA entity simulation
+    triggerSelectState("processing_sound", "Sonar")
+    check configuredProcessingStyle == psSonar
+
+    triggerNumberState("processing_sound_volume", 60.0'f32)
+    check configuredProcessingVolume == 60.0'f32
+
+    triggerSwitchState("wake_chime", false)
+    check wakeChimeEnabled == false
+
+    # Wake word and speech end
+    nim_satellite_wake_word("assistant", 90)
+    nim_satellite_chime_done(true)
+    check nim_satellite_get_state() == 2 # Listening
+    check not nim_satellite_is_processing()
+
+    # User stops speaking -> Thinking begins -> Processing loop starts
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 3 # Thinking
+    check nim_satellite_is_processing()
+
+    # TTS begins -> Replying begins -> Processing loop stops immediately
+    nim_satellite_tts_start()
+    check nim_satellite_get_state() == 4 # Replying
+    check not nim_satellite_is_processing()
+
+    nim_satellite_tts_end()
+    check nim_satellite_get_state() == 0 # Idle
+

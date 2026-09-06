@@ -5,6 +5,7 @@
 substitutions:
   name: "esphome-satellite"
   friendly_name: "Voice Satellite"
+  processing_sound_default: "Spinner"
 
 esphome:
   name: ${name}
@@ -94,3 +95,45 @@ voice_assistant:
   on_client_disconnected:
     - lambda: |-
         call_nim_disconnected();
+
+select:
+  - platform: template
+    id: processing_sound
+    name: "Processing Sound"
+    icon: "mdi:progress-clock"
+    optimistic: true
+    initial_option: ${processing_sound_default}
+    restore_value: true
+    options:
+      - "Silent"
+      - "Spinner"
+      - "Pulse"
+      - "Sonar"
+      - "Tick"
+
+number:
+  - platform: template
+    id: processing_sound_volume
+    name: "Processing Sound Volume"
+    icon: "mdi:volume-medium"
+    min_value: 0
+    max_value: 100
+    step: 5
+    optimistic: true
+
+  - platform: template
+    id: wake_chime_volume
+    name: "Wake Chime Volume"
+    icon: "mdi:volume-high"
+    min_value: 0
+    max_value: 100
+    step: 5
+    optimistic: true
+
+switch:
+  - platform: template
+    id: wake_chime
+    name: "Wake Chime"
+    icon: "mdi:bell-ring"
+    optimistic: true
+

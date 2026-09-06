@@ -1,0 +1,12 @@
+# =============================================================================
+# esphome-satellite: Silent Voice Satellite Profile
+# Seeed ReSpeaker XVF3800 configured with processing sound disabled (Silent / no-op).
+# =============================================================================
+
+substitutions:
+  name: "satellite-silent"
+  friendly_name: "Silent Voice Satellite"
+  processing_sound_default: "Silent"
+
+packages:
+  base: !include respeaker_xvf3800.yaml

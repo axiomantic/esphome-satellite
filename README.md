@@ -307,18 +307,53 @@ ota:
           call_nim_ota_start();
 ```
 
-### Step 4: (Alternative) Using the Drop-in Package
+### Step 4: Drop-in Hardware Profiles
 
-Instead of manually configuring hooks, import the pre-configured package directly into your ESPHome configuration:
+`esphome-satellite` provides ready-to-flash package profiles for supported hardware:
+
+| Profile Package | Target Hardware | Default Audio Feedback | Use Case |
+|---|---|---|---|
+| [`packages/respeaker_xvf3800_twain.yaml`](packages/respeaker_xvf3800_twain.yaml) | Seeed ReSpeaker XVF3800 | **Spinner** (Active loop enabled) | Continuous audio spinner feedback during cloud STT/LLM inference. |
+| [`packages/respeaker_xvf3800_silent.yaml`](packages/respeaker_xvf3800_silent.yaml) | Seeed ReSpeaker XVF3800 | **Silent** (No-op) | Discreet satellite operation with no intermediate processing audio. |
+| [`packages/respeaker_xvf3800.yaml`](packages/respeaker_xvf3800.yaml) | Seeed ReSpeaker XVF3800 | Base Template | Base configuration component for custom inheritance. |
+
+Import the package directly into your ESPHome configuration:
 
 ```yaml
 packages:
   satellite:
     url: https://github.com/axiomantic/esphome-satellite
     ref: main
-    files: [packages/respeaker_xvf3800.yaml]
+    files: [packages/respeaker_xvf3800_twain.yaml]
     refresh: 1d
 ```
+
+---
+
+## Audio Feedback & Processing Sound Loop
+
+When a user finishes speaking, voice assistants often experience variable cloud latencies (1-5 seconds) while Speech-to-Text (STT) and Large Language Models (LLM) synthesize a response. Without feedback, users wonder if their command was received.
+
+`esphome-satellite` implements a non-blocking, zero-allocation audio processing loop:
+
+- **Automatic Start**: When VAD detects speech has finished (`onSpeechEnded`), the processing loop immediately starts playing continuous cadence ticks or chimes.
+- **Immediate Interruption**: As soon as the first TTS audio packet arrives (`onTtsStarted`), or if a stop word/error occurs, the loop stops immediately with zero tail latency.
+- **Configurable Styles**: Select from multiple sound designs (`Silent`, `Spinner`, `Pulse`, `Sonar`, `Tick`) directly from Home Assistant.
+
+---
+
+## Home Assistant Surface Controls & Entities
+
+`esphome-satellite` exposes native Home Assistant entities generated via `nim-esphome`'s declarative controls DSL, enabling runtime configuration from your dashboards without reflashing:
+
+| Entity ID | Domain | Type / Range | Description |
+|---|---|---|---|
+| `select.processing_sound` | `select` | `Silent`, `Spinner`, `Pulse`, `Sonar`, `Tick` | Audio loop style played while the server processes the command. |
+| `number.processing_sound_volume` | `number` | `0` – `100%` (step `5%`) | Volume level for the intermediate processing loop audio. |
+| `switch.wake_chime` | `switch` | `on` / `off` | Toggles whether the satellite plays an acknowledgement chime on wake word. |
+| `number.wake_chime_volume` | `number` | `0` – `100%` (step `5%`) | Volume level for the wake acknowledgement chime. |
+
+All control settings are saved to on-device NVS flash memory and persist across power cycles.
 
 ---
 
