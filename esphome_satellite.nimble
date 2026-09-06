@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.0"
+version       = "0.3.0"
 author        = "Elijah Rust"
 description   = "A robust on-device state supervisor for ESPHome voice satellites that eliminates audio glitches, race conditions, and stuck states"
 license       = "MIT"
@@ -9,7 +9,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.2.8"
-requires "nim_esphome >= 0.2.0"
+requires "nim_esphome >= 0.3.0"
 requires "typestates >= 0.12.0"
 
 task test, "Run satellite typestate invariant tests":
