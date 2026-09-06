@@ -6,6 +6,8 @@ on:
     paths:
       - "web/**"
       - "packages/**"
+      - "src/**"
+      - "scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -20,9 +22,31 @@ concurrency:
 jobs:
   deploy-installer:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Install Nim (latest)
+        uses: asdf-vm/actions/install@v4
+        with:
+          tool_versions: |
+            nim 2.2.10
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ESPHome
+        run: pip install esphome
+
+      - name: Build Factory Binary
+        run: |
+          chmod +x scripts/build_factory_binary.sh
+          ./scripts/build_factory_binary.sh
 
       - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
@@ -31,5 +55,4 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        continue-on-error: true
         uses: actions/deploy-pages@v4
