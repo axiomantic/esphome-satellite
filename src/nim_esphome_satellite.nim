@@ -377,11 +377,12 @@ proc parseSoundStyle*(s: string): ProcessingSoundStyle =
   of "pulse": psPulse
   of "sonar": psSonar
   of "tick": psTick
+  of "custom": psCustom
   else: psSilent
 
 haAction("test_audio_feedback"):
   def.description = "Preview voice satellite sound style or chime from Home Assistant"
-  param "style", pkString, defaultVal = "Spinner", description = "Sound style: Spinner, Pulse, Sonar, Tick, Silent"
+  param "style", pkString, defaultVal = "Spinner", description = "Sound style: Spinner, Pulse, Sonar, Tick, Custom, Silent"
   param "volume", pkFloat, min = 0.0, max = 100.0, defaultVal = "75.0", description = "Playback volume percentage (0-100)"
   onExecute(ctx):
     let styleStr = ctx.getString("style", "Spinner")
@@ -665,7 +666,10 @@ proc nim_satellite_get_processing_style*(): cint {.exportc, cdecl.} =
 esphomeSetup:
   info("SatelliteFSM", "14-state verified voice satellite state machine initialized")
   satellitePipeline.processingLoop.onTick = proc(style: ProcessingSoundStyle, vol: float32, count: int) =
-    debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
+    if style == psCustom:
+      debug("SatelliteAudio", "Streaming custom audio sample from flash partition sound_data (count=" & $count & ")")
+    else:
+      debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
 
 esphomeLoop:
   satellitePipeline.tick(millis())

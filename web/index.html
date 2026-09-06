@@ -4,90 +4,98 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>esphome-satellite Web Installer</title>
-  <script
-    type="module"
-    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
-  ></script>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-      box-sizing: border-box;
-      text-align: center;
-    }
-    .card {
-      background: #1e293b;
-      padding: 40px;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
-      max-width: 540px;
-      width: 100%;
-    }
-    h1 { margin-top: 0; font-size: 1.8rem; color: #60a5fa; }
-    p { color: #94a3b8; line-height: 1.6; }
-    .instructions {
-      text-align: left;
-      background: #0f172a;
-      padding: 16px 20px;
-      border-radius: 8px;
-      margin: 20px 0;
-      font-size: 0.95rem;
-      color: #cbd5e1;
-    }
-    .instructions ol { margin: 0; padding-left: 20px; }
-    .instructions li { margin-bottom: 8px; }
-    .footer { margin-top: 24px; font-size: 0.85rem; color: #64748b; }
-    a { color: #38bdf8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    button.install-btn {
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 14px 28px;
-      font-size: 1.1rem;
-      font-weight: 600;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-    button.install-btn:hover {
-      background: #1d4ed8;
-    }
+    :root { --primary: #3b82f6; --primary-hover: #2563eb; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; --border: #334155; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; margin: 0; padding: 24px; display: flex; align-items: center; justify-content: center; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 36px; max-width: 580px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    h1 { margin-top: 0; font-size: 1.8rem; color: var(--primary); }
+    p.desc { color: var(--muted); line-height: 1.5; margin-bottom: 24px; }
+    .form-group { text-align: left; margin-bottom: 20px; background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
+    label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.95rem; }
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    input[type='file'], select, input[type='text'], input[type='number'] { width: 100%; box-sizing: border-box; padding: 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
+    .file-status { margin-top: 8px; font-size: 0.85rem; color: #34d399; display: none; }
+    .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.1rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
+    button.install-btn:hover { background: var(--primary-hover); }
+    .footer { margin-top: 24px; font-size: 0.8rem; color: var(--muted); text-align: center; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>esphome-satellite</h1>
-    <p>Rock-solid, glitch-free on-device state supervisor for ESPHome and Home Assistant voice satellites.</p>
-    
-    <div class="instructions">
-      <ol>
-        <li>Connect your voice satellite board (e.g. Seeed ReSpeaker XVF3800) via USB.</li>
-        <li>Click <strong>Install esphome-satellite</strong> below using Chrome, Edge, or an install-capable browser.</li>
-        <li>Select the serial port, follow the prompts, and configure your Wi-Fi.</li>
-        <li>Home Assistant will automatically discover your satellite!</li>
-      </ol>
+    <h1>esphome-satellite Web Installer</h1>
+    <p class="desc">Rock-solid on-device state supervisor for ESPHome and Home Assistant voice satellites with customizable audio feedback.</p>
+    <div class="fields-container">
+      <div class="form-group" data-field="custom_audio">
+        <label for="field_custom_audio">Custom Audio Feedback Loop (.wav)</label>
+        <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144">
+        <div class="file-status" id="status_custom_audio"></div>
+        <div class="hint">Optional PCM WAV audio loop flashed directly to safe flash partition (0x370000)</div>
+      </div>
+      <div class="form-group" data-field="default_sound_style">
+        <label for="field_default_sound_style">Default Processing Sound Style</label>
+        <select id="field_default_sound_style">
+          <option value="Spinner" selected>Spinner</option>
+          <option value="Pulse">Pulse</option>
+          <option value="Sonar">Sonar</option>
+          <option value="Tick">Tick</option>
+          <option value="Silent">Silent</option>
+          <option value="Custom">Custom</option>
+        </select>
+        <div class="hint">Acoustic feedback style played while assistant is processing speech</div>
+      </div>
     </div>
-
-    <esp-web-install-button manifest="manifest.json">
-      <button slot="activate" class="install-btn">
-        Install esphome-satellite
-      </button>
-      <span slot="unsupported">Your browser does not support WebSerial. Please use Google Chrome or Microsoft Edge on desktop.</span>
-      <span slot="not-allowed">WebSerial permission denied. Please allow serial access to flash.</span>
-    </esp-web-install-button>
-
-    <div class="footer">
-      Powered by <a href="https://github.com/axiomantic/nim-esphome" target="_blank">nim-esphome</a> &amp; <a href="https://esphome.github.io/esp-web-tools/" target="_blank">ESP-Web-Tools</a>
+    <div class="actions">
+      <esp-web-install-button id="installBtn" manifest="manifest.json">
+        <button slot="activate" class="install-btn">Install Firmware</button>
+        <span slot="unsupported">WebSerial is not supported in this browser. Please use Chrome or Edge on desktop.</span>
+      </esp-web-install-button>
     </div>
+    <div class="footer">Powered by <a href="https://github.com/axiomantic/nim-esphome" target="_blank" style="color: #60a5fa;">nim-esphome</a> &amp; ESP-Web-Tools</div>
   </div>
+  <script>
+    const BASE_MANIFEST = {
+      name: "esphome-satellite",
+      version: "0.2.0",
+      home_assistant_domain: "esphome",
+      new_install_prompt_erase: true,
+      builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
+    };
+    const installBtn = document.getElementById('installBtn');
+    const uploadedParts = new Map();
+
+    function updateDynamicManifest() {
+      const manifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
+      for (const [name, part] of uploadedParts.entries()) {
+        manifest.builds[0].parts.push({ path: part.url, offset: part.offset });
+      }
+      const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+      installBtn.manifest = URL.createObjectURL(blob);
+    }
+
+    const fileInput_custom_audio = document.getElementById('field_custom_audio');
+    const status_custom_audio = document.getElementById('status_custom_audio');
+    if (fileInput_custom_audio) {
+      fileInput_custom_audio.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) { uploadedParts.delete('custom_audio'); updateDynamicManifest(); return; }
+        const maxSizeBytes = parseInt(fileInput_custom_audio.dataset.maxsize || '262144', 10);
+        if (file.size > maxSizeBytes) {
+          alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
+          fileInput_custom_audio.value = '';
+          return;
+        }
+        const offset = parseInt(fileInput_custom_audio.dataset.offset || '0', 10);
+        const blobUrl = URL.createObjectURL(file);
+        uploadedParts.set('custom_audio', { url: blobUrl, offset: offset });
+        if (status_custom_audio) {
+          status_custom_audio.style.display = 'block';
+          status_custom_audio.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at 0x' + offset.toString(16).toUpperCase() + ')';
+        }
+        updateDynamicManifest();
+      });
+    }
+  </script>
 </body>
 </html>

@@ -257,4 +257,16 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     check not nim_satellite_is_muted()
     check nim_satellite_get_state() == 0 # Idle
 
+    # 3. Trigger test_audio_feedback with Custom
+    nim_action_test_audio("Custom", 90.0'f32)
+    check configuredProcessingStyle == psCustom
+    check nim_satellite_is_processing()
+    satellitePipeline.stopProcessingLoop()
+    check not nim_satellite_is_processing()
+
+    # 4. Trigger Select state with Custom
+    triggerSelectState("processing_sound", "Custom")
+    check configuredProcessingStyle == psCustom
+
+
 
