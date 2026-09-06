@@ -1,12 +1,20 @@
 ## Satellite Voice Assistant State Machine using nim-esphome + nim-typestates
 ##
-## Distinct Error States:
-## 1. SilentDismiss: Inaudible / silence (stt-no-text-recognized) or duplicate wakeup.
-##    Instant silent return to Idle without disturbing the user.
-## 2. PipelineError: STT, intent, or TTS stream processing failure.
-##    Plays brief error indicator and returns to Idle.
-## 3. ConnectionError: Home Assistant server offline or WiFi lost.
-##    Suppresses wake word detection until connection is restored.
+## Distinct States:
+## 1. Idle: Satellite awaiting wake word or background activity.
+## 2. Woken: Wake word detected, playing chime / ducking audio.
+## 3. Listening: Microphone capturing speech, VAD detecting speech boundary.
+## 4. Thinking: Speech ended, server processing intent / generating TTS.
+## 5. Replying: Server streaming TTS playback.
+## 6. SilentDismiss: Inaudible / silence (stt-no-text-recognized) or duplicate wakeup.
+## 7. PipelineError: STT, intent, or TTS stream processing failure.
+## 8. ConnectionError: Home Assistant server offline or WiFi lost.
+## 9. Muted: Hardware or software microphone privacy mute.
+## 10. FollowUp: Multi-turn continuous conversation mode.
+## 11. PlayingMedia: Background music / radio playback active with auto-ducking.
+## 12. Alerting: Kitchen timer or alarm buzzer ringing.
+## 13. Announcing: Unprompted server broadcast / intercom announcement.
+## 14. Updating: OTA firmware update in progress, DSP audio suppressed.
 
 import nim_esphome
 import typestates
@@ -16,6 +24,7 @@ type
     wakeWord*: string
     beamAngle*: int
     errorCode*: string
+    wasPlayingMedia*: bool
 
   Idle* = distinct SatelliteContext
   Woken* = distinct SatelliteContext
@@ -23,29 +32,53 @@ type
   Thinking* = distinct SatelliteContext
   Replying* = distinct SatelliteContext
 
-  # Distinct Error & Offline States
+  # Error & Offline States
   SilentDismiss* = distinct SatelliteContext
   PipelineError* = distinct SatelliteContext
   ConnectionError* = distinct SatelliteContext
 
+  # Extended Lifecycle States
+  Muted* = distinct SatelliteContext
+  FollowUp* = distinct SatelliteContext
+  PlayingMedia* = distinct SatelliteContext
+  Alerting* = distinct SatelliteContext
+  Announcing* = distinct SatelliteContext
+  Updating* = distinct SatelliteContext
+
 typestate SatelliteFSM:
   consumeOnTransition = false
-  states Idle, Woken, Listening, Thinking, Replying, SilentDismiss, PipelineError, ConnectionError
+  states Idle, Woken, Listening, Thinking, Replying, SilentDismiss, PipelineError, ConnectionError, Muted, FollowUp, PlayingMedia, Alerting, Announcing, Updating
   transitions:
-    Idle -> (Woken | ConnectionError) as IdleResult
-    Woken -> (Listening | SilentDismiss | ConnectionError) as ChimeResult
+    Idle -> (Woken | ConnectionError | Muted | PlayingMedia | Alerting | Announcing | Updating) as IdleResult
+    Woken -> (Listening | SilentDismiss | ConnectionError) as WokenResult
     Listening -> (Thinking | SilentDismiss | PipelineError | ConnectionError | Idle) as ListenResult
     Thinking -> (Replying | PipelineError | ConnectionError | Idle) as ThinkResult
-    Replying -> (Idle | PipelineError | ConnectionError) as ReplyResult
-    SilentDismiss -> Idle
-    PipelineError -> Idle
-    ConnectionError -> Idle
+    Replying -> (Idle | FollowUp | PipelineError | ConnectionError) as ReplyResult
+    FollowUp -> (Listening | Idle | ConnectionError) as FollowUpResult
+    SilentDismiss -> (Idle | PlayingMedia) as DismissResult
+    PipelineError -> (Idle | PlayingMedia) as PipeErrResult
+    ConnectionError -> (Idle | Muted | Updating) as ConnErrResult
+    Muted -> (Idle | ConnectionError | Updating) as MutedResult
+    PlayingMedia -> (Idle | Woken | Alerting | Announcing | ConnectionError | Updating) as MediaResult
+    Alerting -> (Idle | Woken | ConnectionError) as AlertResult
+    Announcing -> (Idle | ConnectionError) as AnnounceResult
+    Updating -> Idle
 
-# --- Transitions ---
+# --- Core Lifecycle Transitions ---
 
 proc onWakeWord*(s: Idle, word: string, angle: int): Woken {.transition.} =
-  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle)
+  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: false)
   info("SatelliteFSM", "State: IDLE -> WOKEN (wake_word: " & word & ")")
+  result = Woken(ctx)
+
+proc onWakeWordFromMedia*(s: PlayingMedia, word: string, angle: int): Woken {.transition.} =
+  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: true)
+  info("SatelliteFSM", "State: PLAYING_MEDIA -> WOKEN (ducking audio, wake_word: " & word & ")")
+  result = Woken(ctx)
+
+proc onWakeWordDuringAlert*(s: Alerting, word: string, angle: int): Woken {.transition.} =
+  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: false)
+  info("SatelliteFSM", "State: ALERTING -> WOKEN (dismissing alert, wake_word: " & word & ")")
   result = Woken(ctx)
 
 proc onChimeFinished*(s: Woken): Listening {.transition.} =
@@ -92,6 +125,18 @@ proc onTtsFinished*(s: Replying): Idle {.transition.} =
   info("SatelliteFSM", "State: REPLYING -> IDLE (TTS playback finished)")
   result = Idle(SatelliteContext())
 
+proc onFollowUpRequested*(s: Replying): FollowUp {.transition.} =
+  info("SatelliteFSM", "State: REPLYING -> FOLLOW_UP (continuous dialogue requested)")
+  result = FollowUp(SatelliteContext(s))
+
+proc onFollowUpReadyToListen*(s: FollowUp): Listening {.transition.} =
+  info("SatelliteFSM", "State: FOLLOW_UP -> LISTENING (mic open for follow-up)")
+  result = Listening(SatelliteContext(s))
+
+proc onFollowUpTimeout*(s: FollowUp): Idle {.transition.} =
+  info("SatelliteFSM", "State: FOLLOW_UP -> IDLE (dialogue timed out)")
+  result = Idle(SatelliteContext())
+
 proc onStopDuringReplying*(s: Replying): Idle {.transition.} =
   info("SatelliteFSM", "State: REPLYING -> IDLE (Stop command received during TTS)")
   result = Idle(SatelliteContext())
@@ -102,7 +147,78 @@ proc onPipelineErrorFromReplying*(s: Replying, err: string): PipelineError {.tra
   error("SatelliteFSM", "State: REPLYING -> PIPELINE_ERROR (" & err & ")")
   result = PipelineError(ctx)
 
-# Offline / Disconnect transitions
+# --- Privacy Mute Transitions ---
+
+proc onMute*(s: Idle): Muted {.transition.} =
+  warn("SatelliteFSM", "State: IDLE -> MUTED (mic muted)")
+  result = Muted(SatelliteContext(s))
+
+proc onUnmute*(s: Muted): Idle {.transition.} =
+  info("SatelliteFSM", "State: MUTED -> IDLE (mic unmuted)")
+  result = Idle(SatelliteContext(s))
+
+# --- Media Playback & Ducking Transitions ---
+
+proc onMediaPlay*(s: Idle): PlayingMedia {.transition.} =
+  info("SatelliteFSM", "State: IDLE -> PLAYING_MEDIA (media playback started)")
+  result = PlayingMedia(SatelliteContext(s))
+
+proc onMediaStop*(s: PlayingMedia): Idle {.transition.} =
+  info("SatelliteFSM", "State: PLAYING_MEDIA -> IDLE (media playback stopped)")
+  result = Idle(SatelliteContext(s))
+
+# --- Alerting / Timer Transitions ---
+
+proc onAlertStart*(s: Idle): Alerting {.transition.} =
+  warn("SatelliteFSM", "State: IDLE -> ALERTING (timer/alarm ringing)")
+  result = Alerting(SatelliteContext(s))
+
+proc onAlertFromMedia*(s: PlayingMedia): Alerting {.transition.} =
+  warn("SatelliteFSM", "State: PLAYING_MEDIA -> ALERTING (timer/alarm ringing)")
+  result = Alerting(SatelliteContext(s))
+
+proc onAlertDismiss*(s: Alerting): Idle {.transition.} =
+  info("SatelliteFSM", "State: ALERTING -> IDLE (alert dismissed)")
+  result = Idle(SatelliteContext(s))
+
+# --- Announcement / Intercom Transitions ---
+
+proc onAnnouncementStart*(s: Idle): Announcing {.transition.} =
+  info("SatelliteFSM", "State: IDLE -> ANNOUNCING (server broadcast started)")
+  result = Announcing(SatelliteContext(s))
+
+proc onAnnouncementFromMedia*(s: PlayingMedia): Announcing {.transition.} =
+  info("SatelliteFSM", "State: PLAYING_MEDIA -> ANNOUNCING (server broadcast started)")
+  result = Announcing(SatelliteContext(s))
+
+proc onAnnouncementEnd*(s: Announcing): Idle {.transition.} =
+  info("SatelliteFSM", "State: ANNOUNCING -> IDLE (broadcast finished)")
+  result = Idle(SatelliteContext(s))
+
+# --- OTA Update Transitions ---
+
+proc onOtaStart*(s: Idle): Updating {.transition.} =
+  warn("SatelliteFSM", "State: IDLE -> UPDATING (OTA flash in progress)")
+  result = Updating(SatelliteContext(s))
+
+proc onOtaFromMuted*(s: Muted): Updating {.transition.} =
+  warn("SatelliteFSM", "State: MUTED -> UPDATING (OTA flash in progress)")
+  result = Updating(SatelliteContext(s))
+
+proc onOtaFromMedia*(s: PlayingMedia): Updating {.transition.} =
+  warn("SatelliteFSM", "State: PLAYING_MEDIA -> UPDATING (OTA flash in progress)")
+  result = Updating(SatelliteContext(s))
+
+proc onOtaFromConnErr*(s: ConnectionError): Updating {.transition.} =
+  warn("SatelliteFSM", "State: CONNECTION_ERROR -> UPDATING (OTA flash in progress)")
+  result = Updating(SatelliteContext(s))
+
+proc onOtaComplete*(s: Updating): Idle {.transition.} =
+  info("SatelliteFSM", "State: UPDATING -> IDLE (OTA flash complete)")
+  result = Idle(SatelliteContext(s))
+
+# --- Offline / Disconnect Transitions ---
+
 proc onDisconnectFromIdle*(s: Idle): ConnectionError {.transition.} =
   warn("SatelliteFSM", "State: IDLE -> CONNECTION_ERROR (HA disconnected)")
   result = ConnectionError(SatelliteContext(s))
@@ -123,22 +239,56 @@ proc onDisconnectFromReplying*(s: Replying): ConnectionError {.transition.} =
   warn("SatelliteFSM", "State: REPLYING -> CONNECTION_ERROR (HA disconnected)")
   result = ConnectionError(SatelliteContext(s))
 
-# Recovery transitions
+proc onDisconnectFromFollowUp*(s: FollowUp): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: FOLLOW_UP -> CONNECTION_ERROR (HA disconnected)")
+  result = ConnectionError(SatelliteContext(s))
+
+proc onDisconnectFromMuted*(s: Muted): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: MUTED -> CONNECTION_ERROR (HA disconnected)")
+  result = ConnectionError(SatelliteContext(s))
+
+proc onDisconnectFromMedia*(s: PlayingMedia): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: PLAYING_MEDIA -> CONNECTION_ERROR (HA disconnected)")
+  result = ConnectionError(SatelliteContext(s))
+
+proc onDisconnectFromAlerting*(s: Alerting): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: ALERTING -> CONNECTION_ERROR (HA disconnected)")
+  result = ConnectionError(SatelliteContext(s))
+
+proc onDisconnectFromAnnouncing*(s: Announcing): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: ANNOUNCING -> CONNECTION_ERROR (HA disconnected)")
+  result = ConnectionError(SatelliteContext(s))
+
+# --- Recovery Transitions ---
+
 proc onDismiss*(s: SilentDismiss): Idle {.transition.} =
   info("SatelliteFSM", "State: SILENT_DISMISS -> IDLE (silent reset)")
   result = Idle(SatelliteContext())
+
+proc onDismissToMedia*(s: SilentDismiss): PlayingMedia {.transition.} =
+  info("SatelliteFSM", "State: SILENT_DISMISS -> PLAYING_MEDIA (restoring media audio)")
+  result = PlayingMedia(SatelliteContext())
 
 proc onResetPipelineError*(s: PipelineError): Idle {.transition.} =
   info("SatelliteFSM", "State: PIPELINE_ERROR -> IDLE (error cue finished)")
   result = Idle(SatelliteContext())
 
+proc onResetPipelineErrorToMedia*(s: PipelineError): PlayingMedia {.transition.} =
+  info("SatelliteFSM", "State: PIPELINE_ERROR -> PLAYING_MEDIA (restoring media audio)")
+  result = PlayingMedia(SatelliteContext())
+
 proc onConnected*(s: ConnectionError): Idle {.transition.} =
   info("SatelliteFSM", "State: CONNECTION_ERROR -> IDLE (HA reconnected)")
   result = Idle(SatelliteContext())
 
+proc onConnectedMuted*(s: ConnectionError): Muted {.transition.} =
+  info("SatelliteFSM", "State: CONNECTION_ERROR -> MUTED (HA reconnected, mic was muted)")
+  result = Muted(SatelliteContext())
+
 verifyTypestates()
 
 # --- Runtime C API Bridge for ESPHome ---
+
 type
   RuntimeState* = enum
     rsIdle = 0
@@ -149,6 +299,12 @@ type
     rsSilentDismiss = 5
     rsPipelineError = 6
     rsConnectionError = 7
+    rsMuted = 8
+    rsFollowUp = 9
+    rsPlayingMedia = 10
+    rsAlerting = 11
+    rsAnnouncing = 12
+    rsUpdating = 13
 
 var
   currentState: RuntimeState = rsIdle
@@ -160,10 +316,42 @@ var
   ctxDismiss: SilentDismiss
   ctxPipelineErr: PipelineError
   ctxConnErr: ConnectionError
+  ctxMuted: Muted
+  ctxFollowUp: FollowUp
+  ctxMedia: PlayingMedia
+  ctxAlerting: Alerting
+  ctxAnnouncing: Announcing
+  ctxUpdating: Updating
+  mediaWasPlaying: bool = false
+  micWasMuted: bool = false
+
+proc returnFromVoiceFlow() =
+  if mediaWasPlaying:
+    mediaWasPlaying = false
+    ctxMedia = onDismissToMedia(ctxDismiss)
+    currentState = rsPlayingMedia
+  else:
+    currentState = rsIdle
+
+proc returnFromPipelineError() =
+  if mediaWasPlaying:
+    mediaWasPlaying = false
+    ctxMedia = onResetPipelineErrorToMedia(ctxPipelineErr)
+    currentState = rsPlayingMedia
+  else:
+    currentState = rsIdle
 
 proc nim_satellite_wake_word*(word: cstring, angle: cint) {.exportc, cdecl.} =
-  if currentState == rsIdle:
+  case currentState
+  of rsIdle:
     ctxWoken = onWakeWord(ctxIdle, $word, int(angle))
+    currentState = rsWoken
+  of rsPlayingMedia:
+    mediaWasPlaying = true
+    ctxWoken = onWakeWordFromMedia(ctxMedia, $word, int(angle))
+    currentState = rsWoken
+  of rsAlerting:
+    ctxWoken = onWakeWordDuringAlert(ctxAlerting, $word, int(angle))
     currentState = rsWoken
   else:
     warn("SatelliteFSM", "Wake word ignored: satellite in state " & $currentState)
@@ -176,7 +364,7 @@ proc nim_satellite_chime_done*(ok: bool) {.exportc, cdecl.} =
     else:
       ctxDismiss = onChimeFailed(ctxWoken)
       ctxIdle = onDismiss(ctxDismiss)
-      currentState = rsIdle
+      returnFromVoiceFlow()
 
 proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
   if currentState == rsListening:
@@ -187,7 +375,10 @@ proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
   if currentState == rsListening:
     ctxDismiss = onSilenceTimeout(ctxListening)
     ctxIdle = onDismiss(ctxDismiss)
-    currentState = rsIdle
+    returnFromVoiceFlow()
+  elif currentState == rsFollowUp:
+    ctxIdle = onFollowUpTimeout(ctxFollowUp)
+    returnFromVoiceFlow()
 
 proc nim_satellite_tts_start*() {.exportc, cdecl.} =
   if currentState == rsThinking:
@@ -197,19 +388,33 @@ proc nim_satellite_tts_start*() {.exportc, cdecl.} =
 proc nim_satellite_tts_end*() {.exportc, cdecl.} =
   if currentState == rsReplying:
     ctxIdle = onTtsFinished(ctxReplying)
-    currentState = rsIdle
+    returnFromVoiceFlow()
+
+proc nim_satellite_follow_up*() {.exportc, cdecl.} =
+  if currentState == rsReplying:
+    ctxFollowUp = onFollowUpRequested(ctxReplying)
+    currentState = rsFollowUp
+  elif currentState == rsFollowUp:
+    ctxListening = onFollowUpReadyToListen(ctxFollowUp)
+    currentState = rsListening
 
 proc nim_satellite_stop_word*() {.exportc, cdecl.} =
   case currentState
   of rsListening:
     ctxIdle = onStopDuringListening(ctxListening)
-    currentState = rsIdle
+    returnFromVoiceFlow()
   of rsThinking:
     ctxIdle = onStopDuringThinking(ctxThinking)
-    currentState = rsIdle
+    returnFromVoiceFlow()
   of rsReplying:
     ctxIdle = onStopDuringReplying(ctxReplying)
+    returnFromVoiceFlow()
+  of rsAlerting:
+    ctxIdle = onAlertDismiss(ctxAlerting)
     currentState = rsIdle
+  of rsFollowUp:
+    ctxIdle = onFollowUpTimeout(ctxFollowUp)
+    returnFromVoiceFlow()
   else:
     debug("SatelliteFSM", "Stop word ignored in state " & $currentState)
 
@@ -219,23 +424,90 @@ proc nim_satellite_error*(code: cstring) {.exportc, cdecl.} =
     if currentState == rsListening:
       ctxDismiss = onSilenceTimeout(ctxListening)
       ctxIdle = onDismiss(ctxDismiss)
-      currentState = rsIdle
+      returnFromVoiceFlow()
+    elif currentState == rsFollowUp:
+      ctxIdle = onFollowUpTimeout(ctxFollowUp)
+      returnFromVoiceFlow()
     return
 
   case currentState
   of rsListening:
     ctxPipelineErr = onPipelineErrorFromListening(ctxListening, err)
     ctxIdle = onResetPipelineError(ctxPipelineErr)
-    currentState = rsIdle
+    returnFromPipelineError()
   of rsThinking:
     ctxPipelineErr = onPipelineErrorFromThinking(ctxThinking, err)
     ctxIdle = onResetPipelineError(ctxPipelineErr)
-    currentState = rsIdle
+    returnFromPipelineError()
   of rsReplying:
     ctxPipelineErr = onPipelineErrorFromReplying(ctxReplying, err)
     ctxIdle = onResetPipelineError(ctxPipelineErr)
-    currentState = rsIdle
+    returnFromPipelineError()
   else:
+    currentState = rsIdle
+
+proc nim_satellite_set_muted*(muted: bool) {.exportc, cdecl.} =
+  micWasMuted = muted
+  if muted and currentState == rsIdle:
+    ctxMuted = onMute(ctxIdle)
+    currentState = rsMuted
+  elif not muted and currentState == rsMuted:
+    ctxIdle = onUnmute(ctxMuted)
+    currentState = rsIdle
+
+proc nim_satellite_media_play*() {.exportc, cdecl.} =
+  if currentState == rsIdle:
+    ctxMedia = onMediaPlay(ctxIdle)
+    currentState = rsPlayingMedia
+
+proc nim_satellite_media_stop*() {.exportc, cdecl.} =
+  if currentState == rsPlayingMedia:
+    ctxIdle = onMediaStop(ctxMedia)
+    currentState = rsIdle
+
+proc nim_satellite_alert_start*() {.exportc, cdecl.} =
+  if currentState == rsIdle:
+    ctxAlerting = onAlertStart(ctxIdle)
+    currentState = rsAlerting
+  elif currentState == rsPlayingMedia:
+    ctxAlerting = onAlertFromMedia(ctxMedia)
+    currentState = rsAlerting
+
+proc nim_satellite_alert_stop*() {.exportc, cdecl.} =
+  if currentState == rsAlerting:
+    ctxIdle = onAlertDismiss(ctxAlerting)
+    currentState = rsIdle
+
+proc nim_satellite_announcement_start*() {.exportc, cdecl.} =
+  if currentState == rsIdle:
+    ctxAnnouncing = onAnnouncementStart(ctxIdle)
+    currentState = rsAnnouncing
+  elif currentState == rsPlayingMedia:
+    ctxAnnouncing = onAnnouncementFromMedia(ctxMedia)
+    currentState = rsAnnouncing
+
+proc nim_satellite_announcement_end*() {.exportc, cdecl.} =
+  if currentState == rsAnnouncing:
+    ctxIdle = onAnnouncementEnd(ctxAnnouncing)
+    currentState = rsIdle
+
+proc nim_satellite_ota_start*() {.exportc, cdecl.} =
+  case currentState
+  of rsIdle:
+    ctxUpdating = onOtaStart(ctxIdle)
+  of rsMuted:
+    ctxUpdating = onOtaFromMuted(ctxMuted)
+  of rsPlayingMedia:
+    ctxUpdating = onOtaFromMedia(ctxMedia)
+  of rsConnectionError:
+    ctxUpdating = onOtaFromConnErr(ctxConnErr)
+  else:
+    discard
+  currentState = rsUpdating
+
+proc nim_satellite_ota_end*(ok: bool) {.exportc, cdecl.} =
+  if currentState == rsUpdating:
+    ctxIdle = onOtaComplete(ctxUpdating)
     currentState = rsIdle
 
 proc nim_satellite_disconnected*() {.exportc, cdecl.} =
@@ -250,17 +522,40 @@ proc nim_satellite_disconnected*() {.exportc, cdecl.} =
     ctxConnErr = onDisconnectFromThinking(ctxThinking)
   of rsReplying:
     ctxConnErr = onDisconnectFromReplying(ctxReplying)
+  of rsFollowUp:
+    ctxConnErr = onDisconnectFromFollowUp(ctxFollowUp)
+  of rsMuted:
+    ctxConnErr = onDisconnectFromMuted(ctxMuted)
+  of rsPlayingMedia:
+    ctxConnErr = onDisconnectFromMedia(ctxMedia)
+  of rsAlerting:
+    ctxConnErr = onDisconnectFromAlerting(ctxAlerting)
+  of rsAnnouncing:
+    ctxConnErr = onDisconnectFromAnnouncing(ctxAnnouncing)
   else:
     discard
   currentState = rsConnectionError
 
 proc nim_satellite_connected*() {.exportc, cdecl.} =
   if currentState == rsConnectionError:
-    ctxIdle = onConnected(ctxConnErr)
-    currentState = rsIdle
+    if micWasMuted:
+      ctxMuted = onConnectedMuted(ctxConnErr)
+      currentState = rsMuted
+    else:
+      ctxIdle = onConnected(ctxConnErr)
+      currentState = rsIdle
 
 proc nim_satellite_get_state*(): cint {.exportc, cdecl.} =
   result = cint(ord(currentState))
 
+proc nim_satellite_is_muted*(): bool {.exportc, cdecl.} =
+  result = (currentState == rsMuted)
+
+proc nim_satellite_is_media_playing*(): bool {.exportc, cdecl.} =
+  result = (currentState == rsPlayingMedia)
+
+proc nim_satellite_is_alerting*(): bool {.exportc, cdecl.} =
+  result = (currentState == rsAlerting)
+
 esphomeSetup:
-  info("SatelliteFSM", "Multi-error typestate machine initialized")
+  info("SatelliteFSM", "14-state verified voice satellite state machine initialized")

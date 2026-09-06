@@ -52,6 +52,53 @@ suite "Satellite Typestate FSM - Granular Error Handling":
     check dropped is ConnectionError
     check dropped.onConnected() is Idle
 
+suite "Satellite Typestate FSM - Extended Lifecycle States":
+  test "Muted privacy state disables wake words":
+    var idle = Idle(SatelliteContext())
+    var muted = idle.onMute()
+    check muted is Muted
+    var unmuted = muted.onUnmute()
+    check unmuted is Idle
+
+  test "FollowUp continuous conversation":
+    var idle = Idle(SatelliteContext())
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var followUp = replying.onFollowUpRequested()
+    check followUp is FollowUp
+    var listening = followUp.onFollowUpReadyToListen()
+    check listening is Listening
+    var thinking = listening.onSpeechEnded()
+    check thinking is Thinking
+
+  test "PlayingMedia and audio ducking":
+    var idle = Idle(SatelliteContext())
+    var media = idle.onMediaPlay()
+    check media is PlayingMedia
+    var woken = media.onWakeWordFromMedia("assistant", 90)
+    check woken is Woken
+    check SatelliteContext(woken).wasPlayingMedia == true
+
+  test "Alerting and timer ringing":
+    var idle = Idle(SatelliteContext())
+    var alert = idle.onAlertStart()
+    check alert is Alerting
+    var dismissed = alert.onAlertDismiss()
+    check dismissed is Idle
+
+  test "Server push announcement":
+    var idle = Idle(SatelliteContext())
+    var announce = idle.onAnnouncementStart()
+    check announce is Announcing
+    var done = announce.onAnnouncementEnd()
+    check done is Idle
+
+  test "OTA firmware update state":
+    var idle = Idle(SatelliteContext())
+    var updating = idle.onOtaStart()
+    check updating is Updating
+    var done = updating.onOtaComplete()
+    check done is Idle
+
 suite "Compile-Time Invariant Checking (Illegal Error Transitions Rejected)":
   test "Cannot trigger wake word when in ConnectionError":
     var connErr = Idle(SatelliteContext()).onDisconnectFromIdle()
@@ -65,37 +112,93 @@ suite "Compile-Time Invariant Checking (Illegal Error Transitions Rejected)":
     check not compiles(dismissed.onWakeWord("assistant", 0))
     check not compiles(pErr.onWakeWord("assistant", 0))
 
-  test "Cannot end speech when in ConnectionError":
-    var connErr = Idle(SatelliteContext()).onDisconnectFromIdle()
-    check not compiles(connErr.onSpeechEnded())
+  test "Cannot trigger wake word or capture speech when Muted":
+    var muted = Idle(SatelliteContext()).onMute()
+    check not compiles(muted.onWakeWord("assistant", 0))
+    check not compiles(muted.onSpeechEnded())
 
-suite "Runtime C API Bridge (ESPHome Integration with Multiple Errors)":
-  test "Silent error code (stt-no-text-recognized) triggers silent reset":
+  test "Cannot trigger wake word during OTA update":
+    var updating = Idle(SatelliteContext()).onOtaStart()
+    check not compiles(updating.onWakeWord("assistant", 0))
+    check not compiles(updating.onSpeechEnded())
+
+suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
+  test "Privacy mute via C API":
+    check nim_satellite_get_state() == 0 # Idle
+    nim_satellite_set_muted(true)
+    check nim_satellite_get_state() == 8 # Muted
+    check nim_satellite_is_muted() == true
+
+    # Wake word while muted is ignored
+    nim_satellite_wake_word("assistant", 0)
+    check nim_satellite_get_state() == 8 # Still Muted
+
+    nim_satellite_set_muted(false)
+    check nim_satellite_get_state() == 0 # Back to Idle
+    check nim_satellite_is_muted() == false
+
+  test "Follow-up conversation flow via C API":
     nim_satellite_wake_word("assistant", 0)
     nim_satellite_chime_done(true)
+    nim_satellite_speech_ended()
+    nim_satellite_tts_start()
+    check nim_satellite_get_state() == 4 # Replying
+
+    # Server signals follow-up
+    nim_satellite_follow_up()
+    check nim_satellite_get_state() == 9 # FollowUp
+
+    # Device opens mic for answer
+    nim_satellite_follow_up()
     check nim_satellite_get_state() == 2 # Listening
 
-    # Emitting stt-no-text-recognized should silently reset to Idle
-    nim_satellite_error("stt-no-text-recognized")
+    # Follow-up answered
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 3 # Thinking
+    nim_satellite_tts_start()
+    nim_satellite_tts_end()
     check nim_satellite_get_state() == 0 # Idle
 
-  test "Hard pipeline error code (intent-failed) triggers PipelineError recovery":
+  test "Media playback and ducking cycle":
+    check nim_satellite_get_state() == 0 # Idle
+    nim_satellite_media_play()
+    check nim_satellite_get_state() == 10 # PlayingMedia
+    check nim_satellite_is_media_playing() == true
+
+    # Wake word during media triggers ducked conversation
     nim_satellite_wake_word("assistant", 0)
+    check nim_satellite_get_state() == 1 # Woken
     nim_satellite_chime_done(true)
-    check nim_satellite_get_state() == 2 # Listening
+    nim_satellite_speech_ended()
+    nim_satellite_tts_start()
+    nim_satellite_tts_end()
+    # Returns to PlayingMedia because media was playing!
+    check nim_satellite_get_state() == 10 # PlayingMedia
 
-    nim_satellite_error("intent-failed")
-    check nim_satellite_get_state() == 0 # Recovered to Idle
+    nim_satellite_media_stop()
+    check nim_satellite_get_state() == 0 # Idle
 
-  test "Network disconnect and reconnect cycle":
+  test "Timer alert dismissal":
     check nim_satellite_get_state() == 0
-    nim_satellite_disconnected()
-    check nim_satellite_get_state() == 7 # ConnectionError
+    nim_satellite_alert_start()
+    check nim_satellite_get_state() == 11 # Alerting
+    check nim_satellite_is_alerting() == true
 
-    # Wake word while disconnected must be ignored
-    nim_satellite_wake_word("assistant", 0)
-    check nim_satellite_get_state() == 7 # Still ConnectionError
+    # Dismiss via stop word
+    nim_satellite_stop_word()
+    check nim_satellite_get_state() == 0 # Idle
+    check nim_satellite_is_alerting() == false
 
-    # Server comes back online
-    nim_satellite_connected()
-    check nim_satellite_get_state() == 0 # Back to Idle
+  test "Server announcement cycle":
+    check nim_satellite_get_state() == 0
+    nim_satellite_announcement_start()
+    check nim_satellite_get_state() == 12 # Announcing
+    nim_satellite_announcement_end()
+    check nim_satellite_get_state() == 0 # Idle
+
+  test "OTA update lifecycle":
+    check nim_satellite_get_state() == 0
+    nim_satellite_ota_start()
+    check nim_satellite_get_state() == 13 # Updating
+    nim_satellite_ota_end(true)
+    check nim_satellite_get_state() == 0 # Idle

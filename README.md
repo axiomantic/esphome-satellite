@@ -15,11 +15,12 @@ It moves voice satellite state management directly onto the ESP32 microcontrolle
 - [How Compile-Time Typestates Solve It](#how-compile-time-typestates-solve-it)
 - [State Machine Architecture](#state-machine-architecture)
 - [Granular Error Handling](#granular-error-handling)
+- [Extended Lifecycle States](#extended-lifecycle-states)
 - [Integration Guide for ESPHome](#integration-guide-for-esphome)
   - [Step 1: Include External Components](#step-1-include-external-components)
   - [Step 2: Add the C Bridge Header](#step-2-add-the-c-bridge-header)
-  - [Step 3: Connect Voice Assistant & Wake Word Events](#step-3-connect-voice-assistant--wake-word-events)
-  - [Step 4: (Alternative) Using the Ready-to-Use Package](#step-4-alternative-using-the-ready-to-use-package)
+  - [Step 3: Connect Voice Assistant & Extended Event Hooks](#step-3-connect-voice-assistant--extended-event-hooks)
+  - [Step 4: (Alternative) Using the Drop-in Package](#step-4-alternative-using-the-drop-in-package)
 - [Supported Hardware](#supported-hardware)
 - [Local Host Testing](#local-host-testing)
 - [Project Layout](#project-layout)
@@ -35,6 +36,7 @@ In conventional ESPHome voice satellites, state is distributed across asynchrono
 2. **Premature Chime & VAD Clipping**: If the microphone opens while the wake chime is still playing, the VAD algorithm hears the satellite\x27s own speaker and immediately triggers `stt-no-text-recognized`.
 3. **Double Wake / Rapid Re-triggering**: A wake word detected while already processing speech can corrupt audio buffers or cause duplicate requests.
 4. **Offline Phantom Triggers**: On-device micro wake word models continuing to trigger while the WiFi or Home Assistant API connection is dropped.
+5. **Ducking Clobbering**: Music streaming volume is not properly ducked or fails to un-duck when conversations finish or fail.
 
 ---
 
@@ -42,10 +44,11 @@ In conventional ESPHome voice satellites, state is distributed across asynchrono
 
 With [`nim-typestates`](https://github.com/elijahr/nim-typestates), the state of the satellite is encoded directly in the Nim type system:
 
-- **Strict Transitions**: You cannot call `onSpeechEnded()` on an `IdleSatellite` or a `ThinkingSatellite`. The compiler rejects it with a type mismatch error.
-- **Barge-in Safety**: The `Stop` wake word is only valid during `Listening`, `Thinking`, or `Replying`. In `Idle`, `onStopWord()` does not exist on the type.
+- **Strict Transitions**: You cannot call `onSpeechEnded()` on an `Idle` or a `Thinking` state. The compiler rejects it with a type mismatch error.
+- **Barge-in Safety**: The `Stop` wake word is only valid during `Listening`, `Thinking`, `Replying`, or active `Alerting`. In `Idle`, `onStopWord()` does not exist on the type.
 - **Strict Serialization**: Transitioning to `Listening` requires a completed chime event (`onChimeFinished()`). The microphone cannot capture audio during playback.
 - **Offline Suppression**: When the satellite enters `ConnectionError`, wake word transitions are eliminated from the state type.
+- **Privacy Enforcement**: When `Muted`, wake word detection and microphone capture cannot compile or execute.
 
 ---
 
@@ -57,6 +60,11 @@ stateDiagram-v2
 
     Idle --> Woken: onWakeWord(word, angle)
     Idle --> ConnectionError: onDisconnect()
+    Idle --> Muted: onMute()
+    Idle --> PlayingMedia: onMediaPlay()
+    Idle --> Alerting: onAlertStart()
+    Idle --> Announcing: onAnnouncementStart()
+    Idle --> Updating: onOtaStart()
 
     state Woken {
         [*] --> PlayingChime
@@ -86,24 +94,70 @@ stateDiagram-v2
         [*] --> PlayingTTS
     }
     Replying --> Idle: onTtsFinished()
+    Replying --> FollowUp: onFollowUpRequested()
     Replying --> Idle: onStopWord() [Barge-in]
     Replying --> PipelineError: onPipelineError(code)
     Replying --> ConnectionError: onDisconnect()
+
+    state FollowUp {
+        [*] --> ContinuousDialogue
+    }
+    FollowUp --> Listening: onFollowUpReadyToListen()
+    FollowUp --> Idle: onFollowUpTimeout()
+    FollowUp --> ConnectionError: onDisconnect()
+
+    state PlayingMedia {
+        [*] --> StreamingAudio
+    }
+    PlayingMedia --> Woken: onWakeWord() [Ducks volume]
+    PlayingMedia --> Idle: onMediaStop()
+    PlayingMedia --> Alerting: onAlertFromMedia()
+    PlayingMedia --> Announcing: onAnnouncementFromMedia()
+    PlayingMedia --> Updating: onOtaFromMedia()
+    PlayingMedia --> ConnectionError: onDisconnect()
+
+    state Alerting {
+        [*] --> RingingTimerAlarm
+    }
+    Alerting --> Idle: onAlertDismiss() [Tap / Stop word]
+    Alerting --> Woken: onWakeWordDuringAlert()
+    Alerting --> ConnectionError: onDisconnect()
+
+    state Muted {
+        [*] --> PrivacyHardwareMute
+    }
+    Muted --> Idle: onUnmute()
+    Muted --> ConnectionError: onDisconnect()
+    Muted --> Updating: onOtaFromMuted()
+
+    state Announcing {
+        [*] --> ServerBroadcast
+    }
+    Announcing --> Idle: onAnnouncementEnd()
+    Announcing --> ConnectionError: onDisconnect()
+
+    state Updating {
+        [*] --> FirmwareFlash
+    }
+    Updating --> Idle: onOtaComplete()
 
     state SilentDismiss {
         [*] --> SilentReset
     }
     SilentDismiss --> Idle: onDismiss()
+    SilentDismiss --> PlayingMedia: onDismissToMedia()
 
     state PipelineError {
         [*] --> ErrorToneAndLED
     }
     PipelineError --> Idle: onResetPipelineError()
+    PipelineError --> PlayingMedia: onResetPipelineErrorToMedia()
 
     state ConnectionError {
         [*] --> OfflineSuppression
     }
     ConnectionError --> Idle: onConnected() [HA reconnected]
+    ConnectionError --> Muted: onConnectedMuted()
 ```
 
 ---
@@ -114,9 +168,22 @@ Conventional voice implementations dump all failures into a generic error handle
 
 | Typestate | Typical Triggers | Satellite Behavior |
 |---|---|---|
-| **`SilentDismiss`** | Silence timeout (`stt-no-text-recognized`), duplicate wake word. | **Completely silent instant reset**. No error buzzer, no blinking red LEDs. Unlocks the audio beam and returns cleanly to `Idle`. |
-| **`PipelineError`** | Intent parsing error, TTS streaming network error, STT failure. | Plays the standard error sound, pulses red LEDs, unlocks the microphone beam, and resets safely to `Idle`. |
+| **`SilentDismiss`** | Silence timeout (`stt-no-text-recognized`), duplicate wake word. | **Completely silent instant reset**. No error buzzer, no blinking red LEDs. Unlocks the audio beam, restores media if ducked, and returns cleanly to `Idle`. |
+| **`PipelineError`** | Intent parsing error, TTS streaming network error, STT failure. | Plays the standard error sound, pulses red LEDs, unlocks the microphone beam, restores media if ducked, and resets safely to `Idle`. |
 | **`ConnectionError`**| Home Assistant API disconnect, WiFi dropped. | Indicates offline status via LEDs. **Wake word triggers are rejected/suppressed** until reconnect. |
+
+---
+
+## Extended Lifecycle States
+
+| State | Hook / Trigger | Behavior & Compile-Time Guarantees |
+|---|---|---|
+| **`Muted`** | `call_nim_set_muted(true)` | Privacy lock. Wake word detection and mic capture are statically disallowed on the type. |
+| **`FollowUp`** | `call_nim_follow_up()` | Continuous conversation without requiring wake words between dialogue turns. |
+| **`PlayingMedia`** | `call_nim_media_play()` | Background music / radio streaming. Audio ducks on wake word and auto-restores when dialogue ends. |
+| **`Alerting`** | `call_nim_alert_start()` | Active timer / alarm buzzer. Interrupted via touch tap, stop word, or new command. |
+| **`Announcing`** | `call_nim_announcement_start()` | Unprompted server broadcasts (intercom, doorbell, security announcements). |
+| **`Updating`** | `call_nim_ota_start()` | Firmware flash in progress. All audio tasks and DSP inference are halted to prevent brownouts. |
 
 ---
 
@@ -141,7 +208,7 @@ nim:
 
 ### Step 2: Add the C Bridge Header
 
-Copy or include `src/nim_satellite_bridge.h` in your ESPHome `includes:` section:
+Include `nim_satellite_bridge.h` in your ESPHome `includes:` section:
 
 ```yaml
 esphome:
@@ -150,18 +217,18 @@ esphome:
     - nim_satellite_bridge.h
 ```
 
-> **Note**: All bridge functions use `__attribute__((weak))` and safe `call_nim_*` wrappers. If the Nim component is ever removed or disabled, your firmware still compiles without linker errors.
+> **Note**: All bridge functions use `__attribute__((weak))` and safe `call_nim_*` wrappers. If the Nim component is ever omitted or disabled, your firmware still compiles cleanly without linker errors.
 
-### Step 3: Connect Voice Assistant & Wake Word Events
-
-Hook your ESPHome event triggers into the C bridge functions:
+### Step 3: Connect Voice Assistant & Extended Event Hooks
 
 ```yaml
+# Wake Word Detection
 micro_wake_word:
   on_wake_word_detected:
     - lambda: |-
         call_nim_wake_word(wake_word.c_str(), 0);
 
+# Voice Assistant Pipeline
 voice_assistant:
   on_start:
     - lambda: |-
@@ -184,15 +251,37 @@ voice_assistant:
   on_client_disconnected:
     - lambda: |-
         call_nim_disconnected();
-```
 
-### Step 4: (Alternative) Using the Ready-to-Use Package
+# Hardware / Software Privacy Mute
+switch:
+  - platform: template
+    id: mic_mute_switch
+    name: "Mic Mute"
+    on_turn_on:
+      - lambda: |-
+          call_nim_set_muted(true);
+    on_turn_off:
+      - lambda: |-
+          call_nim_set_muted(false);
 
-Instead of manually wiring every event, you can include `packages/satellite_nim_fsm.yaml`:
+# Active Alarm / Timer Ringing
+switch:
+  - platform: template
+    id: timer_ringing
+    name: "Timer Ringing"
+    on_turn_on:
+      - lambda: |-
+          call_nim_alert_start();
+    on_turn_off:
+      - lambda: |-
+          call_nim_alert_stop();
 
-```yaml
-packages:
-  satellite_fsm: !include packages/satellite_nim_fsm.yaml
+# OTA Firmware Updates
+ota:
+  - platform: esphome
+    on_begin:
+      - lambda: |-
+          call_nim_ota_start();
 ```
 
 ---
@@ -208,7 +297,7 @@ packages:
 
 ## Local Host Testing
 
-You do not need an ESP32 connected to run the test suite. All state machine logic and compile-time invariants can be tested locally on macOS or Linux:
+You do not need an ESP32 connected to run the test suite. All state machine logic and compile-time invariants run locally on macOS or Linux:
 
 ```bash
 # Run unit tests
@@ -219,10 +308,11 @@ nim c -r tests/test_fsm.nim
 ```
 
 The test suite validates:
-- Complete happy path lifecycle (`Idle -> Woken -> Listening -> Thinking -> Replying -> Idle`)
-- Barge-in interruptions during `Listening`, `Thinking`, and `Replying`
-- Granular error routing (`SilentDismiss`, `PipelineError`, `ConnectionError`)
-- Invariant safety checks using `not compiles(...)` (e.g. verifying that calling `onSpeechEnded` in `Idle` fails at compile time).
+- **Core Happy Path**: `Idle -> Woken -> Listening -> Thinking -> Replying -> Idle`
+- **Barge-in Interruptions**: `Stop` command during `Listening`, `Thinking`, `Replying`, and `Alerting`
+- **Granular Errors**: `SilentDismiss`, `PipelineError`, `ConnectionError`
+- **Extended Lifecycle**: `Muted`, `FollowUp`, `PlayingMedia`, `Alerting`, `Announcing`, `Updating`
+- **Compile-Time Invariant Enforcement**: Verified using `not compiles(...)` (e.g. verifying that calling `onWakeWord` while `Muted` or `Updating` is rejected by the compiler).
 
 ---
 
@@ -231,13 +321,13 @@ The test suite validates:
 ```
 nim-esphome-satellite/
 ├── src/
-│   ├── nim_esphome_satellite.nim # ESPHome runtime entrypoint & exported C ABI
-│   ├── satellite_fsm.nim         # Core compile-time typestate state machine
+│   ├── nim_esphome_satellite.nim # 14-state verified FSM & exported C ABI
+│   ├── satellite_fsm.nim         # Re-export entrypoint
 │   └── nim_satellite_bridge.h    # C/C++ weak symbol bridge header
 ├── packages/
 │   └── satellite_nim_fsm.yaml    # ESPHome reusable package for drop-in integration
 ├── tests/
-│   └── test_fsm.nim              # 12 unit tests across 4 test suites
+│   └── test_fsm.nim              # 21 unit tests across 5 test suites
 ├── scripts/
 │   ├── build.sh                  # Build validation script
 │   └── test.sh                   # Unit test execution script
