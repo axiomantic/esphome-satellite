@@ -19,15 +19,13 @@ Standard ESPHome voice setups rely on loose asynchronous network events and C++ 
 
 ### Quick Install
 
-#### In-Browser Web Installer (Recommended)
+#### Option 1: In-Browser Web Installer (Recommended)
 
 Connect your ESP32 device via USB and flash pre-compiled firmware directly from Chrome or Edge:
 
 [![Install with ESP-Web-Tools](https://img.shields.io/badge/Web_Install-Connect_%26_Flash-2563eb?style=for-the-badge&logo=espressif&logoColor=white)](https://axiomantic.github.io/esphome-satellite/)
 
-After flashing, configure your Wi-Fi credentials via the captive portal. Home Assistant will automatically discover the voice satellite.
-
-#### ESPHome YAML Package
+#### Option 2: ESPHome YAML Package
 
 If you build firmware with ESPHome CLI or the ESPHome Dashboard, add the remote package to your device configuration:
 
@@ -38,9 +36,31 @@ packages:
 
 ---
 
+### Post-Installation Setup
+
+Follow these steps right after flashing to connect the satellite to your network and Home Assistant:
+
+1. **Connect to Wi-Fi**:
+   - On your computer or phone, open your Wi-Fi settings and connect to the temporary hotspot named **`Satellite Fallback Hotspot`**.
+   - A captive portal popup will appear automatically (if not, navigate to `http://192.168.4.1` in your browser).
+   - Select your home Wi-Fi network, enter your password, and click **Save**. The satellite will reboot and join your local network.
+2. **Adopt in Home Assistant**:
+   - In Home Assistant, open **Settings > Devices & Services**.
+   - Your satellite will automatically appear under **Discovered** via the ESPHome native API integration.
+   - Click **Configure**, complete the prompts, and assign the satellite to an area.
+3. **Configure Voice Assistant**:
+   - In Home Assistant, navigate to **Settings > Voice Assistants**.
+   - Ensure the satellite is mapped to your desired voice pipeline (such as Home Assistant Cloud, Whisper/Piper, or local LLM pipelines).
+   - Test by speaking your configured wake word (e.g. *"Okay Nabu"*).
+
+> 📖 **Manual / Source Builds**: See the full [**Integration Guide for ESPHome**](#integration-guide-for-esphome) below for custom YAML overrides, external component configuration, and C ABI bridge bindings.
+
+---
+
 ## Table of Contents
 
 - [Quick Install](#quick-install)
+- [Post-Installation Setup](#post-installation-setup)
 - [The Voice Satellite Race Condition Problem](#the-voice-satellite-race-condition-problem)
 - [How Compile-Time Typestates Solve It](#how-compile-time-typestates-solve-it)
 - [State Machine Architecture](#state-machine-architecture)
