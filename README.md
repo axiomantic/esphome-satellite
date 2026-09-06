@@ -361,6 +361,7 @@ esphome-satellite/
 │   ├── satellite_fsm.nim         # Re-export entrypoint
 │   └── nim_satellite_bridge.h    # C/C++ weak symbol bridge header
 ├── packages/
+│   ├── respeaker_xvf3800.yaml    # Seeed ReSpeaker XVF3800 hardware configuration
 │   └── satellite_nim_fsm.yaml    # ESPHome reusable package for drop-in integration
 ├── tests/
 │   └── test_fsm.nim              # 21 unit tests across 5 test suites
