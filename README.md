@@ -224,9 +224,9 @@ external_components:
     components: [nim]
 
 nim:
-  source: /path/to/nim-esphome-satellite/src/nim_esphome_satellite.nim
-  nimble_paths:
-    - /path/to/nim-typestates/src
+  source: /path/to/esphome-satellite/src/nim_esphome_satellite.nim
+  requires:
+    - https://github.com/elijahr/nim-typestates
 ```
 
 ### Step 2: Add the C Bridge Header
@@ -305,6 +305,19 @@ ota:
     on_begin:
       - lambda: |-
           call_nim_ota_start();
+```
+
+### Step 4: (Alternative) Using the Drop-in Package
+
+Instead of manually configuring hooks, import the pre-configured package directly into your ESPHome configuration:
+
+```yaml
+packages:
+  satellite:
+    url: https://github.com/axiomantic/esphome-satellite
+    ref: main
+    files: [packages/respeaker_xvf3800.yaml]
+    refresh: 1d
 ```
 
 ---
