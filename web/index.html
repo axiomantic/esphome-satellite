@@ -21,19 +21,18 @@
     .hint { font-size: 0.82rem; color: var(--muted); margin-top: 6px; line-height: 1.4; }
     input[type='file'], select, input[type='text'], input[type='number'] { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #080d1a; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
     select { cursor: pointer; }
-    .preset-card { margin-top: 14px; background: #080d1a; border: 1px solid #202b3d; border-radius: 8px; padding: 14px; }
-    .preset-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .preset-title { font-weight: 600; color: #93c5fd; font-size: 0.95rem; }
+    .preset-card { margin-top: 12px; background: #080d1a; border: 1px solid #202b3d; border-radius: 8px; padding: 14px; text-align: left; }
+    .preset-view { margin-bottom: 8px; }
+    .preset-header { display: flex; align-items: center; margin-bottom: 6px; }
     .preset-badge { font-size: 0.75rem; background: var(--accent-badge); color: var(--accent-badge-text); padding: 2px 8px; border-radius: 12px; font-weight: 500; font-family: monospace; }
-    .preset-desc { font-size: 0.85rem; color: #cbd5e1; margin: 4px 0 10px 0; line-height: 1.4; }
-    .nested-field { margin: 12px 0; background: rgba(15, 23, 42, 0.6); border: 1px dashed #3b82f6; border-radius: 8px; padding: 14px; text-align: left; }
-    .nested-field[data-depends-on] { display: none !important; }
-    .nested-field.highlight { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3); }
+    .preset-desc { font-size: 0.85rem; color: #cbd5e1; margin: 4px 0 6px 0; line-height: 1.4; }
+    .custom-slot { margin-bottom: 10px; }
+    .custom-slot[data-depends-on] { display: none !important; }
     .preview-btn { background: #1e293b; color: #38bdf8; border: 1px solid #334155; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; }
     .preview-btn:hover { background: #334155; color: #7dd3fc; }
     .preview-btn.playing { background: #0284c7; color: #ffffff; border-color: #0284c7; }
-    .format-callout { margin-top: 10px; background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; padding: 10px 12px; border-radius: 4px; font-size: 0.82rem; color: #93c5fd; line-height: 1.4; }
-    .file-status { margin-top: 10px; font-size: 0.85rem; color: #34d399; display: none; background: rgba(16, 185, 129, 0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2); }
+    .format-callout { margin-top: 8px; background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; padding: 8px 12px; border-radius: 4px; font-size: 0.8rem; color: #93c5fd; line-height: 1.4; }
+    .file-status { margin-top: 8px; font-size: 0.85rem; color: #34d399; display: none; background: rgba(16, 185, 129, 0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2); }
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
     button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
     button.install-btn:hover { background: var(--primary-hover); }
@@ -56,17 +55,16 @@
           <option value="Custom">Custom</option>
         </select>
         <div class="preset-card" id="presetCard_default_sound_style">
-          <div class="preset-header">
-            <span class="preset-title" id="presetTitle_default_sound_style">Preset Details</span>
-            <span class="preset-badge" id="presetCadence_default_sound_style"></span>
+          <div class="preset-view" id="presetView_default_sound_style">
+            <div class="preset-header">
+              <span class="preset-badge" id="presetCadence_default_sound_style"></span>
+            </div>
+            <p class="preset-desc" id="presetDesc_default_sound_style"></p>
           </div>
-          <p class="preset-desc" id="presetDesc_default_sound_style"></p>
-          <div class="nested-field" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom" style="display: none;">
-            <label for="field_custom_audio">Custom Audio Feedback Loop (.wav)</label>
-        <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144" disabled>
-        <div class="format-callout"><strong>Format:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to safe dedicated partition at 0x370000, 100% safe from OTA firmware updates.</div>
-        <div class="file-status" id="status_custom_audio"></div>
-            <div class="hint">Upload an uncompressed mono PCM WAV audio file to flash into the dedicated sound_data partition</div>
+          <div class="custom-slot" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom" style="display: none;">
+            <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144" disabled>
+            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to dedicated sound partition at 0x370000.</div>
+            <div class="file-status" id="status_custom_audio"></div>
           </div>
           <div class="preview-actions">
             <button type="button" class="preview-btn" id="previewBtn_default_sound_style">▶ Preview Sound</button>
@@ -208,17 +206,46 @@
 
     const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
     const select_default_sound_style = document.getElementById('field_default_sound_style');
-    const title_default_sound_style = document.getElementById('presetTitle_default_sound_style');
+    const presetView_default_sound_style = document.getElementById('presetView_default_sound_style');
+    const customSlot_default_sound_style = document.querySelector('.custom-slot[data-depends-on="default_sound_style"]');
     const cadence_default_sound_style = document.getElementById('presetCadence_default_sound_style');
     const desc_default_sound_style = document.getElementById('presetDesc_default_sound_style');
     const btn_default_sound_style = document.getElementById('previewBtn_default_sound_style');
     function updatePreset_default_sound_style() {
       stopAudioPreview();
       const val = select_default_sound_style.value;
-      const info = OPTION_DETAILS_default_sound_style[val] || { cadence: '', desc: '' };
-      if (title_default_sound_style) title_default_sound_style.textContent = val + ' Feedback Style';
-      if (cadence_default_sound_style) cadence_default_sound_style.textContent = info.cadence;
-      if (desc_default_sound_style) desc_default_sound_style.textContent = info.desc;
+      const isCustom = (val === 'Custom');
+      const isSilent = (val === 'Silent');
+      if (isCustom) {
+        if (presetView_default_sound_style) presetView_default_sound_style.style.display = 'none';
+        if (customSlot_default_sound_style) {
+          customSlot_default_sound_style.style.setProperty('display', 'block', 'important');
+          customSlot_default_sound_style.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = false);
+        }
+        if (btn_default_sound_style) {
+          btn_default_sound_style.style.display = 'inline-flex';
+          btn_default_sound_style.textContent = '▶ Preview Custom Audio';
+        }
+      } else {
+        if (customSlot_default_sound_style) {
+          customSlot_default_sound_style.style.setProperty('display', 'none', 'important');
+          customSlot_default_sound_style.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = true);
+        }
+        if (presetView_default_sound_style) presetView_default_sound_style.style.display = 'block';
+        if (isSilent) {
+          if (cadence_default_sound_style) cadence_default_sound_style.textContent = 'Muted';
+          if (desc_default_sound_style) desc_default_sound_style.textContent = 'Satellite operates silently while processing speech.';
+          if (btn_default_sound_style) btn_default_sound_style.style.display = 'none';
+        } else {
+          const info = OPTION_DETAILS_default_sound_style[val] || { cadence: '', desc: '' };
+          if (cadence_default_sound_style) cadence_default_sound_style.textContent = info.cadence;
+          if (desc_default_sound_style) desc_default_sound_style.textContent = info.desc;
+          if (btn_default_sound_style) {
+            btn_default_sound_style.style.display = 'inline-flex';
+            btn_default_sound_style.textContent = '▶ Preview Sound';
+          }
+        }
+      }
       updateFieldDependencies();
     }
     if (select_default_sound_style) {
