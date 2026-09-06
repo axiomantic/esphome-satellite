@@ -1,0 +1,21 @@
+# =============================================================================
+# nim-esphome-satellite: Compile-time verified voice satellite state machine
+# =============================================================================
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/axiomantic/nim-esphome
+      ref: main
+    components: [nim]
+
+nim:
+  source: ../src/nim_esphome_satellite.nim
+  nim_flags:
+    - "-d:danger"
+    - "-d:useMalloc"
+    - "-d:esphome"
+
+esphome:
+  includes:
+    - ../src/nim_satellite_bridge.h

@@ -11,3 +11,10 @@ srcDir        = "src"
 requires "nim >= 2.0.0"
 requires "nim_esphome >= 0.1.0"
 requires "typestates >= 0.12.0"
+
+task test, "Run satellite typestate invariant tests":
+  exec "nim c -r tests/test_fsm.nim"
+
+task check_cpp, "Verify embedded C++ generation for ESP32 target":
+  exec "nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on src/nim_esphome_satellite.nim"
+

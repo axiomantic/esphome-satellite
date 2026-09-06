@@ -47,4 +47,4 @@ jobs:
       - name: Test Embedded C++ Transpilation
         working-directory: satellite
         run: |
-          nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
+          nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
