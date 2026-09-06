@@ -24,6 +24,9 @@
     .preset-title { font-weight: 600; color: #93c5fd; font-size: 0.95rem; }
     .preset-badge { font-size: 0.75rem; background: var(--accent-badge); color: var(--accent-badge-text); padding: 2px 8px; border-radius: 12px; font-weight: 500; font-family: monospace; }
     .preset-desc { font-size: 0.85rem; color: #cbd5e1; margin: 4px 0 10px 0; line-height: 1.4; }
+    .nested-field { margin: 12px 0; background: rgba(15, 23, 42, 0.6); border: 1px dashed #3b82f6; border-radius: 8px; padding: 14px; text-align: left; }
+    .nested-field[data-depends-on] { display: none; }
+    .nested-field.highlight { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3); }
     .preview-btn { background: #1e293b; color: #38bdf8; border: 1px solid #334155; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; }
     .preview-btn:hover { background: #334155; color: #7dd3fc; }
     .preview-btn.playing { background: #0284c7; color: #ffffff; border-color: #0284c7; }
@@ -56,18 +59,18 @@
             <span class="preset-badge" id="presetCadence_default_sound_style"></span>
           </div>
           <p class="preset-desc" id="presetDesc_default_sound_style"></p>
+          <div class="nested-field" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom">
+            <label for="field_custom_audio">Custom Audio Feedback Loop (.wav)</label>
+        <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144">
+        <div class="format-callout"><strong>Format:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to safe dedicated partition at 0x370000, 100% safe from OTA firmware updates.</div>
+        <div class="file-status" id="status_custom_audio"></div>
+            <div class="hint">Upload an uncompressed mono PCM WAV audio file to flash into the dedicated sound_data partition</div>
+          </div>
           <div class="preview-actions">
             <button type="button" class="preview-btn" id="previewBtn_default_sound_style">▶ Preview Sound</button>
           </div>
         </div>
         <div class="hint">Acoustic feedback rhythm played while the assistant is processing speech</div>
-      </div>
-      <div class="form-group" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom">
-        <label for="field_custom_audio">Custom Audio Feedback Loop (.wav)</label>
-        <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144">
-        <div class="format-callout"><strong>Format:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to safe dedicated partition at 0x370000, 100% safe from OTA firmware updates.</div>
-        <div class="file-status" id="status_custom_audio"></div>
-        <div class="hint">Upload an uncompressed mono PCM WAV audio file to flash into the dedicated sound_data partition</div>
       </div>
     </div>
     <div class="actions">
@@ -132,7 +135,7 @@
             return;
           }
         }
-        alert('Please select a custom .wav audio file below first to preview.');
+        alert('Please select a custom .wav audio file first to preview.');
         stopAudioPreview();
         return;
       }
@@ -199,7 +202,7 @@
       updateDynamicManifest();
     }
 
-    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms rhythm","desc":"Crisp, fast rhythmic progress ticking indicating active on-device processing and network transit. Recommended default."},"Pulse":{"cadence":"250ms cadence","desc":"Gentle, pulsating heartbeat rhythm. Subtle and non-intrusive for quiet living rooms or bedrooms."},"Sonar":{"cadence":"800ms cadence","desc":"Nautical high-pitch radar ping chirp with smooth exponential decay. Distinct modern tech aesthetic."},"Tick":{"cadence":"500ms cadence","desc":"Discrete mechanical clockwork tick. Deliberate, metronomic cadence."},"Silent":{"cadence":"No sound (0ms)","desc":"No audio cues are emitted during speech processing. The satellite remains completely silent until TTS voice playback begins."},"Custom":{"cadence":"Custom audio loop","desc":"Plays user-uploaded PCM WAV audio streamed from the dedicated flash partition (sound_data at 0x370000). Upload your .wav file below."}};
+    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
     const select_default_sound_style = document.getElementById('field_default_sound_style');
     const title_default_sound_style = document.getElementById('presetTitle_default_sound_style');
     const cadence_default_sound_style = document.getElementById('presetCadence_default_sound_style');
