@@ -13,7 +13,7 @@ Standard ESPHome voice setups rely on loose asynchronous network events and C++ 
 - **Context-Aware Wake Words**: Stop words are strictly ignored when the device is idle, eliminating phantom cancellations from background TV or conversation.
 - **Fail-Safe Media & State Recovery**: If Home Assistant drops connection or a pipeline errors mid-stream, media automatically un-ducks and the device safely resets to idle instead of freezing.
 - **Compile-Time Verified**: Every valid state transition is proven at compile time—dead ends, impossible states, and race conditions are caught before firmware is ever flashed.
-- **Drop-In Integration**: Seamlessly integrates with standard ESPHome voice assistant pipelines and hardware.
+- **Drop-In Integration**: Integrates with standard ESPHome voice assistant pipelines and hardware.
 
 ---
 
@@ -26,7 +26,7 @@ Choose your preferred installation method:
 | **In-Browser Web Installer** | Zero setup. Connect USB and flash directly from Chrome or Edge. | [![Install with ESP-Web-Tools](https://img.shields.io/badge/Web_Install-Connect_%26_Flash-2563eb?style=for-the-badge&logo=espressif&logoColor=white)](https://axiomantic.github.io/esphome-satellite/) |
 | **Home Assistant Dashboard** | If you have the ESPHome Dashboard add-on in Home Assistant. | [![Open your Home Assistant instance and open the ESPHome dashboard to import this node.](https://my.home-assistant.io/badges/dashboard_import.svg)](https://my.home-assistant.io/redirect/dashboard_import/?package=github://axiomantic/esphome-satellite/packages/respeaker_xvf3800.yaml) |
 
-> 🚀 **Zero-YAML Setup**: Plug your device (e.g. Seeed ReSpeaker XVF3800) into your computer and click [**Connect & Flash**](https://axiomantic.github.io/esphome-satellite/) to install pre-compiled firmware and set Wi-Fi in under 60 seconds. Home Assistant will auto-discover it!
+> 🚀 **Browser Installation**: Plug your device (e.g. Seeed ReSpeaker XVF3800) into your computer and use [**Connect & Flash**](https://axiomantic.github.io/esphome-satellite/) to flash pre-compiled firmware and configure Wi-Fi.
 
 ---
 
@@ -56,7 +56,7 @@ Choose your preferred installation method:
 In conventional ESPHome voice satellites, state is distributed across asynchronous Home Assistant server events, network callbacks, and C++ lambdas. Under real-world acoustic and network conditions, this causes severe UX bugs:
 
 1. **Stop Word Clobbering**: Ambient noise or TV audio false-triggers the `Stop` wake word when the satellite is already idle, causing confusing audio stops and state corruption.
-2. **Premature Chime & VAD Clipping**: If the microphone opens while the wake chime is still playing, the VAD algorithm hears the satellite\x27s own speaker and immediately triggers `stt-no-text-recognized`.
+2. **Premature Chime & VAD Clipping**: If the microphone opens while the wake chime is still playing, the VAD algorithm hears the satellite's own speaker and immediately triggers `stt-no-text-recognized`.
 3. **Double Wake / Rapid Re-triggering**: A wake word detected while already processing speech can corrupt audio buffers or cause duplicate requests.
 4. **Offline Phantom Triggers**: On-device micro wake word models continuing to trigger while the WiFi or Home Assistant API connection is dropped.
 5. **Ducking Clobbering**: Music streaming volume is not properly ducked or fails to un-duck when conversations finish or fail.

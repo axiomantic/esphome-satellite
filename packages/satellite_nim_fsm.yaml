@@ -1,5 +1,5 @@
 # =============================================================================
-# nim-esphome-satellite: Compile-time verified voice satellite state machine
+# esphome-satellite: On-device voice satellite state machine
 # =============================================================================
 
 external_components:

@@ -2,7 +2,7 @@
 
 version       = "0.3.0"
 author        = "Elijah Rust"
-description   = "A robust on-device state supervisor for ESPHome voice satellites that eliminates audio glitches, race conditions, and stuck states"
+description   = "An on-device state supervisor for ESPHome voice satellites that eliminates audio glitches, race conditions, and stuck states"
 license       = "MIT"
 srcDir        = "src"
 

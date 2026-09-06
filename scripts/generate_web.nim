@@ -3,7 +3,7 @@ import nim_esphome/dsl/installer
 
 let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   installer.title = "esphome-satellite Web Installer"
-  installer.description = "Rock-solid on-device state supervisor for ESPHome and Home Assistant voice satellites with customizable audio feedback."
+  installer.description = "On-device state supervisor for ESPHome and Home Assistant voice satellites with customizable audio feedback."
   installer.version = "0.3.0"
   installer.homeAssistantDomain = "esphome"
   installer.chipFamily = "ESP32-S3"
