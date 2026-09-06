@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest, macos-latest ]
-        nim-version: [ '2.2.0', '2.2.8', 'stable' ]
+        nim-version: [ '2.2.8', 'stable' ]
 
     steps:
       - name: Check out satellite repository
