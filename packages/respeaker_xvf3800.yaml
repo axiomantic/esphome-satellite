@@ -45,6 +45,20 @@ wifi:
 captive_portal:
 
 api:
+  services:
+    - service: test_audio_feedback
+      variables:
+        style: string
+        volume: float
+      then:
+        - lambda: |-
+            call_nim_action_test_audio(style.c_str(), volume);
+    - service: set_privacy_mute
+      variables:
+        muted: bool
+      then:
+        - lambda: |-
+            call_nim_action_set_mute(muted);
 
 ota:
   - platform: esphome

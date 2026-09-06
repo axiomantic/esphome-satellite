@@ -18,6 +18,8 @@
 
 import nim_esphome
 import typestates
+import std/strutils
+import nim_esphome/dsl/actions
 
 type
   SatelliteContext* = object
@@ -368,6 +370,56 @@ esphomeControls:
     onToggle(enabled):
       wakeChimeEnabled = enabled
       satellitePipeline.wakeChimeEnabled = enabled
+
+proc parseSoundStyle*(s: string): ProcessingSoundStyle =
+  case s.toLowerAscii
+  of "spinner": psSpinner
+  of "pulse": psPulse
+  of "sonar": psSonar
+  of "tick": psTick
+  else: psSilent
+
+haAction("test_audio_feedback"):
+  def.description = "Preview voice satellite sound style or chime from Home Assistant"
+  param "style", pkString, defaultVal = "Spinner", description = "Sound style: Spinner, Pulse, Sonar, Tick, Silent"
+  param "volume", pkFloat, min = 0.0, max = 100.0, defaultVal = "75.0", description = "Playback volume percentage (0-100)"
+  onExecute(ctx):
+    let styleStr = ctx.getString("style", "Spinner")
+    let vol = ctx.getFloat("volume", 75.0)
+    info("SatelliteAction", "Previewing audio feedback: " & styleStr & " at " & $vol & "%")
+    let st = parseSoundStyle(styleStr)
+    configuredProcessingStyle = st
+    satellitePipeline.processingLoop.style = st
+    satellitePipeline.processingLoop.volume = float32(vol / 100.0)
+    satellitePipeline.startProcessingLoop(st)
+
+haService("set_privacy_mute"):
+  def.description = "Set microphone privacy mute state"
+  param "muted", pkBool, defaultVal = "true", description = "Mute microphone"
+  onExecute(ctx):
+    let mute = ctx.getBool("muted", true)
+    info("SatelliteAction", "Privacy mute requested: " & $mute)
+    if mute:
+      if currentState != rsMuted:
+        micWasMuted = true
+        currentState = rsMuted
+    else:
+      if currentState == rsMuted:
+        micWasMuted = false
+        currentState = rsIdle
+
+proc nim_action_test_audio*(style: cstring, volume: cfloat) {.exportc, cdecl.} =
+  discard triggerServiceCall("test_audio_feedback", [
+    ("style", newParamValue($style)),
+    ("volume", newParamValue(float(volume)))
+  ])
+
+proc nim_action_set_mute*(muted: bool) {.exportc, cdecl.} =
+  discard triggerServiceCall("set_privacy_mute", [
+    ("muted", newParamValue(muted))
+  ])
+
+
 
 proc returnFromVoiceFlow() =
   if mediaWasPlaying:

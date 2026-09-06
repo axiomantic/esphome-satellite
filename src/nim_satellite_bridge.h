@@ -92,6 +92,17 @@ inline void call_nim_ota_end(bool ok) {
   if (nim_satellite_ota_end) nim_satellite_ota_end(ok);
 }
 
+// Home Assistant Actions Bridge
+void nim_action_test_audio(const char *style, float volume) __attribute__((weak));
+void nim_action_set_mute(bool muted) __attribute__((weak));
+
+inline void call_nim_action_test_audio(const char *style, float volume) {
+  if (nim_action_test_audio) nim_action_test_audio(style, volume);
+}
+inline void call_nim_action_set_mute(bool muted) {
+  if (nim_action_set_mute) nim_action_set_mute(muted);
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -237,3 +237,24 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_tts_end()
     check nim_satellite_get_state() == 0 # Idle
 
+  test "Home Assistant haAction and haService invocations":
+    check nim_satellite_get_state() == 0
+
+    # 1. Trigger test_audio_feedback action
+    nim_action_test_audio("Pulse", 85.0'f32)
+    check configuredProcessingStyle == psPulse
+    check nim_satellite_is_processing()
+    satellitePipeline.stopProcessingLoop()
+    check not nim_satellite_is_processing()
+
+    # 2. Trigger set_privacy_mute action
+    nim_action_set_mute(true)
+    check nim_satellite_is_muted()
+    check nim_satellite_get_state() == 8 # Muted
+
+    # Unmute via action
+    nim_action_set_mute(false)
+    check not nim_satellite_is_muted()
+    check nim_satellite_get_state() == 0 # Idle
+
+
