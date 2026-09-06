@@ -8,15 +8,8 @@ on:
 
 jobs:
   test:
-    name: Test Nim ${{ matrix.nim-version }} on Linux
+    name: Test on Linux (Nim 2.2 & latest)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - nim-version: latest:2.2
-          - nim-version: latest
-
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -38,19 +31,24 @@ jobs:
           repository: elijahr/nim-typestates
           path: nim-typestates
 
-      - name: Install Nim
+      - name: Install Nim (latest)
         uses: asdf-vm/actions/install@v4
         with:
           tool_versions: |
-            nim ${{ matrix.nim-version }}
+            nim 2.2.10
 
-      - name: Run Typestate Tests
+      - name: Test on Nim latest (2.2.10)
         working-directory: satellite
         run: |
-          asdf set nim ${{ matrix.nim-version }}
+          asdf set nim 2.2.10
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
+          nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
 
-      - name: Test C++ Transpilation
+      - name: Test on Nim 2.2 (minimum supported 2.2.8)
         working-directory: satellite
         run: |
+          asdf install nim 2.2.8
+          asdf set nim 2.2.8
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
           nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
+

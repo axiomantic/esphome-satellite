@@ -7,3 +7,5 @@ nimcache/
 tests/test_fsm
 .DS_Store
 Thumbs.db
+.esphome/
+build/

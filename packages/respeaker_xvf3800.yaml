@@ -14,7 +14,7 @@ esphome:
     name: "axiomantic.esphome-satellite"
     version: "0.2.0"
   includes:
-    - https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/src/nim_satellite_bridge.h
+    - ../src/nim_satellite_bridge.h
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -29,12 +29,12 @@ external_components:
     components: [nim]
 
 nim:
-  source: https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/src/nim_esphome_satellite.nim
+  source: ../src/nim_esphome_satellite.nim
   nim_flags:
     - "-d:danger"
     - "-d:useMalloc"
     - "-d:esphome"
-  nimble_paths:
+  requires:
     - https://github.com/elijahr/nim-typestates
 
 wifi:
