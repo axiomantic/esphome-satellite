@@ -12,6 +12,7 @@
     h1 { margin-top: 0; font-size: 1.75rem; color: #60a5fa; }
     p.desc { color: var(--muted); line-height: 1.5; margin-bottom: 24px; font-size: 0.95rem; }
     .form-group { text-align: left; margin-bottom: 20px; background: var(--card-inner); padding: 18px; border-radius: 10px; border: 1px solid var(--border); transition: all 0.2s ease; }
+    .form-group[data-depends-on] { display: none; }
     .form-group.highlight { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
     .form-group.subtle { opacity: 0.65; }
     label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.95rem; color: #e2e8f0; }
@@ -164,6 +165,15 @@
     function updateDynamicManifest() {
       const manifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
       for (const [name, part] of uploadedParts.entries()) {
+        const group = document.getElementById('group_' + name);
+        if (group) {
+          const parentName = group.dataset.dependsOn;
+          const expectedVal = group.dataset.dependsVal;
+          if (parentName && expectedVal) {
+            const parentEl = document.getElementById('field_' + parentName);
+            if (parentEl && parentEl.value !== expectedVal) continue;
+          }
+        }
         manifest.builds[0].parts.push({ path: part.url, offset: part.offset });
       }
       const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
@@ -178,17 +188,18 @@
         if (parentEl) {
           const match = (parentEl.value === expectedVal);
           if (match) {
+            group.style.display = 'block';
             group.classList.add('highlight');
-            group.classList.remove('subtle');
           } else {
+            group.style.display = 'none';
             group.classList.remove('highlight');
-            group.classList.add('subtle');
           }
         }
       });
+      updateDynamicManifest();
     }
 
-    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms rhythm","desc":"Crisp, fast rhythmic progress ticking indicating active on-device processing and network transit. Recommended default."},"Pulse":{"cadence":"250ms cadence","desc":"Gentle, pulsating heartbeat rhythm. Subtle and non-intrusive for quiet living rooms or bedrooms."},"Sonar":{"cadence":"800ms cadence","desc":"Nautical high-pitch radar ping chirp with smooth exponential decay. Distinct modern tech aesthetic."},"Tick":{"cadence":"500ms cadence","desc":"Discrete mechanical clockwork tick. Deliberate, metronomic cadence."},"Silent":{"cadence":"No sound (0ms)","desc":"No audio cues are emitted during speech processing. The satellite remains completely silent until TTS voice playback begins."},"Custom":{"cadence":"Custom audio loop","desc":"Plays user-uploaded PCM WAV audio streamed from the dedicated flash partition (sound_data at 0x370000)."}};
+    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms rhythm","desc":"Crisp, fast rhythmic progress ticking indicating active on-device processing and network transit. Recommended default."},"Pulse":{"cadence":"250ms cadence","desc":"Gentle, pulsating heartbeat rhythm. Subtle and non-intrusive for quiet living rooms or bedrooms."},"Sonar":{"cadence":"800ms cadence","desc":"Nautical high-pitch radar ping chirp with smooth exponential decay. Distinct modern tech aesthetic."},"Tick":{"cadence":"500ms cadence","desc":"Discrete mechanical clockwork tick. Deliberate, metronomic cadence."},"Silent":{"cadence":"No sound (0ms)","desc":"No audio cues are emitted during speech processing. The satellite remains completely silent until TTS voice playback begins."},"Custom":{"cadence":"Custom audio loop","desc":"Plays user-uploaded PCM WAV audio streamed from the dedicated flash partition (sound_data at 0x370000). Upload your .wav file below."}};
     const select_default_sound_style = document.getElementById('field_default_sound_style');
     const title_default_sound_style = document.getElementById('presetTitle_default_sound_style');
     const cadence_default_sound_style = document.getElementById('presetCadence_default_sound_style');
