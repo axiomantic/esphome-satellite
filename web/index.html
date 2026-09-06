@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>esphome-satellite Web Installer</title>
+  <script
+    type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+  ></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .card {
+      background: #1e293b;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+      max-width: 540px;
+      width: 100%;
+    }
+    h1 { margin-top: 0; font-size: 1.8rem; color: #60a5fa; }
+    p { color: #94a3b8; line-height: 1.6; }
+    .instructions {
+      text-align: left;
+      background: #0f172a;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+    .instructions ol { margin: 0; padding-left: 20px; }
+    .instructions li { margin-bottom: 8px; }
+    .footer { margin-top: 24px; font-size: 0.85rem; color: #64748b; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button.install-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    button.install-btn:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>esphome-satellite</h1>
+    <p>Rock-solid, glitch-free on-device state supervisor for ESPHome and Home Assistant voice satellites.</p>
+    
+    <div class="instructions">
+      <ol>
+        <li>Connect your voice satellite board (e.g. Seeed ReSpeaker XVF3800) via USB.</li>
+        <li>Click <strong>Install esphome-satellite</strong> below using Chrome, Edge, or an install-capable browser.</li>
+        <li>Select the serial port, follow the prompts, and configure your Wi-Fi.</li>
+        <li>Home Assistant will automatically discover your satellite!</li>
+      </ol>
+    </div>
+
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate" class="install-btn">
+        Install esphome-satellite
+      </button>
+      <span slot="unsupported">Your browser does not support WebSerial. Please use Google Chrome or Microsoft Edge on desktop.</span>
+      <span slot="not-allowed">WebSerial permission denied. Please allow serial access to flash.</span>
+    </esp-web-install-button>
+
+    <div class="footer">
+      Powered by <a href="https://github.com/axiomantic/nim-esphome" target="_blank">nim-esphome</a> &amp; <a href="https://esphome.github.io/esp-web-tools/" target="_blank">ESP-Web-Tools</a>
+    </div>
+  </div>
+</body>
+</html>

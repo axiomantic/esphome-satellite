@@ -1,0 +1,77 @@
+# =============================================================================
+# esphome-satellite: Seeed ReSpeaker XVF3800 Drop-in Hardware Configuration
+# =============================================================================
+
+substitutions:
+  name: "esphome-satellite"
+  friendly_name: "Voice Satellite"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: true
+  project:
+    name: "axiomantic.esphome-satellite"
+    version: "0.2.0"
+  includes:
+    - https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/src/nim_satellite_bridge.h
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/axiomantic/nim-esphome
+      ref: main
+    components: [nim]
+
+nim:
+  source: https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/src/nim_esphome_satellite.nim
+  nim_flags:
+    - "-d:danger"
+    - "-d:useMalloc"
+    - "-d:esphome"
+  nimble_paths:
+    - https://github.com/elijahr/nim-typestates
+
+wifi:
+  ap:
+    ssid: "Satellite Fallback Hotspot"
+
+captive_portal:
+
+api:
+
+ota:
+  - platform: esphome
+
+micro_wake_word:
+  on_wake_word_detected:
+    - lambda: |-
+        call_nim_wake_word(wake_word.c_str(), 0);
+
+voice_assistant:
+  on_start:
+    - lambda: |-
+        call_nim_chime_done(true);
+  on_stt_vad_end:
+    - lambda: |-
+        call_nim_speech_ended();
+  on_tts_start:
+    - lambda: |-
+        call_nim_tts_start();
+  on_tts_end:
+    - lambda: |-
+        call_nim_tts_end();
+  on_error:
+    - lambda: |-
+        call_nim_error(code.c_str());
+  on_client_connected:
+    - lambda: |-
+        call_nim_connected();
+  on_client_disconnected:
+    - lambda: |-
+        call_nim_disconnected();

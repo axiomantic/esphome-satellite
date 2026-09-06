@@ -17,8 +17,22 @@ Standard ESPHome voice setups rely on loose asynchronous network events and C++ 
 
 ---
 
+### Quick Install (One-Click)
+
+Choose your preferred installation method:
+
+| Method | Best For | Action |
+|---|---|---|
+| **In-Browser Web Installer** | Zero setup. Connect USB and flash directly from Chrome or Edge. | [![Install with ESP-Web-Tools](https://img.shields.io/badge/Web_Install-Connect_%26_Flash-2563eb?style=for-the-badge&logo=espressif&logoColor=white)](https://axiomantic.github.io/esphome-satellite/) |
+| **Home Assistant Dashboard** | If you have the ESPHome Dashboard add-on in Home Assistant. | [![Open your Home Assistant instance and open the ESPHome dashboard to import this node.](https://my.home-assistant.io/badges/dashboard_import.svg)](https://my.home-assistant.io/redirect/dashboard_import/?package=github://axiomantic/esphome-satellite/packages/respeaker_xvf3800.yaml) |
+
+> 🚀 **Zero-YAML Setup**: Plug your device (e.g. Seeed ReSpeaker XVF3800) into your computer and click [**Connect & Flash**](https://axiomantic.github.io/esphome-satellite/) to install pre-compiled firmware and set Wi-Fi in under 60 seconds. Home Assistant will auto-discover it!
+
+---
+
 ## Table of Contents
 
+- [Quick Install (One-Click)](#quick-install-one-click)
 - [The Voice Satellite Race Condition Problem](#the-voice-satellite-race-condition-problem)
 - [How Compile-Time Typestates Solve It](#how-compile-time-typestates-solve-it)
 - [State Machine Architecture](#state-machine-architecture)
