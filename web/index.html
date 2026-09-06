@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>esphome-satellite Web Installer</title>
   <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
   <style>
@@ -12,9 +15,8 @@
     h1 { margin-top: 0; font-size: 1.75rem; color: #60a5fa; }
     p.desc { color: var(--muted); line-height: 1.5; margin-bottom: 24px; font-size: 0.95rem; }
     .form-group { text-align: left; margin-bottom: 20px; background: var(--card-inner); padding: 18px; border-radius: 10px; border: 1px solid var(--border); transition: all 0.2s ease; }
-    .form-group[data-depends-on] { display: none; }
+    .form-group[data-depends-on] { display: none !important; }
     .form-group.highlight { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-    .form-group.subtle { opacity: 0.65; }
     label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.95rem; color: #e2e8f0; }
     .hint { font-size: 0.82rem; color: var(--muted); margin-top: 6px; line-height: 1.4; }
     input[type='file'], select, input[type='text'], input[type='number'] { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #080d1a; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
@@ -25,7 +27,7 @@
     .preset-badge { font-size: 0.75rem; background: var(--accent-badge); color: var(--accent-badge-text); padding: 2px 8px; border-radius: 12px; font-weight: 500; font-family: monospace; }
     .preset-desc { font-size: 0.85rem; color: #cbd5e1; margin: 4px 0 10px 0; line-height: 1.4; }
     .nested-field { margin: 12px 0; background: rgba(15, 23, 42, 0.6); border: 1px dashed #3b82f6; border-radius: 8px; padding: 14px; text-align: left; }
-    .nested-field[data-depends-on] { display: none; }
+    .nested-field[data-depends-on] { display: none !important; }
     .nested-field.highlight { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3); }
     .preview-btn { background: #1e293b; color: #38bdf8; border: 1px solid #334155; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; }
     .preview-btn:hover { background: #334155; color: #7dd3fc; }
@@ -59,9 +61,9 @@
             <span class="preset-badge" id="presetCadence_default_sound_style"></span>
           </div>
           <p class="preset-desc" id="presetDesc_default_sound_style"></p>
-          <div class="nested-field" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom">
+          <div class="nested-field" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom" style="display: none;">
             <label for="field_custom_audio">Custom Audio Feedback Loop (.wav)</label>
-        <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144">
+        <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144" disabled>
         <div class="format-callout"><strong>Format:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to safe dedicated partition at 0x370000, 100% safe from OTA firmware updates.</div>
         <div class="file-status" id="status_custom_audio"></div>
             <div class="hint">Upload an uncompressed mono PCM WAV audio file to flash into the dedicated sound_data partition</div>
@@ -191,11 +193,13 @@
         if (parentEl) {
           const match = (parentEl.value === expectedVal);
           if (match) {
-            group.style.display = 'block';
+            group.style.setProperty('display', 'block', 'important');
             group.classList.add('highlight');
+            group.querySelectorAll('input, select, button, textarea').forEach(el => { el.disabled = false; });
           } else {
-            group.style.display = 'none';
+            group.style.setProperty('display', 'none', 'important');
             group.classList.remove('highlight');
+            group.querySelectorAll('input, select, button, textarea').forEach(el => { el.disabled = true; });
           }
         }
       });
