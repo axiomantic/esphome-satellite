@@ -9,3 +9,5 @@ tests/test_fsm
 Thumbs.db
 .esphome/
 build/
+node_modules/
+dist/

@@ -32,6 +32,9 @@
     .preview-btn:hover { background: #334155; color: #7dd3fc; }
     .preview-btn.playing { background: #0284c7; color: #ffffff; border-color: #0284c7; }
     .format-callout { margin-top: 8px; background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; padding: 8px 12px; border-radius: 4px; font-size: 0.8rem; color: #93c5fd; line-height: 1.4; }
+    .phonetic-callout { margin-top: 8px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 4px; font-size: 0.82rem; color: #fde68a; line-height: 1.45; }
+    .phonetic-callout strong { color: #fbbf24; }
+    .phonetic-callout code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #cbd5e1; }
     .file-status { margin-top: 8px; font-size: 0.85rem; color: #34d399; display: none; background: rgba(16, 185, 129, 0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2); }
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
     button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
@@ -42,8 +45,40 @@
 <body>
   <div class="card">
     <h1>esphome-satellite Web Installer</h1>
-    <p class="desc">On-device state supervisor for ESPHome and Home Assistant voice satellites with customizable audio feedback.</p>
+    <p class="desc">On-device state supervisor for ESPHome and Home Assistant voice satellites with hardware target switching, multi-wake-word selection, and customizable audio feedback.</p>
+    <div class="form-group" id="group_hardware_target" data-field="hardware_target">
+      <label for="field_hardware_target">Hardware Target</label>
+      <select id="field_hardware_target">
+        <option value="Seeed ReSpeaker XVF3800" selected>Seeed ReSpeaker XVF3800</option>
+        <option value="Home Assistant Voice PE">Home Assistant Voice PE</option>
+        <option value="ESP32-S3-BOX / BOX-3">ESP32-S3-BOX / BOX-3</option>
+      </select>
+      <div class="hint" id="target_desc">Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation</div>
+    </div>
     <div class="fields-container">
+      <div class="form-group" id="group_wake_word" data-field="wake_word">
+        <label for="field_wake_word">Active Wake Word Model(s)</label>
+        <select id="field_wake_word">
+          <option value="Okay Nabu (Default)" selected>Okay Nabu (Default)</option>
+          <option value="Hey Jarvis">Hey Jarvis</option>
+          <option value="Alexa">Alexa</option>
+          <option value="All 3 Models (Concurrent)">All 3 Models (Concurrent)</option>
+          <option value="Custom Wake Word">Custom Wake Word</option>
+        </select>
+        <div class="hint">On-device micro-wake-word models. ESP32-S3 with 8MB PSRAM supports up to 3 concurrent models in parallel without reflashing.</div>
+        <div class="nested-field" id="group_custom_wake_word_phrase" data-field="custom_wake_word_phrase" data-depends-on="wake_word" data-depends-val="Custom Wake Word" style="display: none;">
+          <label for="field_custom_wake_word_phrase">Phonetic Wake Word Phrase</label>
+        <input type="text" id="field_custom_wake_word_phrase" value="" placeholder="okay see three pee oh" disabled>
+        <div class="phonetic-callout"><strong>Phonetic spelling recommendation:</strong> Spell words phonetically for optimal acoustic feature matching &mdash; e.g. <code>ok c3p0</code> &rarr; <code>okay see three pee oh</code> or <code>dj pj</code> &rarr; <code>dee jay pee jay</code>.</div>
+          <div class="hint">Phonetic representation used by the wake word model engine and WASM/WebGPU generator</div>
+        </div>
+        <div class="nested-field" id="group_custom_wake_word_model" data-field="custom_wake_word_model" data-depends-on="wake_word" data-depends-val="Custom Wake Word" style="display: none;">
+          <label for="field_custom_wake_word_model">Custom Wake Word Model (.tflite)</label>
+        <input type="file" id="field_custom_wake_word_model" accept=".tflite" data-offset="3866624" data-maxsize="262144" disabled>
+        <div class="file-status" id="status_custom_wake_word_model"></div>
+          <div class="hint">Upload a pre-trained micro_wake_word model or one generated with the browser WASM/WebGPU trainer</div>
+        </div>
+      </div>
       <div class="form-group" id="group_default_sound_style" data-field="default_sound_style">
         <label for="field_default_sound_style">Default Processing Sound Style</label>
         <select id="field_default_sound_style">
@@ -89,6 +124,18 @@
       new_install_prompt_erase: true,
       builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
     };
+    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation"},"Home Assistant Voice PE":{"bin":"firmware-voice-pe.bin","chip":"ESP32-S3","desc":"Official Home Assistant Voice PE smart speaker satellite with hardware mute switch"},"ESP32-S3-BOX / BOX-3":{"bin":"firmware-s3box.bin","chip":"ESP32-S3","desc":"Espressif ESP32-S3-BOX / BOX-3 with integrated display and dual microphones"}};
+    const targetSelect = document.getElementById('field_hardware_target');
+    const targetDesc = document.getElementById('target_desc');
+    if (targetSelect) {
+      targetSelect.addEventListener('change', () => {
+        const info = TARGET_MAP[targetSelect.value];
+        if (info) {
+          if (targetDesc && info.desc) targetDesc.textContent = info.desc;
+          updateDynamicManifest();
+        }
+      });
+    }
     const installBtn = document.getElementById('installBtn');
     const uploadedParts = new Map();
     let activeAudioCtx = null;
@@ -167,6 +214,14 @@
 
     function updateDynamicManifest() {
       const manifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
+      const targetSelect = document.getElementById('field_hardware_target');
+      if (targetSelect && typeof TARGET_MAP !== 'undefined') {
+        const info = TARGET_MAP[targetSelect.value];
+        if (info) {
+          manifest.builds[0].parts[0].path = info.bin;
+          if (info.chip) manifest.builds[0].chipFamily = info.chip;
+        }
+      }
       for (const [name, part] of uploadedParts.entries()) {
         const group = document.getElementById('group_' + name);
         if (group) {
@@ -204,6 +259,35 @@
       updateDynamicManifest();
     }
 
+    const fileInput_custom_wake_word_model = document.getElementById('field_custom_wake_word_model');
+    const status_custom_wake_word_model = document.getElementById('status_custom_wake_word_model');
+    if (fileInput_custom_wake_word_model) {
+      fileInput_custom_wake_word_model.addEventListener('change', (e) => {
+        stopAudioPreview();
+        const file = e.target.files[0];
+        if (!file) { uploadedParts.delete('custom_wake_word_model'); updateDynamicManifest(); return; }
+        const maxSizeBytes = parseInt(fileInput_custom_wake_word_model.dataset.maxsize || '262144', 10);
+        if (file.size > maxSizeBytes) {
+          alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
+          fileInput_custom_wake_word_model.value = '';
+          return;
+        }
+        const offset = parseInt(fileInput_custom_wake_word_model.dataset.offset || '0', 10);
+        const blobUrl = URL.createObjectURL(file);
+        uploadedParts.set('custom_wake_word_model', { url: blobUrl, offset: offset });
+        if (status_custom_wake_word_model) {
+          status_custom_wake_word_model.style.display = 'block';
+          status_custom_wake_word_model.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')';
+        }
+        // Automatically select Custom if dependency field exists
+        const depSelect = document.getElementById('field_wake_word');
+        if (depSelect) {
+          depSelect.value = 'Custom Wake Word';
+          depSelect.dispatchEvent(new Event('change'));
+        }
+        updateDynamicManifest();
+      });
+    }
     const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
     const select_default_sound_style = document.getElementById('field_default_sound_style');
     const presetView_default_sound_style = document.getElementById('presetView_default_sound_style');

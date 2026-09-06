@@ -52,3 +52,29 @@ jobs:
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
           nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
 
+  trainer-test:
+    name: Test In-Browser Wake Word Trainer (TypeScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out satellite repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install trainer dependencies
+        working-directory: trainer
+        run: npm ci || npm install
+
+      - name: Typecheck trainer
+        working-directory: trainer
+        run: npm run typecheck
+
+      - name: Run trainer tests
+        working-directory: trainer
+        run: npm test
+
+
