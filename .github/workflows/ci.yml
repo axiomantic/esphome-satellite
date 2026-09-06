@@ -8,8 +8,17 @@ on:
 
 jobs:
   test:
-    name: Test on Linux (Nim 2.2 & Stable)
+    name: Test Nim ${{ matrix.nim-version }} on Linux
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nim-version: latest:2.2
+          - nim-version: latest
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Check out satellite repository
@@ -29,32 +38,19 @@ jobs:
           repository: elijahr/nim-typestates
           path: nim-typestates
 
-      - name: Set up Nim 2.2
-        uses: jiro4989/setup-nim-action@v2
+      - name: Install Nim
+        uses: asdf-vm/actions/install@v4
         with:
-          nim-version: '2.2.8'
+          tool_versions: |
+            nim ${{ matrix.nim-version }}
 
-      - name: Run Typestate Tests (Nim 2.2)
+      - name: Run Typestate Tests
         working-directory: satellite
         run: |
+          asdf set nim ${{ matrix.nim-version }}
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
 
-      - name: Test C++ Transpilation (Nim 2.2)
-        working-directory: satellite
-        run: |
-          nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
-
-      - name: Set up Nim Stable
-        uses: jiro4989/setup-nim-action@v2
-        with:
-          nim-version: 'stable'
-
-      - name: Run Typestate Tests (Nim Stable)
-        working-directory: satellite
-        run: |
-          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
-
-      - name: Test C++ Transpilation (Nim Stable)
+      - name: Test C++ Transpilation
         working-directory: satellite
         run: |
           nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
