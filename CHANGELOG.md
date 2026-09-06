@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed package and repository to `esphome-satellite` for clean, discoverable integration with ESPHome.
 - Updated minimum `nim_esphome` requirement to `>= 0.2.0`.
 - Standardized test suites to use generic wake words (`hey assistant`, `assistant`).
+- Reframed project description and documentation around its core value as an on-device state supervisor eliminating audio glitches and race conditions.
 
 ## [0.1.0] - 2026-09-06
 

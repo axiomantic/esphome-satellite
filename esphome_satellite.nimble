@@ -2,7 +2,7 @@
 
 version       = "0.2.0"
 author        = "Elijah Rust"
-description   = "Compile-time verified voice satellite state machine for ESPHome using nim-esphome and nim-typestates"
+description   = "A robust on-device state supervisor for ESPHome voice satellites that eliminates audio glitches, race conditions, and stuck states"
 license       = "MIT"
 srcDir        = "src"
 
