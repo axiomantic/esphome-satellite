@@ -48,12 +48,31 @@ api:
 ota:
   - platform: esphome
 
+i2s_audio:
+  - id: i2s_in
+    i2s_lrclk_pin: GPIO7
+    i2s_bclk_pin: GPIO8
+
+microphone:
+  - platform: i2s_audio
+    id: board_mic
+    i2s_audio_id: i2s_in
+    i2s_din_pin: GPIO43
+    adc_type: external
+    pdm: false
+    sample_rate: 16000
+    bits_per_sample: 32bit
+    channel: right
+
 micro_wake_word:
+  models:
+    - model: okay_nabu
   on_wake_word_detected:
     - lambda: |-
         call_nim_wake_word(wake_word.c_str(), 0);
 
 voice_assistant:
+  microphone: board_mic
   on_start:
     - lambda: |-
         call_nim_chime_done(true);
