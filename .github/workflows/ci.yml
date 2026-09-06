@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test Nim ${{ matrix.nim-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+        nim-version: [ '2.0.x', '2.2.x', 'stable' ]
+
+    steps:
+      - name: Check out satellite repository
+        uses: actions/checkout@v4
+        with:
+          path: satellite
+
+      - name: Check out nim-esphome
+        uses: actions/checkout@v4
+        with:
+          repository: axiomantic/nim-esphome
+          path: nim-esphome
+
+      - name: Check out nim-typestates
+        uses: actions/checkout@v4
+        with:
+          repository: elijahr/nim-typestates
+          path: nim-typestates
+
+      - name: Set up Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: ${{ matrix.nim-version }}
+
+      - name: Run Typestate Invariant Test Suite
+        working-directory: satellite
+        run: |
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
+
+      - name: Test Embedded C++ Transpilation
+        working-directory: satellite
+        run: |
+          nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
