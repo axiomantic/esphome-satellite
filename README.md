@@ -1,9 +1,9 @@
-# nim-esphome-satellite
+# esphome-satellite
 
-[![CI](https://github.com/axiomantic/nim-esphome-satellite/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomantic/nim-esphome-satellite/actions/workflows/ci.yml)
+[![CI](https://github.com/axiomantic/esphome-satellite/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomantic/esphome-satellite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**`nim-esphome-satellite`** is a compile-time verified voice satellite state machine for [ESPHome](https://esphome.io) devices (such as Seeed ReSpeaker XVF3800 and Home Assistant Voice PE), built on [`nim-esphome`](https://github.com/axiomantic/nim-esphome) and [`nim-typestates`](https://github.com/elijahr/nim-typestates).
+**`esphome-satellite`** is a compile-time verified voice satellite state machine for [ESPHome](https://esphome.io) devices (such as Seeed ReSpeaker XVF3800 and Home Assistant Voice PE), built on [`nim-esphome`](https://github.com/axiomantic/nim-esphome) and [`nim-typestates`](https://github.com/elijahr/nim-typestates).
 
 It moves voice satellite state management directly onto the ESP32 microcontroller, eliminating split-brain race conditions between Home Assistant server events and device hardware callbacks while enforcing state invariants at compile time.
 
@@ -319,7 +319,7 @@ The test suite validates:
 ## Project Layout
 
 ```
-nim-esphome-satellite/
+esphome-satellite/
 ├── src/
 │   ├── nim_esphome_satellite.nim # 14-state verified FSM & exported C ABI
 │   ├── satellite_fsm.nim         # Re-export entrypoint
@@ -331,7 +331,7 @@ nim-esphome-satellite/
 ├── scripts/
 │   ├── build.sh                  # Build validation script
 │   └── test.sh                   # Unit test execution script
-└── nim_esphome_satellite.nimble  # Package specification & dependencies
+└── esphome_satellite.nimble      # Package specification & dependencies
 ```
 
 ---
