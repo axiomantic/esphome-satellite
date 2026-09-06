@@ -24,6 +24,7 @@ It moves voice satellite state management directly onto the ESP32 microcontrolle
 - [Supported Hardware](#supported-hardware)
 - [Local Host Testing](#local-host-testing)
 - [Project Layout](#project-layout)
+- [Changelog](#changelog)
 - [License](#license)
 
 ---
@@ -333,6 +334,10 @@ esphome-satellite/
 │   └── test.sh                   # Unit test execution script
 └── esphome_satellite.nimble      # Package specification & dependencies
 ```
+
+## Changelog
+
+All notable changes are documented in [CHANGELOG.md](CHANGELOG.md) in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 

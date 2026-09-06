@@ -1,0 +1,48 @@
+name: Auto Tag
+
+on:
+  push:
+    branches: [main]
+    paths: ["*.nimble"]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.TAG_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from .nimble
+        id: ver
+        run: |
+          NIMBLE=$(ls *.nimble | head -1)
+          VERSION=$(grep -m1 -E '^version\s*=\s*"' "$NIMBLE" | sed -E 's/^version\s*=\s*"([^"]+)".*/\1/')
+          [ -z "$VERSION" ] && { echo "No version found in $NIMBLE"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Tag and create release if not exists
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists, skipping."
+            exit 0
+          fi
+
+          echo "Creating tag v$VERSION..."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+
+          if command -v gh >/dev/null 2>&1; then
+            gh release create "v$VERSION" --title "v$VERSION" --generate-notes || true
+          fi
