@@ -17,22 +17,30 @@ Standard ESPHome voice setups rely on loose asynchronous network events and C++ 
 
 ---
 
-### Quick Install (One-Click)
+### Quick Install
 
-Choose your preferred installation method:
+#### In-Browser Web Installer (Recommended)
 
-| Method | Best For | Action |
-|---|---|---|
-| **In-Browser Web Installer** | Zero setup. Connect USB and flash directly from Chrome or Edge. | [![Install with ESP-Web-Tools](https://img.shields.io/badge/Web_Install-Connect_%26_Flash-2563eb?style=for-the-badge&logo=espressif&logoColor=white)](https://axiomantic.github.io/esphome-satellite/) |
-| **Home Assistant Dashboard** | If you have the ESPHome Dashboard add-on in Home Assistant. | [![Open your Home Assistant instance and open the ESPHome dashboard to import this node.](https://my.home-assistant.io/badges/dashboard_import.svg)](https://my.home-assistant.io/redirect/dashboard_import/?package=github://axiomantic/esphome-satellite/packages/respeaker_xvf3800.yaml) |
+Connect your ESP32 device via USB and flash pre-compiled firmware directly from Chrome or Edge:
 
-> 🚀 **Browser Installation**: Plug your device (e.g. Seeed ReSpeaker XVF3800) into your computer and use [**Connect & Flash**](https://axiomantic.github.io/esphome-satellite/) to flash pre-compiled firmware and configure Wi-Fi.
+[![Install with ESP-Web-Tools](https://img.shields.io/badge/Web_Install-Connect_%26_Flash-2563eb?style=for-the-badge&logo=espressif&logoColor=white)](https://axiomantic.github.io/esphome-satellite/)
+
+After flashing, configure your Wi-Fi credentials via the captive portal. Home Assistant will automatically discover the voice satellite.
+
+#### ESPHome YAML Package
+
+If you build firmware with ESPHome CLI or the ESPHome Dashboard, add the remote package to your device configuration:
+
+```yaml
+packages:
+  satellite: github://axiomantic/esphome-satellite/packages/respeaker_xvf3800.yaml
+```
 
 ---
 
 ## Table of Contents
 
-- [Quick Install (One-Click)](#quick-install-one-click)
+- [Quick Install](#quick-install)
 - [The Voice Satellite Race Condition Problem](#the-voice-satellite-race-condition-problem)
 - [How Compile-Time Typestates Solve It](#how-compile-time-typestates-solve-it)
 - [State Machine Architecture](#state-machine-architecture)
