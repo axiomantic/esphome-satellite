@@ -95,11 +95,12 @@ micro_wake_word:
     - model: okay_nabu
   on_wake_word_detected:
     - lambda: |-
-        if (id(active_wake_word).state != "All" &&
-            id(active_wake_word).state != wake_word &&
-            !(id(active_wake_word).state == "Mr. Clemens" && (wake_word == "Mr. Clemens" || wake_word == "clemens")) &&
-            !(id(active_wake_word).state == "Okay Nabu" && wake_word == "okay_nabu")) {
-          ESP_LOGD("satellite", "Ignored wake word '%s' (active: '%s')", wake_word.c_str(), id(active_wake_word).state.c_str());
+        std::string selected = id(active_wake_word).current_option();
+        if (selected != "All" &&
+            selected != wake_word &&
+            !(selected == "Mr. Clemens" && (wake_word == "Mr. Clemens" || wake_word == "clemens")) &&
+            !(selected == "Okay Nabu" && wake_word == "okay_nabu")) {
+          ESP_LOGD("satellite", "Ignored wake word '%s' (active: '%s')", wake_word.c_str(), selected.c_str());
           return;
         }
         call_nim_wake_word(wake_word.c_str(), 0);
