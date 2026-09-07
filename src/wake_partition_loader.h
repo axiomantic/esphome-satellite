@@ -24,8 +24,9 @@ struct __attribute__((packed)) WakeModelHeader {
   uint8_t  sliding_window_size;   // Default 5
   uint16_t tensor_arena_kb;       // Tensor arena size in KB (e.g. 40 = 40960 bytes). If 0, default 40KB
   char     wake_word[32];         // Null-terminated wake word string, e.g. "Marvin"
-  uint8_t  reserved[20];          // Padding to 64 bytes
+  uint8_t  reserved[16];          // Padding to 64 bytes
 };
+static_assert(sizeof(WakeModelHeader) == 64, "WakeModelHeader must be exactly 64 bytes");
 
 class WakePartitionLoader {
  public:

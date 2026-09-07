@@ -293,15 +293,21 @@ voice_assistant:
         if (should_cancel) {
           ESP_LOGI("voice_assistant", "Cancellation word detected in '%s'. Aborting listening.", s.c_str());
           esphome::get_pcm_sound_player().stop();
+          bool played_cancel = false;
           if (id(cancel_sound_switch).state) {
             std::string opt = id(cancel_sound_sound).current_option();
             if (opt == "Match Wake Chime") {
               opt = id(wake_chime_sound).current_option();
             }
-            float vol = id(cancel_sound_volume).state / 100.0f;
-            esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+            if (opt != "Silent") {
+              float vol = id(cancel_sound_volume).state / 100.0f;
+              esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+              played_cancel = true;
+            }
           }
-          id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+          if (!played_cancel) {
+            id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+          }
           id(va).request_stop();
           call_nim_stop_word();
         } else {
@@ -328,15 +334,21 @@ voice_assistant:
   on_error:
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
+        bool played_cancel = false;
         if (id(cancel_sound_switch).state && (code == "timeout" || code == "cancelled" || code == "canceled")) {
           std::string opt = id(cancel_sound_sound).current_option();
           if (opt == "Match Wake Chime") {
             opt = id(wake_chime_sound).current_option();
           }
-          float vol = id(cancel_sound_volume).state / 100.0f;
-          esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+          if (opt != "Silent") {
+            float vol = id(cancel_sound_volume).state / 100.0f;
+            esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+            played_cancel = true;
+          }
         }
-        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+        if (!played_cancel) {
+          id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+        }
         call_nim_error(code.c_str());
   on_client_connected:
     - micro_wake_word.start:
