@@ -2,7 +2,7 @@
 # Name,   Type, SubType, Offset,   Size, Flags
 nvs,      data, nvs,     0x9000,   0x5000,
 otadata,  data, ota,     0xe000,   0x2000,
-app0,     app,  ota_0,   0x10000,  0x1B0000,
-app1,     app,  ota_1,   0x1C0000, 0x1B0000,
-sound_data, data, 0x82, 0x370000, 0x040000,
-wake_model, data, 0x83, 0x3B0000, 0x040000,
+app0,     app,  ota_0,   0x10000,  0x240000,
+app1,     app,  ota_1,   0x250000, 0x240000,
+sound_data, data, 0x82, 0x490000, 0x080000,
+wake_model, data, 0x83, 0x510000, 0x080000,

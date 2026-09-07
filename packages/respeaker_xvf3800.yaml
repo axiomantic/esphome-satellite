@@ -21,6 +21,8 @@ esphome:
   includes:
     - ../src/nim_satellite_bridge.h
     - ../src/xvf3800_hardware.h
+    - ../src/sound_data.h
+    - ../src/pcm_sound_player.h
   build_flags:
     - -Wno-write-strings
   on_boot:
@@ -28,7 +30,11 @@ esphome:
       then:
         - lambda: |-
             esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
-            id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
+            App.register_component_(&esphome::get_pcm_sound_player());
+            esphome::get_pcm_sound_player().set_speaker(id(board_speaker));
+            esphome::get_pcm_sound_player().set_on_finished([]() {
+              id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+            });
             id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         - micro_wake_word.start:
         - lambda: |-
@@ -92,22 +98,6 @@ binary_sensor:
       - delayed_off: 50ms
     on_press:
       - switch.toggle: mic_mute_switch
-
-rtttl:
-  id: chime_player
-  speaker: board_speaker
-  on_finished_playback:
-    - lambda: |-
-        if (std::string(get_satellite_state_name()) == "Thinking") {
-          std::string opt = id(processing_sound).current_option();
-          const char* rtttl_str = get_processing_rtttl(opt);
-          if (rtttl_str && strlen(rtttl_str) > 0) {
-            id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
-            id(chime_player).play(rtttl_str);
-            return;
-          }
-        }
-        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
 
 nim:
   source: ../src/nim_esphome_satellite.nim
@@ -243,11 +233,8 @@ micro_wake_word:
               then:
                 - lambda: |-
                     std::string opt = id(wake_chime_sound).current_option();
-                    const char* rtttl_str = get_chime_rtttl(opt);
-                    if (rtttl_str && strlen(rtttl_str) > 0) {
-                      id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
-                      id(chime_player).play(rtttl_str);
-                    }
+                    float vol = id(wake_chime_volume).state / 100.0f;
+                    esphome::get_pcm_sound_player().play_sound(opt, false, vol);
                 - delay: 250ms
           - voice_assistant.start:
               wake_word: !lambda return wake_word;
@@ -266,11 +253,8 @@ voice_assistant:
     - lambda: |-
         call_nim_speech_ended();
         std::string opt = id(processing_sound).current_option();
-        const char* rtttl_str = get_processing_rtttl(opt);
-        if (rtttl_str && strlen(rtttl_str) > 0) {
-          id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
-          id(chime_player).play(rtttl_str);
-        }
+        float vol = id(processing_sound_volume).state / 100.0f;
+        esphome::get_pcm_sound_player().play_sound(opt, true, vol);
   on_stt_end:
     - lambda: |-
         std::string s = x;
@@ -301,7 +285,7 @@ voice_assistant:
 
         if (should_cancel) {
           ESP_LOGI("voice_assistant", "Cancellation word detected in '%s'. Aborting listening.", s.c_str());
-          id(chime_player).stop();
+          esphome::get_pcm_sound_player().stop();
           id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
           id(va).request_stop();
           call_nim_stop_word();
@@ -309,17 +293,13 @@ voice_assistant:
           if (std::string(get_satellite_state_name()) != "Thinking") {
             call_nim_speech_ended();
             std::string opt = id(processing_sound).current_option();
-            const char* rtttl_str = get_processing_rtttl(opt);
-            if (rtttl_str && strlen(rtttl_str) > 0) {
-              id(chime_player).stop();
-              id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
-              id(chime_player).play(rtttl_str);
-            }
+            float vol = id(processing_sound_volume).state / 100.0f;
+            esphome::get_pcm_sound_player().play_sound(opt, true, vol);
           }
         }
   on_tts_start:
     - lambda: |-
-        id(chime_player).stop();
+        esphome::get_pcm_sound_player().stop();
         id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_tts_start();
   on_tts_end:
@@ -327,12 +307,12 @@ voice_assistant:
         call_nim_tts_end();
   on_end:
     - lambda: |-
-        id(chime_player).stop();
+        esphome::get_pcm_sound_player().stop();
         id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_stop_word();
   on_error:
     - lambda: |-
-        id(chime_player).stop();
+        esphome::get_pcm_sound_player().stop();
         id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_error(code.c_str());
   on_client_connected:
@@ -402,7 +382,6 @@ select:
     initial_option: ${processing_sound_default}
     restore_value: true
     options:
-      - "Silent"
       - "Spinner"
       - "Pulse"
       - "Sonar"
@@ -410,16 +389,23 @@ select:
       - "Typewriter"
       - "Clockwork"
       - "Water Droplets"
+      - "Raindrops"
+      - "Forest Stream"
+      - "Campfire Ember"
+      - "Shishi-Odoshi"
+      - "Soft Footsteps"
+      - "Radar Ping"
+      - "Data Crunch"
+      - "Telemetry Blip"
+      - "Quantum Flux"
+      - "Retro Terminal"
+      - "Silent"
       - "Custom"
     set_action:
       - lambda: |-
           call_nim_action_set_processing_sound(x.c_str());
-          const char* rtttl_str = get_processing_rtttl(x);
-          if (rtttl_str && strlen(rtttl_str) > 0) {
-            id(chime_player).stop();
-            id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
-            id(chime_player).play(rtttl_str);
-          }
+          float vol = id(processing_sound_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_sound(x, false, vol);
 
   - platform: template
     id: wake_chime_sound
@@ -437,17 +423,23 @@ select:
       - "Meditation Bell"
       - "Marimba"
       - "Subtle Beep"
+      - "Bamboo Chime"
+      - "Tibetan Bowl"
+      - "Acoustic Harp"
+      - "Woodblock"
+      - "Ceramic Bell"
+      - "Neon Shimmer"
+      - "Prism Ping"
+      - "Cyber Bloom"
+      - "Quantum Beep"
+      - "Aero Chime"
       - "Silent"
       - "Custom"
     set_action:
       - lambda: |-
           call_nim_action_set_chime_sound(x.c_str());
-          const char* rtttl_str = get_chime_rtttl(x);
-          if (rtttl_str && strlen(rtttl_str) > 0) {
-            id(chime_player).stop();
-            id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
-            id(chime_player).play(rtttl_str);
-          }
+          float vol = id(wake_chime_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_sound(x, false, vol);
 
   - platform: template
     id: led_pattern
@@ -494,12 +486,7 @@ number:
       - lambda: |-
           call_nim_action_set_processing_volume(x);
           std::string opt = id(processing_sound).current_option();
-          const char* rtttl_str = get_processing_rtttl(opt);
-          if (rtttl_str && strlen(rtttl_str) > 0) {
-            id(chime_player).stop();
-            id(chime_player).set_gain(x / 100.0f);
-            id(chime_player).play(rtttl_str);
-          }
+          esphome::get_pcm_sound_player().play_sound(opt, false, x / 100.0f);
 
   - platform: template
     id: wake_chime_volume
@@ -516,12 +503,7 @@ number:
       - lambda: |-
           call_nim_action_set_chime_volume(x);
           std::string opt = id(wake_chime_sound).current_option();
-          const char* rtttl_str = get_chime_rtttl(opt);
-          if (rtttl_str && strlen(rtttl_str) > 0) {
-            id(chime_player).stop();
-            id(chime_player).set_gain(x / 100.0f);
-            id(chime_player).play(rtttl_str);
-          }
+          esphome::get_pcm_sound_player().play_sound(opt, false, x / 100.0f);
 
   - platform: template
     id: led_brightness
