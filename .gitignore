@@ -5,6 +5,7 @@ nimcache/
 *.o
 *.obj
 tests/test_fsm
+tests/test_version_sync
 .DS_Store
 Thumbs.db
 .esphome/
