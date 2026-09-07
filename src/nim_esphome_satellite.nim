@@ -708,7 +708,13 @@ esphomeSetup:
       else:
         debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
 
+var lastHeartbeatMs: uint32 = 0
+
 esphomeLoop:
+  let now = millis()
   if satellitePipeline != nil:
-    satellitePipeline.tick(millis())
+    satellitePipeline.tick(now)
+  if now - lastHeartbeatMs >= 10000:
+    lastHeartbeatMs = now
+    info("Satellite", "Heartbeat: state=" & $currentState & " uptime=" & $(now div 1000) & "s heap=" & $getFreeHeap())
 

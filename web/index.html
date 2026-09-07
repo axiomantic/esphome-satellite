@@ -340,6 +340,7 @@
             <svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
             <span>Connect Logs</span>
           </button>
+          <button type="button" id="btnTermReset" class="term-btn secondary" title="Send hardware reset pulse via RTS/DTR">Reset Chip</button>
           <button type="button" id="btnTermClear" class="term-btn secondary" title="Clear console output">Clear</button>
           <button type="button" id="btnTermToggle" class="term-btn secondary" title="Expand or collapse terminal height">Expand ▼</button>
         </div>
@@ -1457,6 +1458,7 @@
     let termPort = null;
     let termReader = null;
     let termKeepReading = false;
+    let termReadPromise = null;
     let isDisconnecting = false;
 
     async function disconnectTerminal() {
@@ -1466,9 +1468,9 @@
       if (termReader) {
         try { await termReader.cancel(); } catch (_) {}
       }
-      if (termReader) {
-        try { termReader.releaseLock(); } catch (_) {}
-        termReader = null;
+      if (termReadPromise) {
+        try { await termReadPromise; } catch (_) {}
+        termReadPromise = null;
       }
       if (termPort) {
         try { await termPort.close(); } catch (_) {}
@@ -1552,6 +1554,11 @@
       } catch (err) {
         if (termKeepReading) appendTermLine('[Stream closed: ' + (err.message || err) + ']', 'warn');
       } finally {
+        if (buffer.length > 0) {
+          appendTermLine(buffer);
+          parseDeviceLogLine(buffer);
+          buffer = '';
+        }
         if (!isDisconnecting) {
           await disconnectTerminal();
         }
@@ -1574,6 +1581,9 @@
           await termPort.open({ baudRate: 115200 });
         }
         termKeepReading = true;
+        try {
+          await termPort.setSignals({ dataTerminalReady: true, requestToSend: false });
+        } catch (_) {}
         if (badge) { badge.className = 'term-badge connected'; badge.textContent = 'Connected (115200)'; }
         if (banner) banner.style.display = 'flex';
         if (connectBtn) {
@@ -1581,7 +1591,7 @@
           connectBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15"></line></svg> <span>Disconnect</span>';
         }
         appendTermLine('--- Connected to Serial Console (115200 baud) ---', 'dbg');
-        readSerialLoop();
+        termReadPromise = readSerialLoop();
       } catch (err) {
         console.error('Terminal connection failed:', err);
         await disconnectTerminal();
@@ -1594,6 +1604,24 @@
       btnTermConnect.addEventListener('click', async () => {
         if (termPort) await disconnectTerminal();
         else await connectTerminal();
+      });
+    }
+
+    const btnTermReset = document.getElementById('btnTermReset');
+    if (btnTermReset) {
+      btnTermReset.addEventListener('click', async () => {
+        if (!termPort) {
+          appendTermLine('Please click [Connect Logs] first to send reset pulse.', 'warn');
+          return;
+        }
+        try {
+          appendTermLine('--- Sending hardware reset pulse (RTS/DTR) ---', 'dbg');
+          await termPort.setSignals({ dataTerminalReady: false, requestToSend: true });
+          await new Promise(r => setTimeout(r, 120));
+          await termPort.setSignals({ dataTerminalReady: true, requestToSend: false });
+        } catch (e) {
+          appendTermLine('Reset signal failed: ' + (e.message || e), 'err');
+        }
       });
     }
 
