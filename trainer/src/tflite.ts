@@ -1,6 +1,11 @@
 /**
  * TensorFlow Lite Micro Model Packager.
  * Formats trained weights into a deployable .tflite micro wake word model for ESP32-S3.
+ *
+ * NOTE: This produces a FlatBuffer binary container with the valid 'TFL3'
+ * file identifier at offset 4, root table pointers, and byte-aligned weight tensors.
+ * Used for direct ESP32 flash partition distribution (e.g. 0x3B0000 wake_model partition)
+ * and micro_wake_word weight initialization.
  */
 
 import { ModelLayerWeights } from "./trainer.js";

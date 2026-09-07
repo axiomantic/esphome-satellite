@@ -138,6 +138,7 @@
     }
     const installBtn = document.getElementById('installBtn');
     const uploadedParts = new Map();
+    let activeManifestUrl = null;
     let activeAudioCtx = null;
     let activeAudioTimer = null;
     let activeAudioElement = null;
@@ -235,7 +236,9 @@
         manifest.builds[0].parts.push({ path: part.url, offset: part.offset });
       }
       const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-      installBtn.manifest = URL.createObjectURL(blob);
+      if (activeManifestUrl) URL.revokeObjectURL(activeManifestUrl);
+      activeManifestUrl = URL.createObjectURL(blob);
+      installBtn.manifest = activeManifestUrl;
     }
 
     function updateFieldDependencies() {

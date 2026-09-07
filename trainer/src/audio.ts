@@ -71,7 +71,7 @@ export function decodeWav(buffer: ArrayBuffer): { samples: Float32Array; metadat
       break;
     }
 
-    offset += 8 + chunkSize;
+    offset += 8 + chunkSize + (chunkSize % 2);
   }
 
   if (dataOffset === 0) {
@@ -120,7 +120,7 @@ export function resampleTo16kHz(samples: Float32Array, originalRate: number): Fl
 
   for (let i = 0; i < newLength; i++) {
     const origIndex = i * ratio;
-    const lower = Math.floor(origIndex);
+    const lower = Math.min(Math.floor(origIndex), samples.length - 1);
     const upper = Math.min(lower + 1, samples.length - 1);
     const frac = origIndex - lower;
     result[i] = (1 - frac) * samples[lower] + frac * samples[upper];
@@ -139,6 +139,14 @@ export function extractSpectralFeatures(
   windowSize: number = 400, // 25ms at 16kHz
   hopSize: number = 160     // 10ms at 16kHz
 ): AudioTensorFrames {
+  if (audio.length === 0) {
+    return {
+      data: new Float32Array(0),
+      numFrames: 0,
+      featuresPerFrame,
+    };
+  }
+
   const numFrames = Math.max(1, Math.floor((audio.length - windowSize) / hopSize) + 1);
   const data = new Float32Array(numFrames * featuresPerFrame);
 

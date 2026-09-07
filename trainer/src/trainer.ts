@@ -83,18 +83,26 @@ export class WakeWordTrainer {
 
   /**
    * Forward inference pass on a single audio feature frame vector.
-   * Returns predicted probability [0.0, 1.0].
+   * Returns predicted probability and intermediate activations for backprop.
    */
-  public predict(sample: AudioTensorFrames): number {
+  public forward(sample: AudioTensorFrames): {
+    pred: number;
+    pooled: Float32Array;
+    preAct: Float32Array;
+    hidden: Float32Array;
+  } {
     const { data, numFrames, featuresPerFrame } = sample;
     const bins = Math.min(featuresPerFrame, this.config.featureBins);
     const hidden = new Float32Array(this.hiddenDim);
+    const preAct = new Float32Array(this.hiddenDim);
 
     // 1. Average pooling across time frames into frequency vector
     const pooled = new Float32Array(bins);
-    for (let f = 0; f < numFrames; f++) {
-      for (let k = 0; k < bins; k++) {
-        pooled[k] += data[f * featuresPerFrame + k] / numFrames;
+    if (numFrames > 0) {
+      for (let f = 0; f < numFrames; f++) {
+        for (let k = 0; k < bins; k++) {
+          pooled[k] += data[f * featuresPerFrame + k] / numFrames;
+        }
       }
     }
 
@@ -104,6 +112,7 @@ export class WakeWordTrainer {
       for (let k = 0; k < bins; k++) {
         sum += pooled[k] * this.weights.convKernel[k * this.hiddenDim + h];
       }
+      preAct[h] = sum;
       hidden[h] = Math.max(0, sum); // ReLU
     }
 
@@ -113,7 +122,16 @@ export class WakeWordTrainer {
       logit += hidden[h] * this.weights.denseKernel[h];
     }
 
-    return 1.0 / (1.0 + Math.exp(-Math.max(-10, Math.min(10, logit))));
+    const pred = 1.0 / (1.0 + Math.exp(-Math.max(-10, Math.min(10, logit))));
+    return { pred, pooled, preAct, hidden };
+  }
+
+  /**
+   * Forward inference pass on a single audio feature frame vector.
+   * Returns predicted probability [0.0, 1.0].
+   */
+  public predict(sample: AudioTensorFrames): number {
+    return this.forward(sample).pred;
   }
 
   /**
@@ -131,7 +149,7 @@ export class WakeWordTrainer {
     let gradDenseBias = 0;
 
     for (const sample of batch) {
-      const pred = this.predict(sample.features);
+      const { pred, pooled, preAct, hidden } = this.forward(sample.features);
       const target = sample.label;
 
       // Binary cross-entropy loss: - [y * log(p) + (1-y) * log(1-p)]
@@ -148,8 +166,17 @@ export class WakeWordTrainer {
       // Accumulate dense gradients
       gradDenseBias += dLogit;
       for (let h = 0; h < this.hiddenDim; h++) {
-        gradDenseKernel[h] += dLogit * 0.5; // approximated backprop
-        gradConvBias[h] += dLogit * this.weights.denseKernel[h] * 0.1;
+        gradDenseKernel[h] += dLogit * hidden[h];
+
+        // Backpropagation through ReLU to conv layer
+        const dAct = preAct[h] > 0 ? dLogit * this.weights.denseKernel[h] : 0.0;
+        gradConvBias[h] += dAct;
+
+        // Backprop to spectral projection conv kernel
+        const bins = pooled.length;
+        for (let k = 0; k < bins; k++) {
+          gradConvKernel[k * this.hiddenDim + h] += dAct * pooled[k];
+        }
       }
     }
 
@@ -163,6 +190,10 @@ export class WakeWordTrainer {
 
     for (let i = 0; i < this.weights.convBias.length; i++) {
       this.weights.convBias[i] -= lr * (gradConvBias[i] / batchSize);
+    }
+
+    for (let i = 0; i < this.weights.convKernel.length; i++) {
+      this.weights.convKernel[i] -= lr * (gradConvKernel[i] / batchSize);
     }
 
     return {
