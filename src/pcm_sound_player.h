@@ -3,9 +3,11 @@
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 #include "esphome/components/speaker/speaker.h"
+#include "esphome/components/select/select.h"
 #include "sound_data.h"
 #include <esp_partition.h>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include <functional>
 #include <cstring>
@@ -15,6 +17,32 @@
 namespace esphome {
 
 static const char *const PCM_PLAYER_TAG = "pcm_sound_player";
+static const uint32_t CAUD_MAGIC = 0x44554143; // 'CAUD' in little-endian
+
+struct __attribute__((packed)) CustomAudioHeader {
+  uint32_t magic;         // 0x44554143 ("CAUD")
+  uint16_t version;       // 1
+  uint16_t count;         // Number of sound entries
+  uint8_t  reserved[24];  // 32 bytes total
+};
+static_assert(sizeof(CustomAudioHeader) == 32, "CustomAudioHeader must be 32 bytes");
+
+struct __attribute__((packed)) CustomAudioEntry {
+  char     name[32];      // Null-terminated sound name, e.g. "My Chime"
+  uint32_t offset;        // Byte offset from partition start
+  uint32_t size;          // Byte length of WAV file
+  uint8_t  reserved[8];   // 48 bytes total
+};
+static_assert(sizeof(CustomAudioEntry) == 48, "CustomAudioEntry must be 48 bytes");
+
+struct CustomSoundItem {
+  std::string name;
+  const uint8_t *pcm_data{nullptr};
+  size_t pcm_len{0};
+  uint32_t sample_rate{16000};
+  uint16_t channels{1};
+  uint16_t bits_per_sample{16};
+};
 
 struct WavInfo {
   bool valid{false};
@@ -29,39 +57,139 @@ class PcmSoundPlayer {
  public:
   void set_speaker(speaker::Speaker *speaker) { this->speaker_ = speaker; }
 
-  void init_partitions() {
+  void init_partitions(select::Select *chime_sel = nullptr, select::Select *proc_sel = nullptr, select::Select *cancel_sel = nullptr) {
     if (this->partitions_initialized_) return;
     this->partitions_initialized_ = true;
 
-    // sound_data partition (custom processing sound loop)
+    // sound_data partition (custom processing sounds)
     const esp_partition_t *part_sound = esp_partition_find_first(
         ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "sound_data");
     if (part_sound != nullptr) {
       esp_err_t err = esp_partition_mmap(part_sound, 0, part_sound->size, ESP_PARTITION_MMAP_DATA,
                                          &this->sound_map_ptr_, &this->sound_map_handle_);
-      if (err == ESP_OK) {
+      if (err == ESP_OK && this->sound_map_ptr_ != nullptr) {
         this->sound_partition_size_ = part_sound->size;
         ESP_LOGI(PCM_PLAYER_TAG, "Mapped sound_data partition at 0x%06X (size %u KB)",
                  (unsigned int)part_sound->address, (unsigned int)(part_sound->size / 1024));
-      } else {
-        ESP_LOGW(PCM_PLAYER_TAG, "Failed to mmap sound_data: err=0x%X", err);
+        this->custom_processing_sounds_ = parse_custom_sounds(
+            reinterpret_cast<const uint8_t *>(this->sound_map_ptr_), this->sound_partition_size_, "Custom Processing");
       }
     }
 
-    // chime_data partition (custom wake chime)
+    // chime_data partition (custom wake chimes)
     const esp_partition_t *part_chime = esp_partition_find_first(
         ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "chime_data");
     if (part_chime != nullptr) {
       esp_err_t err = esp_partition_mmap(part_chime, 0, part_chime->size, ESP_PARTITION_MMAP_DATA,
                                          &this->chime_map_ptr_, &this->chime_map_handle_);
-      if (err == ESP_OK) {
+      if (err == ESP_OK && this->chime_map_ptr_ != nullptr) {
         this->chime_partition_size_ = part_chime->size;
         ESP_LOGI(PCM_PLAYER_TAG, "Mapped chime_data partition at 0x%06X (size %u KB)",
                  (unsigned int)part_chime->address, (unsigned int)(part_chime->size / 1024));
-      } else {
-        ESP_LOGW(PCM_PLAYER_TAG, "Failed to mmap chime_data: err=0x%X", err);
+        this->custom_chimes_ = parse_custom_sounds(
+            reinterpret_cast<const uint8_t *>(this->chime_map_ptr_), this->chime_partition_size_, "Custom Chime");
       }
     }
+
+    // cancel_data partition (custom cancel sounds)
+    const esp_partition_t *part_cancel = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "cancel_data");
+    if (part_cancel != nullptr) {
+      esp_err_t err = esp_partition_mmap(part_cancel, 0, part_cancel->size, ESP_PARTITION_MMAP_DATA,
+                                         &this->cancel_map_ptr_, &this->cancel_map_handle_);
+      if (err == ESP_OK && this->cancel_map_ptr_ != nullptr) {
+        this->cancel_partition_size_ = part_cancel->size;
+        ESP_LOGI(PCM_PLAYER_TAG, "Mapped cancel_data partition at 0x%06X (size %u KB)",
+                 (unsigned int)part_cancel->address, (unsigned int)(part_cancel->size / 1024));
+        this->custom_cancel_sounds_ = parse_custom_sounds(
+            reinterpret_cast<const uint8_t *>(this->cancel_map_ptr_), this->cancel_partition_size_, "Custom Cancel");
+      }
+    }
+
+    // Update Home Assistant select entities if custom sounds were found
+    if (chime_sel != nullptr && !this->custom_chimes_.empty()) {
+      this->chime_options_storage_ = {
+        "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba", "Meditation Bell",
+        "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl", "Acoustic Harp", "Woodblock",
+        "Ceramic Bell", "Neon Shimmer", "Prism Ping", "Cyber Bloom", "Quantum Beep", "Aero Chime",
+        "Silent"
+      };
+      for (const auto &c : this->custom_chimes_) {
+        this->chime_options_storage_.push_back(c.name);
+      }
+      FixedVector<const char *> fixed_opts;
+      fixed_opts.init(this->chime_options_storage_.size());
+      for (const auto &opt : this->chime_options_storage_) fixed_opts.push_back(opt.c_str());
+      chime_sel->traits.set_options(fixed_opts);
+      ESP_LOGI(PCM_PLAYER_TAG, "Updated Wake Chime Sound options with %zu custom sound(s)", this->custom_chimes_.size());
+    }
+
+    if (proc_sel != nullptr && !this->custom_processing_sounds_.empty()) {
+      this->proc_options_storage_ = {
+        "Spinner", "Pulse", "Sonar", "Tick", "Typewriter", "Clockwork", "Water Droplets",
+        "Raindrops", "Forest Stream", "Campfire Ember", "Shishi-Odoshi", "Soft Footsteps",
+        "Radar Ping", "Data Crunch", "Telemetry Blip", "Quantum Flux", "Retro Terminal",
+        "Silent"
+      };
+      for (const auto &p : this->custom_processing_sounds_) {
+        this->proc_options_storage_.push_back(p.name);
+      }
+      FixedVector<const char *> fixed_opts;
+      fixed_opts.init(this->proc_options_storage_.size());
+      for (const auto &opt : this->proc_options_storage_) fixed_opts.push_back(opt.c_str());
+      proc_sel->traits.set_options(fixed_opts);
+      ESP_LOGI(PCM_PLAYER_TAG, "Updated Processing Sound options with %zu custom sound(s)", this->custom_processing_sounds_.size());
+    }
+
+    if (cancel_sel != nullptr && !this->custom_cancel_sounds_.empty()) {
+      this->cancel_options_storage_ = {
+        "Match Wake Chime", "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba",
+        "Meditation Bell", "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl",
+        "Acoustic Harp", "Woodblock", "Ceramic Bell", "Neon Shimmer", "Prism Ping",
+        "Cyber Bloom", "Quantum Beep", "Aero Chime", "Silent"
+      };
+      for (const auto &cs : this->custom_cancel_sounds_) {
+        this->cancel_options_storage_.push_back(cs.name);
+      }
+      FixedVector<const char *> fixed_opts;
+      fixed_opts.init(this->cancel_options_storage_.size());
+      for (const auto &opt : this->cancel_options_storage_) fixed_opts.push_back(opt.c_str());
+      cancel_sel->traits.set_options(fixed_opts);
+      ESP_LOGI(PCM_PLAYER_TAG, "Updated Cancel Sound options with %zu custom sound(s)", this->custom_cancel_sounds_.size());
+    }
+  }
+
+  static std::vector<CustomSoundItem> parse_custom_sounds(const uint8_t *part_data, size_t part_size, const std::string &default_name) {
+    std::vector<CustomSoundItem> items;
+    if (part_data == nullptr || part_size < 32) return items;
+
+    if (*reinterpret_cast<const uint32_t *>(part_data) == CAUD_MAGIC) {
+      const CustomAudioHeader *hdr = reinterpret_cast<const CustomAudioHeader *>(part_data);
+      const CustomAudioEntry *entries = reinterpret_cast<const CustomAudioEntry *>(part_data + sizeof(CustomAudioHeader));
+      size_t max_entries = (part_size - sizeof(CustomAudioHeader)) / sizeof(CustomAudioEntry);
+      size_t count = std::min((size_t)hdr->count, max_entries);
+
+      for (size_t i = 0; i < count; i++) {
+        const auto &e = entries[i];
+        if (e.offset >= part_size || e.offset + e.size > part_size || e.size < 44) continue;
+        WavInfo wav = parse_wav(part_data + e.offset, e.size);
+        if (wav.valid) {
+          char name_buf[33] = {0};
+          memcpy(name_buf, e.name, 32);
+          name_buf[32] = '\0';
+          std::string sound_name = (name_buf[0] != '\0') ? std::string(name_buf) : (default_name + " " + std::to_string(i + 1));
+          items.push_back({sound_name, wav.pcm_data, wav.pcm_len, wav.sample_rate, wav.channels, wav.bits_per_sample});
+          ESP_LOGI(PCM_PLAYER_TAG, "Loaded custom sound: '%s' (%u bytes PCM)", sound_name.c_str(), (unsigned int)wav.pcm_len);
+        }
+      }
+    } else {
+      WavInfo wav = parse_wav(part_data, part_size);
+      if (wav.valid) {
+        items.push_back({default_name, wav.pcm_data, wav.pcm_len, wav.sample_rate, wav.channels, wav.bits_per_sample});
+        ESP_LOGI(PCM_PLAYER_TAG, "Loaded legacy single custom sound: '%s'", default_name.c_str());
+      }
+    }
+    return items;
   }
 
   static WavInfo parse_wav(const uint8_t *data, size_t max_len) {
@@ -77,7 +205,7 @@ class PcmSoundPlayer {
       uint32_t chunk_size = *reinterpret_cast<const uint32_t *>(data + offset + 4);
       if (memcmp(data + offset, "fmt ", 4) == 0 && chunk_size >= 16) {
         uint16_t format = *reinterpret_cast<const uint16_t *>(data + offset + 8);
-        if (format != 1) { // 1 = uncompressed PCM
+        if (format != 1) {
           ESP_LOGW(PCM_PLAYER_TAG, "Non-PCM WAV format (%u) not supported", format);
           return info;
         }
@@ -106,10 +234,6 @@ class PcmSoundPlayer {
       this->stop();
       return;
     }
-    if (name == "Custom") {
-      this->play_processing_sound(name, loop, volume);
-      return;
-    }
 
     const satellite_audio::SoundEntry *entry = satellite_audio::find_sound(name);
     if (!entry) {
@@ -125,17 +249,11 @@ class PcmSoundPlayer {
       this->stop();
       return;
     }
-    if (name == "Custom") {
-      this->init_partitions();
-      if (this->sound_map_ptr_ != nullptr) {
-        WavInfo wav = parse_wav(reinterpret_cast<const uint8_t *>(this->sound_map_ptr_), this->sound_partition_size_);
-        if (wav.valid) {
-          this->play_raw_pcm(wav.pcm_data, wav.pcm_len, wav.sample_rate, wav.channels, wav.bits_per_sample, loop, volume, "custom_processing");
-          return;
-        }
+    for (const auto &item : this->custom_processing_sounds_) {
+      if (item.name == name || (name == "Custom" && &item == &this->custom_processing_sounds_[0])) {
+        this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
+        return;
       }
-      ESP_LOGW(PCM_PLAYER_TAG, "Custom processing sound selected, but sound_data partition contains no valid WAV audio.");
-      return;
     }
     this->play_sound(name, loop, volume);
   }
@@ -145,17 +263,11 @@ class PcmSoundPlayer {
       this->stop();
       return;
     }
-    if (name == "Custom" || name == "Custom Chime Audio") {
-      this->init_partitions();
-      if (this->chime_map_ptr_ != nullptr) {
-        WavInfo wav = parse_wav(reinterpret_cast<const uint8_t *>(this->chime_map_ptr_), this->chime_partition_size_);
-        if (wav.valid) {
-          this->play_raw_pcm(wav.pcm_data, wav.pcm_len, wav.sample_rate, wav.channels, wav.bits_per_sample, loop, volume, "custom_chime");
-          return;
-        }
+    for (const auto &item : this->custom_chimes_) {
+      if (item.name == name || (name == "Custom" && &item == &this->custom_chimes_[0])) {
+        this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
+        return;
       }
-      ESP_LOGW(PCM_PLAYER_TAG, "Custom wake chime selected, but chime_data partition contains no valid WAV audio.");
-      return;
     }
     this->play_sound(name, loop, volume);
   }
@@ -165,17 +277,19 @@ class PcmSoundPlayer {
       this->stop();
       return;
     }
+    for (const auto &item : this->custom_cancel_sounds_) {
+      if (item.name == name || (name == "Custom" && &item == &this->custom_cancel_sounds_[0])) {
+        this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
+        return;
+      }
+    }
     std::string lookup = name;
     if (lookup.rfind("cancel-", 0) != 0 && lookup.rfind("Cancel ", 0) != 0) {
       lookup = "cancel-" + lookup;
     }
     const satellite_audio::SoundEntry *entry = satellite_audio::find_sound(lookup);
-    if (!entry) {
-      entry = satellite_audio::find_sound(name);
-      if (!entry) {
-        entry = satellite_audio::find_sound("cancel-bell-ping");
-      }
-    }
+    if (!entry) entry = satellite_audio::find_sound(name);
+    if (!entry) entry = satellite_audio::find_sound("cancel-bell-ping");
     if (entry) {
       this->play_adpcm(entry->data, entry->length, loop, volume, entry->name);
     }
@@ -296,6 +410,18 @@ class PcmSoundPlayer {
   const void *chime_map_ptr_{nullptr};
   esp_partition_mmap_handle_t chime_map_handle_{0};
   size_t chime_partition_size_{0};
+
+  const void *cancel_map_ptr_{nullptr};
+  esp_partition_mmap_handle_t cancel_map_handle_{0};
+  size_t cancel_partition_size_{0};
+
+  std::vector<CustomSoundItem> custom_chimes_;
+  std::vector<CustomSoundItem> custom_processing_sounds_;
+  std::vector<CustomSoundItem> custom_cancel_sounds_;
+
+  std::vector<std::string> chime_options_storage_;
+  std::vector<std::string> proc_options_storage_;
+  std::vector<std::string> cancel_options_storage_;
 
   int32_t valprev_{0};
   int8_t index_{0};

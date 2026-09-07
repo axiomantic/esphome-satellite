@@ -33,7 +33,8 @@ esphome:
         - lambda: |-
             esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
             esphome::get_pcm_sound_player().set_speaker(id(board_speaker));
-            esphome::get_pcm_sound_player().init_partitions();
+            esphome::get_pcm_sound_player().init_partitions(
+                id(wake_chime_sound), id(processing_sound), id(cancel_sound_sound));
             esphome::get_pcm_sound_player().set_on_finished([]() {
               id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
             });
