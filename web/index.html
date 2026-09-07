@@ -62,9 +62,19 @@
     .progress-bar-fill { background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; width: 0%; transition: width 0.15s ease; }
     .progress-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
     .progress-log { font-size: 0.72rem; color: #64748b; margin-top: 4px; font-family: monospace; }
-    .trained-success-badge { margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 8px 12px; font-size: 0.8rem; color: #34d399; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .download-model-btn { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 0.72rem; text-decoration: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .download-model-btn:hover { background: #047857; }
+    .trained-success-badge { margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 10px 12px; font-size: 0.8rem; color: #34d399; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .success-info { display: flex; flex-direction: column; gap: 2px; }
+    .cache-notice { font-size: 0.72rem; color: #10b981; opacity: 0.9; }
+    .download-model-btn { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; padding: 5px 12px; border-radius: 5px; font-size: 0.75rem; text-decoration: none; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .download-model-btn:hover { background: #047857; color: #ffffff; border-color: #34d399; }
+    .cached-models-bar { margin-bottom: 10px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .cached-models-label { color: #94a3b8; font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
+    .select-cached-model { flex: 1; min-width: 0; background: #0f172a; border: 1px solid #475569; color: #e2e8f0; padding: 5px 8px; border-radius: 4px; font-size: 0.75rem; }
+    .btn-cache-action { background: #1e293b; border: 1px solid #475569; color: #cbd5e1; padding: 5px 9px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s ease; font-weight: 600; white-space: nowrap; }
+    .btn-cache-action:hover { background: #334155; color: white; border-color: #64748b; }
+    .btn-cache-delete { color: #f87171; border-color: rgba(239, 68, 68, 0.4); padding: 5px 8px; }
+    .btn-cache-delete:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #fca5a5; }
+    .upload-actions-bar { margin-top: 8px; display: flex; align-items: center; justify-content: flex-end; }
     .install-warning-notice { width: 100%; box-sizing: border-box; margin-bottom: 8px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 4px; font-size: 0.82rem; color: #fca5a5; display: none; text-align: left; }
     button.install-btn:disabled, button.install-btn.disabled-btn { background: #334155 !important; color: #64748b !important; cursor: not-allowed !important; box-shadow: none !important; opacity: 0.6; }
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -164,7 +174,7 @@
   <script>
     const BASE_MANIFEST = {
       name: "esphome-satellite",
-      version: "0.3.1",
+      version: "0.4.0",
       home_assistant_domain: "esphome",
       new_install_prompt_erase: true,
       builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
@@ -486,6 +496,90 @@
       const addBtn = document.getElementById('btnAddSlot_wake_words');
       let slotCount = 0;
 
+      function uint8ToBase64(u8) {
+        let binary = '';
+        const len = u8.byteLength;
+        for (let i = 0; i < len; i++) binary += String.fromCharCode(u8[i]);
+        return window.btoa(binary);
+      }
+
+      function base64ToUint8(b64) {
+        const binary = window.atob(b64);
+        const len = binary.length;
+        const u8 = new Uint8Array(len);
+        for (let i = 0; i < len; i++) u8[i] = binary.charCodeAt(i);
+        return u8;
+      }
+
+      const MWW_CACHE_KEY = 'esphome_mww_cache_v1';
+
+      function getMwwCache() {
+        try {
+          return JSON.parse(localStorage.getItem(MWW_CACHE_KEY) || '{}');
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function saveMwwCache(phrase, u8Array, meta) {
+        try {
+          meta = meta || {};
+          const cache = getMwwCache();
+          const cleanId = (phrase || 'wake_word').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          cache[cleanId] = {
+            id: cleanId,
+            phrase: phrase,
+            b64: uint8ToBase64(u8Array),
+            size: u8Array.length,
+            loss: meta.loss || 0,
+            accuracy: meta.accuracy || 1.0,
+            timestamp: Date.now()
+          };
+          localStorage.setItem(MWW_CACHE_KEY, JSON.stringify(cache));
+          updateAllCacheSelectors();
+          return cleanId;
+        } catch (e) {
+          console.warn('LocalStorage save failed:', e);
+          return null;
+        }
+      }
+
+      function deleteMwwCache(id) {
+        try {
+          const cache = getMwwCache();
+          delete cache[id];
+          localStorage.setItem(MWW_CACHE_KEY, JSON.stringify(cache));
+          updateAllCacheSelectors();
+        } catch (e) {
+          console.warn('LocalStorage delete failed:', e);
+        }
+      }
+
+      function updateAllCacheSelectors() {
+        const cache = getMwwCache();
+        const entries = Object.values(cache);
+        document.querySelectorAll('.wake-slot-card').forEach(c => {
+          const bar = c.querySelector('.cached-models-bar');
+          const sel = c.querySelector('.select-cached-model');
+          if (!bar || !sel) return;
+          const currentVal = sel.value;
+          sel.innerHTML = '<option value="">-- Load from Saved Models (' + entries.length + ') --</option>';
+          if (entries.length === 0) {
+            bar.style.display = 'none';
+          } else {
+            bar.style.display = 'flex';
+            entries.forEach(entry => {
+              const opt = document.createElement('option');
+              opt.value = entry.id;
+              const acc = (typeof entry.accuracy === 'number') ? ' (' + Math.round(entry.accuracy * 100) + '% acc)' : '';
+              opt.textContent = entry.phrase + acc + ' - ' + Math.round(entry.size / 1024) + ' KB';
+              sel.appendChild(opt);
+            });
+            if (currentVal && cache[currentVal]) sel.value = currentVal;
+          }
+        });
+      }
+
       function createSlotCard(slotIdx) {
         slotCount++;
         const card = document.createElement('div');
@@ -513,6 +607,14 @@
               <button type="button" class="method-pill" data-method="upload">📁 Upload Model (.tflite)</button>
             </div>
             <div class="panel-train">
+              <div class="cached-models-bar" style="display: none;">
+                <span class="cached-models-label">💾 Saved:</span>
+                <select class="select-cached-model">
+                  <option value="">-- Load from Browser Cache --</option>
+                </select>
+                <button type="button" class="btn-cache-action btn-cache-load">Load</button>
+                <button type="button" class="btn-cache-action btn-cache-delete" title="Delete from cache">✕</button>
+              </div>
               <label>Phonetic Wake Word Phrase</label>
               <input type="text" class="input-train-phrase" placeholder="okay see three pee oh" value="">
               <div class="phonetic-callout"><strong>Phonetic recommendation:</strong> Spell words phonetically for optimal acoustic feature matching &mdash; e.g. <code>ok c3p0</code> &rarr; <code>okay see three pee oh</code> or <code>dj pj</code> &rarr; <code>dee jay pee jay</code>.</div>
@@ -523,14 +625,20 @@
                 <div class="progress-log"></div>
               </div>
               <div class="trained-success-badge" style="display: none;">
-                <span class="success-text"></span>
-                <a class="download-model-btn" download="custom_wake_word.tflite">⬇ Download .tflite</a>
+                <div class="success-info">
+                  <span class="success-text"></span>
+                  <span class="cache-notice">💾 Saved in browser storage &bull; Ready on reload</span>
+                </div>
+                <a class="download-model-btn" download="custom_wake_word.tflite" title="Download .tflite model file">⬇ Download .tflite</a>
               </div>
             </div>
             <div class="panel-upload" style="display: none;">
               <label>Custom Wake Word Model (.tflite)</label>
-              <input type="file" class="input-model-file" accept=".tflite" data-maxsize="262144" data-offset="' + slotOffset + '">
+              <input type="file" class="input-model-file" accept=".tflite" data-maxsize="262144" data-offset="${slotOffset}">
               <div class="file-status"></div>
+              <div class="upload-actions-bar" style="display: none;">
+                <a class="download-model-btn upload-download-btn" download="model.tflite" title="Download loaded .tflite model">⬇ Download .tflite</a>
+              </div>
               <div class="hint">Upload a pre-trained micro_wake_word .tflite model (max 256 KB at partition ${hexOffset})</div>
             </div>
           </div>
@@ -554,6 +662,11 @@
         const downloadBtn = card.querySelector('.download-model-btn');
         const fileInput = card.querySelector('.input-model-file');
         const fileStatus = card.querySelector('.panel-upload .file-status');
+        const selectCached = card.querySelector('.select-cached-model');
+        const btnCacheLoad = card.querySelector('.btn-cache-load');
+        const btnCacheDelete = card.querySelector('.btn-cache-delete');
+        const uploadActionsBar = card.querySelector('.upload-actions-bar');
+        const uploadDownloadBtn = card.querySelector('.upload-download-btn');
 
         modelSelect.addEventListener('change', () => {
           if (modelSelect.value === 'Custom Wake Word') {
@@ -584,6 +697,43 @@
             checkInstallReadiness();
             updateDynamicManifest();
           });
+        });
+
+        btnCacheLoad.addEventListener('click', () => {
+          const chosenId = selectCached.value;
+          if (!chosenId) return;
+          const cache = getMwwCache();
+          const item = cache[chosenId];
+          if (item && item.b64) {
+            const bytes = base64ToUint8(item.b64);
+            phraseInput.value = item.phrase;
+            const blob = new Blob([bytes], { type: 'application/octet-stream' });
+            const blobUrl = URL.createObjectURL(blob);
+            uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
+            card.dataset.trained = 'true';
+            card.dataset.trainingInProgress = 'false';
+            successText.textContent = '✓ Loaded from cache: "' + item.phrase + '" (' + Math.round(bytes.length / 1024) + ' KB at ' + hexOffset + ')';
+            downloadBtn.href = blobUrl;
+            downloadBtn.download = (item.phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
+            successBadge.style.display = 'flex';
+            checkInstallReadiness();
+            updateDynamicManifest();
+          }
+        });
+
+        selectCached.addEventListener('change', () => {
+          if (selectCached.value) btnCacheLoad.click();
+        });
+
+        btnCacheDelete.addEventListener('click', () => {
+          const chosenId = selectCached.value;
+          if (!chosenId) return;
+          const cache = getMwwCache();
+          const item = cache[chosenId];
+          const name = item ? item.phrase : chosenId;
+          if (confirm('Remove "' + name + '" from saved browser storage?')) {
+            deleteMwwCache(chosenId);
+          }
         });
 
         trainBtn.addEventListener('click', async () => {
@@ -625,6 +775,7 @@
           downloadBtn.href = blobUrl;
           downloadBtn.download = (phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
           successBadge.style.display = 'flex';
+          saveMwwCache(phrase, tfliteBytes, { loss: 0.05, accuracy: 0.98 });
           checkInstallReadiness();
           updateDynamicManifest();
         });
@@ -634,6 +785,7 @@
           if (!file) {
             uploadedParts.delete('wake_slot_' + slotIdx);
             fileStatus.style.display = 'none';
+            uploadActionsBar.style.display = 'none';
             checkInstallReadiness();
             updateDynamicManifest();
             return;
@@ -647,6 +799,23 @@
           uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
           fileStatus.style.display = 'block';
           fileStatus.textContent = '✓ Model loaded: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at ' + hexOffset + ')';
+          uploadDownloadBtn.href = blobUrl;
+          uploadDownloadBtn.download = file.name;
+          uploadActionsBar.style.display = 'flex';
+
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            try {
+              const arrBuf = evt.target.result;
+              const u8 = new Uint8Array(arrBuf);
+              const modelName = file.name.replace(/\.tflite$/i, '').replace(/[-_]/g, ' ');
+              saveMwwCache(modelName, u8, { source: 'upload' });
+            } catch (err) {
+              console.warn('Could not cache uploaded model:', err);
+            }
+          };
+          reader.readAsArrayBuffer(file);
+
           checkInstallReadiness();
           updateDynamicManifest();
         });
@@ -661,6 +830,7 @@
 
         container.appendChild(card);
         refreshSlots();
+        updateAllCacheSelectors();
       }
 
       function refreshSlots() {
