@@ -1,6 +1,5 @@
 #pragma once
 
-#include "esphome/core/component.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 #include "esphome/components/speaker/speaker.h"
@@ -8,12 +7,14 @@
 #include <string>
 #include <algorithm>
 #include <functional>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 namespace esphome {
 
 static const char *const PCM_PLAYER_TAG = "pcm_sound_player";
 
-class PcmSoundPlayer : public Component {
+class PcmSoundPlayer {
  public:
   void set_speaker(speaker::Speaker *speaker) { this->speaker_ = speaker; }
   
@@ -32,9 +33,7 @@ class PcmSoundPlayer : public Component {
   void play_adpcm(const uint8_t *data, size_t length, bool loop = false, float volume = -1.0f, const char* name = "sound") {
     if (this->speaker_ == nullptr || data == nullptr || length == 0) return;
     
-    if (this->is_playing_) {
-      this->speaker_->stop();
-    }
+    this->stop_task_();
     
     this->data_ = data;
     this->data_len_ = length;
@@ -42,8 +41,6 @@ class PcmSoundPlayer : public Component {
     this->is_loop_ = loop;
     this->valprev_ = 0;
     this->index_ = 0;
-    this->buffer_samples_ = 0;
-    this->buffer_sent_bytes_ = 0;
     this->is_playing_ = true;
     
     audio::AudioStreamInfo info(16, 1, 16000);
@@ -52,15 +49,32 @@ class PcmSoundPlayer : public Component {
       this->speaker_->set_volume(volume);
     }
     this->speaker_->start();
-    ESP_LOGD(PCM_PLAYER_TAG, "Playing PCM recorded audio: %s (%zu bytes ADPCM, loop=%d)", name, length, (int)loop);
+    
+    ESP_LOGD(PCM_PLAYER_TAG, "Playing PCM audio: %s (%zu bytes, loop=%d, vol=%.2f)", name, length, (int)loop, volume);
+    
+    BaseType_t ret = xTaskCreatePinnedToCore(
+        playback_task_entry_,
+        "pcm_playback",
+        4096,
+        this,
+        5,
+        &this->task_handle_,
+        1
+    );
+    if (ret != pdPASS) {
+      ESP_LOGE(PCM_PLAYER_TAG, "Failed to create playback task!");
+      this->is_playing_ = false;
+      this->speaker_->stop();
+    }
   }
   
   void set_on_finished(std::function<void()> callback) { this->on_finished_ = callback; }
 
   void stop() {
-    if (!this->is_playing_) return;
+    if (!this->is_playing_ && this->task_handle_ == nullptr) return;
     this->is_playing_ = false;
     this->is_loop_ = false;
+    this->stop_task_();
     if (this->speaker_ != nullptr) {
       this->speaker_->stop();
     }
@@ -71,73 +85,93 @@ class PcmSoundPlayer : public Component {
   }
   
   bool is_playing() const { return this->is_playing_; }
-  
-  void loop() override {
-    if (!this->is_playing_ || this->speaker_ == nullptr) return;
-    
-    // 1. Send remainder of decode_buffer_ if any
-    size_t total_buffer_bytes = this->buffer_samples_ * sizeof(int16_t);
-    if (this->buffer_sent_bytes_ < total_buffer_bytes) {
-      const uint8_t *src = reinterpret_cast<const uint8_t*>(this->decode_buffer_) + this->buffer_sent_bytes_;
-      size_t to_send = total_buffer_bytes - this->buffer_sent_bytes_;
-      size_t sent = this->speaker_->play(src, to_send, 0);
-      this->buffer_sent_bytes_ += sent;
-      if (this->buffer_sent_bytes_ < total_buffer_bytes) {
-        return; // ring buffer full, continue next loop
-      }
-    }
-    
-    // 2. Decode next chunk if available
-    if (this->read_offset_ >= this->data_len_) {
-      if (this->is_loop_) {
-        this->read_offset_ = 0;
-        this->valprev_ = 0;
-        this->index_ = 0;
-      } else {
-        this->is_playing_ = false;
-        this->speaker_->finish();
-        ESP_LOGD(PCM_PLAYER_TAG, "PCM audio finished");
-        if (this->on_finished_) {
-          this->on_finished_();
-        }
-        return;
-      }
-    }
-    
-    size_t bytes_to_decode = std::min((size_t)256, this->data_len_ - this->read_offset_);
-    this->buffer_samples_ = 0;
-    this->buffer_sent_bytes_ = 0;
-    
-    for (size_t i = 0; i < bytes_to_decode; ++i) {
-      uint8_t byte = this->data_[this->read_offset_++];
-      uint8_t nibble_low = byte & 0x0F;
-      uint8_t nibble_high = (byte >> 4) & 0x0F;
-      
-      this->decode_buffer_[this->buffer_samples_++] = this->decode_sample_(nibble_low);
-      this->decode_buffer_[this->buffer_samples_++] = this->decode_sample_(nibble_high);
-    }
-    
-    total_buffer_bytes = this->buffer_samples_ * sizeof(int16_t);
-    const uint8_t *src = reinterpret_cast<const uint8_t*>(this->decode_buffer_);
-    size_t sent = this->speaker_->play(src, total_buffer_bytes, 0);
-    this->buffer_sent_bytes_ = sent;
-  }
-  
+
  protected:
   speaker::Speaker *speaker_{nullptr};
   const uint8_t *data_{nullptr};
   size_t data_len_{0};
   size_t read_offset_{0};
-  bool is_playing_{false};
+  volatile bool is_playing_{false};
   bool is_loop_{false};
   std::function<void()> on_finished_{nullptr};
+  TaskHandle_t task_handle_{nullptr};
   
   int32_t valprev_{0};
   int8_t index_{0};
   
-  int16_t decode_buffer_[512];
-  size_t buffer_samples_{0};
-  size_t buffer_sent_bytes_{0};
+  static void playback_task_entry_(void *arg) {
+    PcmSoundPlayer *self = static_cast<PcmSoundPlayer *>(arg);
+    self->run_playback_();
+    self->task_handle_ = nullptr;
+    vTaskDelete(NULL);
+  }
+  
+  void stop_task_() {
+    this->is_playing_ = false;
+    if (this->task_handle_ != nullptr) {
+      for (int i = 0; i < 40 && this->task_handle_ != nullptr; ++i) {
+        vTaskDelay(pdMS_TO_TICKS(5));
+      }
+      if (this->task_handle_ != nullptr) {
+        vTaskDelete(this->task_handle_);
+        this->task_handle_ = nullptr;
+      }
+    }
+  }
+  
+  void run_playback_() {
+    vTaskDelay(pdMS_TO_TICKS(20));
+    
+    int16_t pcm_buf[256];
+    
+    while (this->is_playing_) {
+      if (this->read_offset_ >= this->data_len_) {
+        if (this->is_loop_) {
+          this->read_offset_ = 0;
+          this->valprev_ = 0;
+          this->index_ = 0;
+        } else {
+          break;
+        }
+      }
+      
+      size_t bytes_to_decode = std::min((size_t)128, this->data_len_ - this->read_offset_);
+      size_t samples = 0;
+      for (size_t i = 0; i < bytes_to_decode; ++i) {
+        uint8_t byte = this->data_[this->read_offset_++];
+        pcm_buf[samples++] = this->decode_sample_(byte & 0x0F);
+        pcm_buf[samples++] = this->decode_sample_((byte >> 4) & 0x0F);
+      }
+      
+      size_t total_bytes = samples * sizeof(int16_t);
+      const uint8_t *ptr = reinterpret_cast<const uint8_t *>(pcm_buf);
+      
+      while (total_bytes > 0 && this->is_playing_) {
+        size_t written = this->speaker_->play(ptr, total_bytes, pdMS_TO_TICKS(50));
+        if (written > 0) {
+          ptr += written;
+          total_bytes -= written;
+        } else {
+          vTaskDelay(pdMS_TO_TICKS(5));
+        }
+      }
+    }
+    
+    if (this->is_playing_ && !this->is_loop_) {
+      this->speaker_->finish();
+      uint32_t wait_count = 0;
+      while (this->is_playing_ && this->speaker_->is_running() && wait_count < 150) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+        wait_count++;
+      }
+      ESP_LOGD(PCM_PLAYER_TAG, "PCM audio finished");
+      if (this->on_finished_) {
+        this->on_finished_();
+      }
+    }
+    
+    this->is_playing_ = false;
+  }
   
   inline int16_t decode_sample_(uint8_t nibble) {
     int32_t step = satellite_audio::STEP_SIZE_TABLE[this->index_];
