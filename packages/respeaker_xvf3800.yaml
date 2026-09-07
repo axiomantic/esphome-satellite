@@ -133,6 +133,8 @@ select:
       - "Sonar"
       - "Tick"
       - "Typewriter"
+      - "Clockwork"
+      - "Water Droplets"
       - "Custom"
 
   - platform: template
@@ -145,6 +147,9 @@ select:
     options:
       - "Bell Ping"
       - "Modern Chime"
+      - "Crystal Glass"
+      - "Warm Kalimba"
+      - "Meditation Bell"
       - "Marimba"
       - "Subtle Beep"
       - "Silent"

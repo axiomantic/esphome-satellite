@@ -386,6 +386,9 @@ proc parseSoundStyle*(s: string): ProcessingSoundStyle =
   of "pulse": psPulse
   of "sonar": psSonar
   of "tick": psTick
+  of "typewriter": psTypewriter
+  of "clockwork": psClockwork
+  of "water droplets", "water_droplets", "water": psWaterDroplets
   of "custom": psCustom
   else: psSilent
 
@@ -393,6 +396,9 @@ proc parseWakeChimeSound*(s: string): WakeChimeSound =
   case s.toLowerAscii
   of "bell ping", "bell": wcBell
   of "modern chime", "modern": wcModern
+  of "crystal glass", "crystal": wcCrystal
+  of "warm kalimba", "kalimba": wcKalimba
+  of "meditation bell", "meditation": wcMeditation
   of "marimba": wcMarimba
   of "subtle beep", "subtle": wcSubtle
   of "custom", "custom chime audio": wcCustom
@@ -400,7 +406,7 @@ proc parseWakeChimeSound*(s: string): WakeChimeSound =
 
 haAction("test_audio_feedback"):
   def.description = "Preview voice satellite sound style or chime from Home Assistant"
-  param "style", pkString, defaultVal = "Spinner", description = "Sound style: Spinner, Pulse, Sonar, Tick, Custom, Silent"
+  param "style", pkString, defaultVal = "Spinner", description = "Sound style: Spinner, Pulse, Sonar, Tick, Typewriter, Clockwork, Water Droplets, Custom, Silent"
   param "volume", pkFloat, min = 0.0, max = 100.0, defaultVal = "75.0", description = "Playback volume percentage (0-100)"
   onExecute(ctx):
     let styleStr = ctx.getString("style", "Spinner")

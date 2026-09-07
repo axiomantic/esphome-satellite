@@ -105,6 +105,9 @@
         <select id="field_wake_chime_sound">
           <option value="Bell Ping (Default)" selected>Bell Ping (Default)</option>
           <option value="Modern Chime">Modern Chime</option>
+          <option value="Crystal Glass">Crystal Glass</option>
+          <option value="Warm Kalimba">Warm Kalimba</option>
+          <option value="Meditation Bell">Meditation Bell</option>
           <option value="Marimba">Marimba</option>
           <option value="Subtle Beep">Subtle Beep</option>
           <option value="Silent">Silent</option>
@@ -136,6 +139,8 @@
           <option value="Sonar">Sonar</option>
           <option value="Tick">Tick</option>
           <option value="Typewriter">Typewriter</option>
+          <option value="Clockwork">Clockwork</option>
+          <option value="Water Droplets">Water Droplets</option>
           <option value="Silent">Silent</option>
           <option value="Custom">Custom</option>
         </select>
@@ -331,14 +336,17 @@
           for (const sel of document.querySelectorAll('select')) {
             if (sel.value === key) {
               let isOverridden = false;
+              const off = info.offset || 0x370000;
               for (const [upKey, _] of uploadedParts.entries()) {
-                if (upKey.includes('sound') || upKey.includes('audio') || upKey.includes('chime')) {
+                if (off >= 0x390000 && upKey.includes('chime')) {
+                  isOverridden = true;
+                  break;
+                } else if (off < 0x390000 && (upKey.includes('sound') || upKey.includes('audio'))) {
                   isOverridden = true;
                   break;
                 }
               }
               if (!isOverridden) {
-                const off = info.offset || 0x370000;
                 manifest.builds[0].parts.push({ path: info.flash, offset: off });
               }
             }
@@ -720,7 +728,8 @@
       createSlotCard(1);
     })();
 
-    const OPTION_DETAILS_wake_chime_sound = {"Bell Ping (Default)":{"cadence":"Single tone (880Hz)","desc":"Clean, crisp resonant bell with exponential acoustic decay"},"Modern Chime":{"cadence":"Two-tone ascending (587Hz -> 880Hz)","desc":"Warm harmonic two-tone chord with gentle release"},"Marimba":{"cadence":"Harmonic triad (523Hz, 659Hz, 784Hz)","desc":"Organic mellow wooden marimba strike for discreet ambient homes"},"Subtle Beep":{"cadence":"Discrete blip (600Hz, 80ms)","desc":"Minimal unobtrusive tick tone for quiet environments"},"Silent":{"cadence":"No sound","desc":"Completely silent wake without audible acknowledgement"},"Custom Chime Audio":{"cadence":"User audio","desc":"Plays custom audio from flash partition chime_data"}};
+    Object.assign(PRESET_AUDIO, {"Modern Chime":{"preview":"sounds/modern-chime.mp3","flash":"sounds/modern-chime.wav","offset":3735552},"Crystal Glass":{"preview":"sounds/crystal-glass.mp3","flash":"sounds/crystal-glass.wav","offset":3735552},"Warm Kalimba":{"preview":"sounds/warm-kalimba.mp3","flash":"sounds/warm-kalimba.wav","offset":3735552},"Meditation Bell":{"preview":"sounds/meditation-bell.mp3","flash":"sounds/meditation-bell.wav","offset":3735552}});
+    const OPTION_DETAILS_wake_chime_sound = {"Bell Ping (Default)":{"cadence":"Single tone (880Hz)","desc":"Clean, crisp resonant bell with exponential acoustic decay"},"Modern Chime":{"cadence":"Two-tone ascending chord","desc":"Modern minimalist crisp ascending harmonic chime (Kenney CC0)"},"Crystal Glass":{"cadence":"Crystal ping resonance","desc":"Modern minimalist delicate crystal resonance ping"},"Warm Kalimba":{"cadence":"Dual-tine acoustic strike","desc":"Organic acoustic thumb piano with wooden body resonance"},"Meditation Bell":{"cadence":"Tibetan singing bowl","desc":"Organic acoustic singing bowl with deep harmonic decay"},"Marimba":{"cadence":"Harmonic triad (523Hz, 659Hz, 784Hz)","desc":"Organic mellow wooden marimba strike for discreet ambient homes"},"Subtle Beep":{"cadence":"Discrete blip (600Hz, 80ms)","desc":"Minimal unobtrusive tick tone for quiet environments"},"Silent":{"cadence":"No sound","desc":"Completely silent wake without audible acknowledgement"},"Custom Chime Audio":{"cadence":"User audio","desc":"Plays custom audio from flash partition chime_data"}};
     const select_wake_chime_sound = document.getElementById('field_wake_chime_sound');
     const presetView_wake_chime_sound = document.getElementById('presetView_wake_chime_sound');
     const customSlot_wake_chime_sound = document.querySelector('.custom-slot[data-depends-on="wake_chime_sound"]');
@@ -803,8 +812,8 @@
         checkInstallReadiness();
       });
     }
-    Object.assign(PRESET_AUDIO, {"Typewriter":{"preview":"sounds/typewriter.mp3","flash":"sounds/typewriter.wav"}});
-    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Typewriter":{"cadence":"Mechanical rhythm","desc":"Soft acoustic typewriter keystrokes and mechanical chatter during LLM processing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
+    Object.assign(PRESET_AUDIO, {"Typewriter":{"preview":"sounds/typewriter.mp3","flash":"sounds/typewriter.wav","offset":3604480},"Clockwork":{"preview":"sounds/clockwork.mp3","flash":"sounds/clockwork.wav","offset":3604480},"Water Droplets":{"preview":"sounds/water-droplets.mp3","flash":"sounds/water-droplets.wav","offset":3604480}});
+    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Typewriter":{"cadence":"Mechanical rhythm","desc":"Soft acoustic typewriter keystrokes and mechanical chatter during LLM processing"},"Clockwork":{"cadence":"Watchmaker escapement","desc":"Modern minimalist precision escapement tick-tock with subtle gear movement"},"Water Droplets":{"cadence":"Bubbly acoustic resonance","desc":"Organic acoustic water droplets dripping into a calm pool"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
     const select_default_sound_style = document.getElementById('field_default_sound_style');
     const presetView_default_sound_style = document.getElementById('presetView_default_sound_style');
     const customSlot_default_sound_style = document.querySelector('.custom-slot[data-depends-on="default_sound_style"]');
