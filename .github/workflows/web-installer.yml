@@ -30,7 +30,7 @@ permissions:
 
 concurrency:
   group: "pages-web"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy-installer:
