@@ -1439,7 +1439,7 @@
           eraseStatus.innerHTML = '<span class="spinner"></span> Erasing entire flash memory (wiping NVS, credentials, partitions)...';
           await esploader.eraseFlash();
           eraseStatus.className = 'erase-status success';
-          eraseStatus.innerHTML = ICONS.check + ' <strong>Flash erased successfully!</strong> All cached Wi-Fi credentials, NVS keys, and data have been wiped clean. You can now click <strong>Install Firmware</strong> above for a pristine out-of-the-box install.';
+          eraseStatus.innerHTML = ICONS.check + ' <strong>Flash erased successfully!</strong> All flash partitions and settings wiped.<br/><small style="display:block; margin-top:6px; opacity:0.85;">ℹ️ <em>Note: If you connect serial logs now, you will see <code>invalid header: 0xffffffff</code> repeating—this is normal when flash memory is empty!</em> If flashing does not start immediately, hold the <strong>BOOT</strong> button, tap <strong>RST</strong>, then release BOOT.</small><br/>You can now click <strong>Install Firmware</strong> above to flash clean firmware.';
         } catch (err) {
           console.error('Erase error:', err);
           eraseStatus.className = 'erase-status error';
@@ -1457,11 +1457,17 @@
     let termPort = null;
     let termReader = null;
     let termKeepReading = false;
+    let isDisconnecting = false;
 
     async function disconnectTerminal() {
+      if (isDisconnecting) return;
+      isDisconnecting = true;
       termKeepReading = false;
       if (termReader) {
         try { await termReader.cancel(); } catch (_) {}
+      }
+      if (termReader) {
+        try { termReader.releaseLock(); } catch (_) {}
         termReader = null;
       }
       if (termPort) {
@@ -1475,6 +1481,7 @@
         connectBtn.className = 'term-btn connect';
         connectBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg> <span>Connect Logs</span>';
       }
+      isDisconnecting = false;
     }
 
     function appendTermLine(text, type) {
@@ -1517,30 +1524,37 @@
     }
 
     async function readSerialLoop() {
-      const textDecoder = new TextDecoderStream();
-      const readableStreamClosed = termPort.readable.pipeTo(textDecoder.writable);
-      termReader = textDecoder.readable.getReader();
+      const decoder = new TextDecoder();
       let buffer = '';
       try {
-        while (termKeepReading) {
-          const { value, done } = await termReader.read();
-          if (done) break;
-          if (value) {
-            buffer += value;
-            const lines = buffer.split(/\r?\n/);
-            buffer = lines.pop();
-            for (const line of lines) {
-              appendTermLine(line);
-              parseDeviceLogLine(line);
+        while (termKeepReading && termPort && termPort.readable) {
+          termReader = termPort.readable.getReader();
+          try {
+            while (termKeepReading) {
+              const { value, done } = await termReader.read();
+              if (done) break;
+              if (value) {
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop();
+                for (const line of lines) {
+                  appendTermLine(line);
+                  parseDeviceLogLine(line);
+                }
+              }
             }
+          } finally {
+            try { termReader.releaseLock(); } catch (_) {}
+            termReader = null;
           }
+          break;
         }
       } catch (err) {
         if (termKeepReading) appendTermLine('[Stream closed: ' + (err.message || err) + ']', 'warn');
       } finally {
-        try { await termReader.cancel(); } catch (_) {}
-        try { await readableStreamClosed.catch(() => {}); } catch (_) {}
-        await disconnectTerminal();
+        if (!isDisconnecting) {
+          await disconnectTerminal();
+        }
       }
     }
 
@@ -1556,7 +1570,9 @@
       try {
         if (badge) { badge.className = 'term-badge connecting'; badge.textContent = 'Connecting...'; }
         termPort = await navigator.serial.requestPort();
-        await termPort.open({ baudRate: 115200 });
+        if (!termPort.readable) {
+          await termPort.open({ baudRate: 115200 });
+        }
         termKeepReading = true;
         if (badge) { badge.className = 'term-badge connected'; badge.textContent = 'Connected (115200)'; }
         if (banner) banner.style.display = 'flex';

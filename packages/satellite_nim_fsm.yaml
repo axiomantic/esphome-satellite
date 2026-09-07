@@ -15,6 +15,7 @@ nim:
     - "-d:danger"
     - "-d:useMalloc"
     - "-d:esphome"
+    - "-d:noSignalHandler"
   requires:
     - https://github.com/elijahr/nim-typestates
 

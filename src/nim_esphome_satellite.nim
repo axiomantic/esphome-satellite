@@ -691,19 +691,24 @@ proc nim_satellite_is_alerting*(): bool {.exportc, cdecl.} =
   result = (currentState == rsAlerting)
 
 proc nim_satellite_is_processing*(): bool {.exportc, cdecl.} =
-  satellitePipeline.isProcessing()
+  if satellitePipeline != nil:
+    satellitePipeline.isProcessing()
+  else:
+    false
 
 proc nim_satellite_get_processing_style*(): cint {.exportc, cdecl.} =
   cint(ord(configuredProcessingStyle))
 
 esphomeSetup:
   info("SatelliteFSM", "14-state verified voice satellite state machine initialized")
-  satellitePipeline.processingLoop.onTick = proc(style: ProcessingSoundStyle, vol: float32, count: int) =
-    if style == psCustom:
-      debug("SatelliteAudio", "Streaming custom audio sample from flash partition sound_data (count=" & $count & ")")
-    else:
-      debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
+  if satellitePipeline != nil and satellitePipeline.processingLoop != nil:
+    satellitePipeline.processingLoop.onTick = proc(style: ProcessingSoundStyle, vol: float32, count: int) =
+      if style == psCustom:
+        debug("SatelliteAudio", "Streaming custom audio sample from flash partition sound_data (count=" & $count & ")")
+      else:
+        debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
 
 esphomeLoop:
-  satellitePipeline.tick(millis())
+  if satellitePipeline != nil:
+    satellitePipeline.tick(millis())
 
