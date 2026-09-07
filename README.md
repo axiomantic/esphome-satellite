@@ -48,7 +48,7 @@ Follow these steps right after flashing to connect the satellite to your network
 >
 > **You must physically unplug and reconnect the USB-C cable** (or tap the **RST** button on the board) right after flashing!
 > 
-> *If you attempt to configure Wi-Fi before power-cycling, the installer will report `⚠️ An error occurred. Improv Wi-Fi Serial not detected` because the firmware has not booted yet.*
+> *If you attempt to configure Wi-Fi before power-cycling, the installer will report `An error occurred. Improv Wi-Fi Serial not detected` because the firmware has not booted yet.*
 
 #### Step 2: Connect to Wi-Fi
 
@@ -86,7 +86,7 @@ Once the board has rebooted into ESPHome, connect using either method:
 2. Assign the satellite to your desired voice pipeline (Home Assistant Cloud, Whisper/Piper, or local Ollama LLM).
 3. On the device card in Home Assistant, you can change your **Wake Chime** (*Modern Chime*, *Crystal Glass*, *Warm Kalimba*, *Meditation Bell*, *Bell Ping*, *Marimba*, *Subtle Beep*) and **Processing Sound** (*Typewriter*, *Clockwork*, *Water Droplets*, *Spinner*, *Pulse*, *Sonar*, *Tick*) at any time!
 
-> 📖 **Manual / Source Builds**: See the full [**Integration Guide for ESPHome**](#integration-guide-for-esphome) below for custom YAML overrides, external component configuration, and C ABI bridge bindings.
+> **Manual / Source Builds**: See the full [**Integration Guide for ESPHome**](#integration-guide-for-esphome) below for custom YAML overrides, external component configuration, and C ABI bridge bindings.
 
 ---
 
