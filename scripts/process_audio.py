@@ -16,6 +16,7 @@ import glob
 import subprocess
 import struct
 import re
+import wave
 
 SAMPLE_RATE = 16000
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -78,16 +79,11 @@ def encode_ima_adpcm(pcm_samples):
     return bytes(adpcm_bytes)
 
 def read_wav_pcm16(wav_path):
-    with open(wav_path, "rb") as f:
-        data = f.read()
-    # Find data chunk
-    idx = data.find(b"data")
-    if idx == -1:
-        raise ValueError(f"Cannot find data chunk in {wav_path}")
-    data_size = struct.unpack("<I", data[idx+4:idx+8])[0]
-    pcm_bytes = data[idx+8:idx+8+data_size]
-    num_samples = len(pcm_bytes) // 2
-    return list(struct.unpack(f"<{num_samples}h", pcm_bytes))
+    with wave.open(wav_path, "rb") as wf:
+        nframes = wf.getnframes()
+        pcm_bytes = wf.readframes(nframes)
+        num_samples = len(pcm_bytes) // 2
+        return list(struct.unpack(f"<{num_samples}h", pcm_bytes))
 
 def get_max_volume_db(wav_path):
     cmd = ["ffmpeg", "-i", wav_path, "-af", "volumedetect", "-f", "null", "-"]
