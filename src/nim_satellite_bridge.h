@@ -141,5 +141,51 @@ inline const char* get_satellite_state_name() {
 }
 
 #ifdef __cplusplus
+} // extern "C"
+
+#include <string>
+#include <cstring>
+
+inline const char* get_chime_rtttl(const std::string &sound) {
+  if (sound == "Modern Chime") {
+    return "modern:d=16,o=5,b=200:e,g,b,e6";
+  } else if (sound == "Crystal Glass") {
+    return "crystal:d=32,o=6,b=200:e,b,e7";
+  } else if (sound == "Warm Kalimba") {
+    return "kalimba:d=16,o=5,b=160:c,g,c6";
+  } else if (sound == "Meditation Bell") {
+    return "meditate:d=8,o=4,b=100:g,c5,e5";
+  } else if (sound == "Marimba") {
+    return "marimba:d=16,o=5,b=200:c,e,g";
+  } else if (sound == "Subtle Beep") {
+    return "subtle:d=32,o=5,b=240:e";
+  } else if (sound == "Silent") {
+    return "";
+  } else {
+    // "Bell Ping" or fallback
+    return "bell:d=16,o=6,b=180:c,g";
+  }
+}
+
+inline const char* get_processing_rtttl(const std::string &style) {
+  if (style == "Pulse") {
+    return "pulse:d=16,o=4,b=120:c,p,c,8p";
+  } else if (style == "Sonar") {
+    return "sonar:d=16,o=6,b=100:g,8p,4p";
+  } else if (style == "Tick") {
+    return "tick:d=32,o=6,b=160:c,8p,16p";
+  } else if (style == "Typewriter") {
+    return "typewriter:d=32,o=5,b=220:c,e,d,g,e";
+  } else if (style == "Clockwork") {
+    return "clockwork:d=16,o=5,b=140:c,d,c,d";
+  } else if (style == "Water Droplets") {
+    return "droplets:d=32,o=6,b=160:c,8p,g,8p,e7,8p";
+  } else if (style == "Silent") {
+    return "";
+  } else {
+    // "Spinner" or fallback
+    return "spinner:d=16,o=5,b=200:c,e,g,c6,g,e";
+  }
 }
 #endif
+

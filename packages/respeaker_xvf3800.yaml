@@ -98,6 +98,15 @@ rtttl:
   speaker: board_speaker
   on_finished_playback:
     - lambda: |-
+        if (std::string(get_satellite_state_name()) == "Thinking") {
+          std::string opt = id(processing_sound).current_option();
+          const char* rtttl_str = get_processing_rtttl(opt);
+          if (rtttl_str && strlen(rtttl_str) > 0) {
+            id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
+            id(chime_player).play(rtttl_str);
+            return;
+          }
+        }
         id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
 
 nim:
@@ -233,10 +242,13 @@ micro_wake_word:
                 switch.is_on: wake_chime
               then:
                 - lambda: |-
-                    id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
-                - rtttl.play:
-                    rtttl: "bell:d=16,o=6,b=180:c,g"
-                - delay: 180ms
+                    std::string opt = id(wake_chime_sound).current_option();
+                    const char* rtttl_str = get_chime_rtttl(opt);
+                    if (rtttl_str && strlen(rtttl_str) > 0) {
+                      id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
+                      id(chime_player).play(rtttl_str);
+                    }
+                - delay: 250ms
           - voice_assistant.start:
               wake_word: !lambda return wake_word;
 
@@ -253,6 +265,12 @@ voice_assistant:
   on_stt_vad_end:
     - lambda: |-
         call_nim_speech_ended();
+        std::string opt = id(processing_sound).current_option();
+        const char* rtttl_str = get_processing_rtttl(opt);
+        if (rtttl_str && strlen(rtttl_str) > 0) {
+          id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
+          id(chime_player).play(rtttl_str);
+        }
   on_stt_end:
     - lambda: |-
         std::string s = x;
@@ -283,20 +301,39 @@ voice_assistant:
 
         if (should_cancel) {
           ESP_LOGI("voice_assistant", "Cancellation word detected in '%s'. Aborting listening.", s.c_str());
+          id(chime_player).stop();
+          id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
           id(va).request_stop();
           call_nim_stop_word();
+        } else {
+          if (std::string(get_satellite_state_name()) != "Thinking") {
+            call_nim_speech_ended();
+            std::string opt = id(processing_sound).current_option();
+            const char* rtttl_str = get_processing_rtttl(opt);
+            if (rtttl_str && strlen(rtttl_str) > 0) {
+              id(chime_player).stop();
+              id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
+              id(chime_player).play(rtttl_str);
+            }
+          }
         }
   on_tts_start:
     - lambda: |-
+        id(chime_player).stop();
+        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_tts_start();
   on_tts_end:
     - lambda: |-
         call_nim_tts_end();
   on_end:
     - lambda: |-
+        id(chime_player).stop();
+        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_stop_word();
   on_error:
     - lambda: |-
+        id(chime_player).stop();
+        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_error(code.c_str());
   on_client_connected:
     - micro_wake_word.start:
@@ -377,6 +414,12 @@ select:
     set_action:
       - lambda: |-
           call_nim_action_set_processing_sound(x.c_str());
+          const char* rtttl_str = get_processing_rtttl(x);
+          if (rtttl_str && strlen(rtttl_str) > 0) {
+            id(chime_player).stop();
+            id(chime_player).set_gain(id(processing_sound_volume).state / 100.0f);
+            id(chime_player).play(rtttl_str);
+          }
 
   - platform: template
     id: wake_chime_sound
@@ -399,6 +442,12 @@ select:
     set_action:
       - lambda: |-
           call_nim_action_set_chime_sound(x.c_str());
+          const char* rtttl_str = get_chime_rtttl(x);
+          if (rtttl_str && strlen(rtttl_str) > 0) {
+            id(chime_player).stop();
+            id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
+            id(chime_player).play(rtttl_str);
+          }
 
   - platform: template
     id: led_pattern
@@ -444,6 +493,13 @@ number:
     set_action:
       - lambda: |-
           call_nim_action_set_processing_volume(x);
+          std::string opt = id(processing_sound).current_option();
+          const char* rtttl_str = get_processing_rtttl(opt);
+          if (rtttl_str && strlen(rtttl_str) > 0) {
+            id(chime_player).stop();
+            id(chime_player).set_gain(x / 100.0f);
+            id(chime_player).play(rtttl_str);
+          }
 
   - platform: template
     id: wake_chime_volume
@@ -458,8 +514,14 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          id(chime_player).set_gain(x / 100.0f);
           call_nim_action_set_chime_volume(x);
+          std::string opt = id(wake_chime_sound).current_option();
+          const char* rtttl_str = get_chime_rtttl(opt);
+          if (rtttl_str && strlen(rtttl_str) > 0) {
+            id(chime_player).stop();
+            id(chime_player).set_gain(x / 100.0f);
+            id(chime_player).play(rtttl_str);
+          }
 
   - platform: template
     id: led_brightness
