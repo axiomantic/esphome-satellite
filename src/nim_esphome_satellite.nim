@@ -328,6 +328,7 @@ var
   micWasMuted: bool = false
   configuredProcessingStyle* = psSpinner
   configuredProcessingVolume* = 75.0'f32
+  configuredWakeChimeSound* = wcBell
   wakeChimeEnabled* = true
   wakeChimeVolume* = 80.0'f32
   satellitePipeline* = newSatellitePipeline()
@@ -340,6 +341,14 @@ esphomeControls:
     onSelect(style):
       configuredProcessingStyle = style
       satellitePipeline.processingLoop.style = style
+
+  select[WakeChimeSound]("wake_chime_sound"):
+    name = "Wake Chime Sound"
+    default = wcBell
+    persist = true
+    onSelect(sound):
+      configuredWakeChimeSound = sound
+      satellitePipeline.wakeChimeSound = sound
 
   number("processing_sound_volume"):
     name = "Processing Sound Volume"
@@ -379,6 +388,15 @@ proc parseSoundStyle*(s: string): ProcessingSoundStyle =
   of "tick": psTick
   of "custom": psCustom
   else: psSilent
+
+proc parseWakeChimeSound*(s: string): WakeChimeSound =
+  case s.toLowerAscii
+  of "bell ping", "bell": wcBell
+  of "modern chime", "modern": wcModern
+  of "marimba": wcMarimba
+  of "subtle beep", "subtle": wcSubtle
+  of "custom", "custom chime audio": wcCustom
+  else: wcSilent
 
 haAction("test_audio_feedback"):
   def.description = "Preview voice satellite sound style or chime from Home Assistant"

@@ -6,6 +6,7 @@ substitutions:
   name: "esphome-satellite"
   friendly_name: "Voice Satellite"
   processing_sound_default: "Spinner"
+  wake_chime_sound_default: "Bell Ping"
 
 esphome:
   name: ${name}
@@ -13,7 +14,7 @@ esphome:
   name_add_mac_suffix: true
   project:
     name: "axiomantic.esphome-satellite"
-    version: "0.3.0"
+    version: "0.3.1"
   includes:
     - ../src/nim_satellite_bridge.h
 
@@ -129,6 +130,21 @@ select:
       - "Pulse"
       - "Sonar"
       - "Tick"
+      - "Custom"
+
+  - platform: template
+    id: wake_chime_sound
+    name: "Wake Chime Sound"
+    icon: "mdi:bell-ring"
+    optimistic: true
+    initial_option: ${wake_chime_sound_default}
+    restore_value: true
+    options:
+      - "Bell Ping"
+      - "Modern Chime"
+      - "Marimba"
+      - "Subtle Beep"
+      - "Silent"
       - "Custom"
 
 number:

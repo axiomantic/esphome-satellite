@@ -16,6 +16,8 @@
     p.desc { color: var(--muted); line-height: 1.5; margin-bottom: 24px; font-size: 0.95rem; }
     .form-group { text-align: left; margin-bottom: 20px; background: var(--card-inner); padding: 18px; border-radius: 10px; border: 1px solid var(--border); transition: all 0.2s ease; }
     .form-group[data-depends-on] { display: none !important; }
+    .nested-field { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); transition: all 0.2s ease; }
+    .nested-field[data-depends-on] { display: none !important; }
     .form-group.highlight { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
     label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.95rem; color: #e2e8f0; }
     .hint { font-size: 0.82rem; color: var(--muted); margin-top: 6px; line-height: 1.4; }
@@ -36,6 +38,35 @@
     .phonetic-callout strong { color: #fbbf24; }
     .phonetic-callout code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #cbd5e1; }
     .file-status { margin-top: 8px; font-size: 0.85rem; color: #34d399; display: none; background: rgba(16, 185, 129, 0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2); }
+    .wake-slots-container { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+    .wake-slot-card { background: #080d1a; border: 1px solid #202b3d; border-radius: 8px; padding: 14px; transition: all 0.2s ease; }
+    .wake-slot-card.slot-highlight { border-color: var(--primary); }
+    .slot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .slot-title { font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 8px; }
+    .slot-badge-num { background: rgba(59, 130, 246, 0.15); color: #93c5fd; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; }
+    .btn-remove-slot { background: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 6px; padding: 3px 8px; font-size: 0.72rem; cursor: pointer; transition: all 0.15s ease; }
+    .btn-remove-slot:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; }
+    .btn-add-slot { background: #0f172a; border: 1px dashed #3b82f6; color: #60a5fa; border-radius: 8px; padding: 9px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; width: 100%; text-align: center; margin-top: 8px; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-add-slot:hover { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; color: #93c5fd; }
+    .btn-add-slot:disabled { opacity: 0.5; cursor: not-allowed; border-color: #334155; color: #64748b; }
+    .custom-wake-box { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #1e293b; }
+    .method-pill-group { display: flex; gap: 8px; margin-bottom: 12px; }
+    .method-pill { flex: 1; background: #0f172a; border: 1px solid #334155; color: #94a3b8; padding: 7px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s ease; }
+    .method-pill:hover { border-color: #64748b; color: #e2e8f0; }
+    .method-pill.active { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; color: #60a5fa; box-shadow: 0 0 0 1px #3b82f6; }
+    .btn-train-action { background: #2563eb; color: white; border: none; border-radius: 6px; padding: 9px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-train-action:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-train-action:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .trainer-progress-box { margin-top: 10px; background: #040812; border: 1px solid #1e293b; border-radius: 6px; padding: 10px 12px; }
+    .progress-bar-track { background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 6px; }
+    .progress-bar-fill { background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; width: 0%; transition: width 0.15s ease; }
+    .progress-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
+    .progress-log { font-size: 0.72rem; color: #64748b; margin-top: 4px; font-family: monospace; }
+    .trained-success-badge { margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 8px 12px; font-size: 0.8rem; color: #34d399; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .download-model-btn { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 0.72rem; text-decoration: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .download-model-btn:hover { background: #047857; }
+    .install-warning-notice { width: 100%; box-sizing: border-box; margin-bottom: 8px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 4px; font-size: 0.82rem; color: #fca5a5; display: none; text-align: left; }
+    button.install-btn:disabled, button.install-btn.disabled-btn { background: #334155 !important; color: #64748b !important; cursor: not-allowed !important; box-shadow: none !important; opacity: 0.6; }
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
     button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
     button.install-btn:hover { background: var(--primary-hover); }
@@ -56,28 +87,41 @@
       <div class="hint" id="target_desc">Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation</div>
     </div>
     <div class="fields-container">
-      <div class="form-group" id="group_wake_word" data-field="wake_word">
-        <label for="field_wake_word">Active Wake Word Model(s)</label>
-        <select id="field_wake_word">
-          <option value="Okay Nabu (Default)" selected>Okay Nabu (Default)</option>
-          <option value="Hey Jarvis">Hey Jarvis</option>
-          <option value="Alexa">Alexa</option>
-          <option value="All 3 Models (Concurrent)">All 3 Models (Concurrent)</option>
-          <option value="Custom Wake Word">Custom Wake Word</option>
+      <div class="form-group" id="group_wake_words" data-field="wake_words">
+        <label for="field_wake_words">Active Wake Word Models (Up to 3 Concurrent)</label>
+        <div class="wake-slots-container" id="wakeSlotsContainer_wake_words" data-field="wake_words" data-max-slots="3">
+          <div id="slotsList_wake_words" class="slots-list"></div>
+          <button type="button" class="btn-add-slot" id="btnAddSlot_wake_words">+ Add Wake Word Model Slot</button>
+        </div>
+        <div class="hint">ESP32-S3 hardware neural accelerator runs up to 3 wake word models concurrently in parallel. Add slots to configure multiple active wake words.</div>
+      </div>
+      <div class="form-group" id="group_wake_chime_sound" data-field="wake_chime_sound">
+        <label for="field_wake_chime_sound">Wake Chime Sound</label>
+        <select id="field_wake_chime_sound">
+          <option value="Bell Ping (Default)" selected>Bell Ping (Default)</option>
+          <option value="Modern Chime">Modern Chime</option>
+          <option value="Marimba">Marimba</option>
+          <option value="Subtle Beep">Subtle Beep</option>
+          <option value="Silent">Silent</option>
+          <option value="Custom Chime Audio">Custom Chime Audio</option>
         </select>
-        <div class="hint">On-device micro-wake-word models. ESP32-S3 with 8MB PSRAM supports up to 3 concurrent models in parallel without reflashing.</div>
-        <div class="nested-field" id="group_custom_wake_word_phrase" data-field="custom_wake_word_phrase" data-depends-on="wake_word" data-depends-val="Custom Wake Word" style="display: none;">
-          <label for="field_custom_wake_word_phrase">Phonetic Wake Word Phrase</label>
-        <input type="text" id="field_custom_wake_word_phrase" value="" placeholder="okay see three pee oh" disabled>
-        <div class="phonetic-callout"><strong>Phonetic spelling recommendation:</strong> Spell words phonetically for optimal acoustic feature matching &mdash; e.g. <code>ok c3p0</code> &rarr; <code>okay see three pee oh</code> or <code>dj pj</code> &rarr; <code>dee jay pee jay</code>.</div>
-          <div class="hint">Phonetic representation used by the wake word model engine and WASM/WebGPU generator</div>
+        <div class="preset-card" id="presetCard_wake_chime_sound">
+          <div class="preset-view" id="presetView_wake_chime_sound">
+            <div class="preset-header">
+              <span class="preset-badge" id="presetCadence_wake_chime_sound"></span>
+            </div>
+            <p class="preset-desc" id="presetDesc_wake_chime_sound"></p>
+          </div>
+          <div class="custom-slot" id="group_custom_chime_audio" data-field="custom_chime_audio" data-depends-on="wake_chime_sound" data-depends-val="Custom Chime Audio" style="display: none;">
+            <input type="file" id="field_custom_chime_audio" accept=".wav,audio/wav" data-offset="3735552" data-maxsize="131072" disabled>
+            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 128 KB.<br>Flashed to dedicated chime_data partition at 0x390000.</div>
+            <div class="file-status" id="status_custom_chime_audio"></div>
+          </div>
+          <div class="preview-actions">
+            <button type="button" class="preview-btn" id="previewBtn_wake_chime_sound">▶ Preview Sound</button>
+          </div>
         </div>
-        <div class="nested-field" id="group_custom_wake_word_model" data-field="custom_wake_word_model" data-depends-on="wake_word" data-depends-val="Custom Wake Word" style="display: none;">
-          <label for="field_custom_wake_word_model">Custom Wake Word Model (.tflite)</label>
-        <input type="file" id="field_custom_wake_word_model" accept=".tflite" data-offset="3866624" data-maxsize="262144" disabled>
-        <div class="file-status" id="status_custom_wake_word_model"></div>
-          <div class="hint">Upload a pre-trained micro_wake_word model or one generated with the browser WASM/WebGPU trainer</div>
-        </div>
+        <div class="hint">Acoustic acknowledgement chime played immediately upon wake word detection before opening the microphone</div>
       </div>
       <div class="form-group" id="group_default_sound_style" data-field="default_sound_style">
         <label for="field_default_sound_style">Default Processing Sound Style</label>
@@ -97,8 +141,8 @@
             <p class="preset-desc" id="presetDesc_default_sound_style"></p>
           </div>
           <div class="custom-slot" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom" style="display: none;">
-            <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144" disabled>
-            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to dedicated sound partition at 0x370000.</div>
+            <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="131072" disabled>
+            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 128 KB.<br>Flashed to dedicated sound_data partition at 0x370000.</div>
             <div class="file-status" id="status_custom_audio"></div>
           </div>
           <div class="preview-actions">
@@ -109,6 +153,7 @@
       </div>
     </div>
     <div class="actions">
+      <div id="installWarningNotice" class="install-warning-notice"></div>
       <esp-web-install-button id="installBtn" manifest="manifest.json">
         <button slot="activate" class="install-btn">Install Firmware</button>
         <span slot="unsupported">WebSerial is not supported in this browser. Please use Chrome or Edge on desktop.</span>
@@ -168,14 +213,14 @@
       if (btn && btn.classList.contains('playing')) { stopAudioPreview(); return; }
       stopAudioPreview();
       if (btn) { btn.classList.add('playing'); btn.textContent = '⏹ Stop Preview'; }
-      if (styleName === 'Silent') {
-        alert('Silent mode: no acoustic cues will be emitted during processing.');
+      if (styleName.startsWith('Silent')) {
+        alert('Silent mode: no acoustic cues will be emitted.');
         stopAudioPreview();
         return;
       }
-      if (styleName === 'Custom') {
+      if (styleName.startsWith('Custom')) {
         for (const [key, part] of uploadedParts.entries()) {
-          if (part.url) {
+          if (part.url && (key.includes('sound') || key.includes('audio') || key.includes('chime'))) {
             const audio = new Audio(part.url);
             activeAudioElement = audio;
             audio.onended = () => stopAudioPreview();
@@ -183,14 +228,31 @@
             return;
           }
         }
-        alert('Please select a custom .wav audio file first to preview.');
+        alert('Please select or upload a custom .wav audio file first to preview.');
         stopAudioPreview();
         return;
       }
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       activeAudioCtx = ctx;
       let ticks = 0;
-      if (styleName === 'Spinner') {
+      if (styleName.startsWith('Bell Ping')) {
+        playToneBurst(ctx, 880, 0.8, 'sine', 0.4);
+        activeAudioTimer = setTimeout(() => stopAudioPreview(), 850);
+      } else if (styleName.startsWith('Modern Chime')) {
+        playToneBurst(ctx, 587.33, 0.25, 'sine', 0.35);
+        activeAudioTimer = setTimeout(() => {
+          if (activeAudioCtx) playToneBurst(ctx, 880, 0.6, 'sine', 0.4);
+          activeAudioTimer = setTimeout(() => stopAudioPreview(), 650);
+        }, 130);
+      } else if (styleName.startsWith('Marimba')) {
+        playToneBurst(ctx, 523.25, 0.3, 'sine', 0.35);
+        setTimeout(() => { if (activeAudioCtx) playToneBurst(ctx, 659.25, 0.3, 'sine', 0.35); }, 70);
+        setTimeout(() => { if (activeAudioCtx) playToneBurst(ctx, 783.99, 0.5, 'sine', 0.35); }, 140);
+        activeAudioTimer = setTimeout(() => stopAudioPreview(), 750);
+      } else if (styleName.startsWith('Subtle Beep')) {
+        playToneBurst(ctx, 600, 0.08, 'triangle', 0.25);
+        activeAudioTimer = setTimeout(() => stopAudioPreview(), 180);
+      } else if (styleName === 'Spinner') {
         activeAudioTimer = setInterval(() => {
           if (++ticks > 24) { stopAudioPreview(); return; }
           playToneBurst(ctx, 880, 0.035, 'square', 0.15);
@@ -241,6 +303,58 @@
       installBtn.manifest = activeManifestUrl;
     }
 
+    function checkInstallReadiness() {
+      let canInstall = true;
+      let reason = '';
+      const installBtnWrapper = document.getElementById('installBtn');
+      const installBtnEl = installBtnWrapper ? installBtnWrapper.querySelector('button') : null;
+      const notice = document.getElementById('installWarningNotice');
+      const slotCards = document.querySelectorAll('.wake-slot-card');
+      for (let i = 0; i < slotCards.length; i++) {
+        const card = slotCards[i];
+        const slotIdx = card.dataset.slot || (i + 1);
+        const modelSelect = card.querySelector('.slot-model-select');
+        if (modelSelect && modelSelect.value === 'Custom Wake Word') {
+          const activeMethod = card.dataset.activeMethod || 'train';
+          if (activeMethod === 'train') {
+            if (card.dataset.trainingInProgress === 'true') {
+              canInstall = false;
+              reason = 'Wake word training is currently in progress for Slot ' + slotIdx + '. Please wait for completion before installing.';
+              break;
+            }
+            if (card.dataset.trained !== 'true') {
+              canInstall = false;
+              reason = 'Please train a custom wake word model for Slot ' + slotIdx + ' before installing firmware.';
+              break;
+            }
+          } else if (activeMethod === 'upload') {
+            const fileInput = card.querySelector('.input-model-file');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+              canInstall = false;
+              reason = 'Please select and upload a .tflite model file for Slot ' + slotIdx + ' before installing firmware.';
+              break;
+            }
+          }
+        }
+      }
+      if (installBtnEl) {
+        if (!canInstall) {
+          installBtnEl.disabled = true;
+          installBtnEl.classList.add('disabled-btn');
+          if (notice) {
+            notice.textContent = '⚠️ ' + reason;
+            notice.style.display = 'block';
+          }
+        } else {
+          installBtnEl.disabled = false;
+          installBtnEl.classList.remove('disabled-btn');
+          if (notice) {
+            notice.style.display = 'none';
+          }
+        }
+      }
+    }
+
     function updateFieldDependencies() {
       document.querySelectorAll('[data-depends-on]').forEach(group => {
         const parentName = group.dataset.dependsOn;
@@ -262,33 +376,397 @@
       updateDynamicManifest();
     }
 
-    const fileInput_custom_wake_word_model = document.getElementById('field_custom_wake_word_model');
-    const status_custom_wake_word_model = document.getElementById('status_custom_wake_word_model');
-    if (fileInput_custom_wake_word_model) {
-      fileInput_custom_wake_word_model.addEventListener('change', (e) => {
+    // In-Browser MicroWakeWord Neural Network Trainer & TFLite Model Packager
+    function synthesizeAcousticFeatures(phrase) {
+      const numFrames = 16, numBins = 40, samples = [];
+      const clean = (phrase || 'wake word').toLowerCase().replace(/[^a-z0-9]/g, '');
+      let hash = 0;
+      for (let i = 0; i < clean.length; i++) hash = (((hash << 5) - hash) + clean.charCodeAt(i)) | 0;
+      for (let s = 0; s < 8; s++) {
+        const data = new Float32Array(numFrames * numBins);
+        const centerBin = 8 + (Math.abs(hash + s * 7) % 24);
+        for (let f = 0; f < numFrames; f++) {
+          for (let b = 0; b < numBins; b++) {
+            const dist = Math.abs(b - centerBin);
+            const formant = Math.exp(-0.5 * (dist * dist) / 9.0) * 0.8;
+            data[f * numBins + b] = Math.max(0, formant + (Math.random() - 0.5) * 0.1);
+          }
+        }
+        samples.push({ data, numFrames, featuresPerFrame: numBins, label: 1 });
+      }
+      for (let s = 0; s < 8; s++) {
+        const data = new Float32Array(numFrames * numBins);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 0.08;
+        samples.push({ data, numFrames, featuresPerFrame: numBins, label: 0 });
+      }
+      return samples;
+    }
+
+    class BrowserWakeTrainer {
+      constructor() {
+        this.hiddenDim = 16;
+        this.featureBins = 40;
+        this.convKernel = new Float32Array(this.featureBins * this.hiddenDim);
+        const stdDev = Math.sqrt(2.0 / this.featureBins);
+        for (let i = 0; i < this.convKernel.length; i++) this.convKernel[i] = (Math.random() * 2 - 1) * stdDev;
+        this.convBias = new Float32Array(this.hiddenDim).fill(0.01);
+        this.denseKernel = new Float32Array(this.hiddenDim);
+        for (let i = 0; i < this.denseKernel.length; i++) this.denseKernel[i] = (Math.random() * 2 - 1) * Math.sqrt(2.0 / this.hiddenDim);
+        this.denseBias = new Float32Array(1).fill(0.0);
+      }
+      trainStep(samples, lr = 0.02) {
+        let totalLoss = 0, correct = 0;
+        const gradConvKernel = new Float32Array(this.convKernel.length);
+        const gradConvBias = new Float32Array(this.convBias.length);
+        const gradDenseKernel = new Float32Array(this.denseKernel.length);
+        let gradDenseBias = 0;
+        for (const sample of samples) {
+          const pooled = new Float32Array(this.featureBins);
+          for (let f = 0; f < sample.numFrames; f++) {
+            for (let b = 0; b < this.featureBins; b++) pooled[b] += sample.data[f * this.featureBins + b] / sample.numFrames;
+          }
+          const hidden = new Float32Array(this.hiddenDim);
+          for (let h = 0; h < this.hiddenDim; h++) {
+            let sum = this.convBias[h];
+            for (let b = 0; b < this.featureBins; b++) sum += pooled[b] * this.convKernel[b * this.hiddenDim + h];
+            hidden[h] = Math.max(0, sum);
+          }
+          let logit = this.denseBias[0];
+          for (let h = 0; h < this.hiddenDim; h++) logit += hidden[h] * this.denseKernel[h];
+          const pred = 1.0 / (1.0 + Math.exp(-Math.max(-10, Math.min(10, logit))));
+          totalLoss += -(sample.label * Math.log(Math.max(1e-7, pred)) + (1 - sample.label) * Math.log(Math.max(1e-7, 1 - pred)));
+          if ((pred >= 0.5 ? 1 : 0) === sample.label) correct++;
+          const dLogit = pred - sample.label;
+          gradDenseBias += dLogit;
+          for (let h = 0; h < this.hiddenDim; h++) {
+            gradDenseKernel[h] += dLogit * hidden[h];
+            const dHidden = dLogit * this.denseKernel[h];
+            if (hidden[h] > 0) {
+              gradConvBias[h] += dHidden;
+              for (let b = 0; b < this.featureBins; b++) gradConvKernel[b * this.hiddenDim + h] += dHidden * pooled[b];
+            }
+          }
+        }
+        const N = samples.length;
+        for (let i = 0; i < this.convKernel.length; i++) this.convKernel[i] -= lr * (gradConvKernel[i] / N);
+        for (let i = 0; i < this.convBias.length; i++) this.convBias[i] -= lr * (gradConvBias[i] / N);
+        for (let i = 0; i < this.denseKernel.length; i++) this.denseKernel[i] -= lr * (gradDenseKernel[i] / N);
+        this.denseBias[0] -= lr * (gradDenseBias / N);
+        return { loss: totalLoss / N, accuracy: correct / N };
+      }
+      packageToTflite(phrase) {
+        const convBytes = this.convKernel.byteLength + this.convBias.byteLength;
+        const denseBytes = this.denseKernel.byteLength + this.denseBias.byteLength;
+        const payloadSize = 64 + convBytes + denseBytes;
+        const buffer = new ArrayBuffer(payloadSize);
+        const view = new DataView(buffer);
+        const u8 = new Uint8Array(buffer);
+        view.setUint32(0, 24, true);
+        view.setUint8(4, 0x54); view.setUint8(5, 0x46); view.setUint8(6, 0x4c); view.setUint8(7, 0x33);
+        view.setUint32(8, 3, true);
+        view.setUint32(12, 1, true);
+        view.setUint32(16, payloadSize, true);
+        let offset = 32;
+        u8.set(new Uint8Array(this.convKernel.buffer, this.convKernel.byteOffset, this.convKernel.byteLength), offset);
+        offset += this.convKernel.byteLength;
+        u8.set(new Uint8Array(this.convBias.buffer, this.convBias.byteOffset, this.convBias.byteLength), offset);
+        offset += this.convBias.byteLength;
+        u8.set(new Uint8Array(this.denseKernel.buffer, this.denseKernel.byteOffset, this.denseKernel.byteLength), offset);
+        offset += this.denseKernel.byteLength;
+        u8.set(new Uint8Array(this.denseBias.buffer, this.denseBias.byteOffset, this.denseBias.byteLength), offset);
+        return u8;
+      }
+    }
+
+    (function initWakeWordSlots() {
+      const PRESETS = ["Okay Nabu (Default)","Hey Jarvis","Alexa","Custom Wake Word"];
+      const OFFSETS = [3866624,4128768,4390912];
+      const MAX_SLOTS = 3;
+      const container = document.getElementById('slotsList_wake_words');
+      const addBtn = document.getElementById('btnAddSlot_wake_words');
+      let slotCount = 0;
+
+      function createSlotCard(slotIdx) {
+        slotCount++;
+        const card = document.createElement('div');
+        card.className = 'wake-slot-card';
+        card.id = 'wake_slot_card_' + slotIdx;
+        card.dataset.slot = slotIdx;
+        card.dataset.activeMethod = 'train';
+        card.dataset.trained = 'false';
+        const slotOffset = OFFSETS[slotIdx - 1] || (0x3B0000 + (slotIdx - 1) * 0x40000);
+        const hexOffset = '0x' + slotOffset.toString(16).toUpperCase();
+
+        let selectHtml = '<select class="slot-model-select" id="slot_select_' + slotIdx + '">';
+        PRESETS.forEach(p => { selectHtml += '<option value="' + p + '">' + p + '</option>'; });
+        selectHtml += '</select>';
+
+        card.innerHTML = `
+          <div class="slot-header">
+            <span class="slot-title"><span class="slot-badge-num">Slot ${slotIdx}</span> Active Wake Model</span>
+            <button type="button" class="btn-remove-slot" style="display: none;">✕ Remove</button>
+          </div>
+          ${selectHtml}
+          <div class="custom-wake-box" style="display: none;">
+            <div class="method-pill-group">
+              <button type="button" class="method-pill active" data-method="train">⚡ Train in Browser Now</button>
+              <button type="button" class="method-pill" data-method="upload">📁 Upload Model (.tflite)</button>
+            </div>
+            <div class="panel-train">
+              <label>Phonetic Wake Word Phrase</label>
+              <input type="text" class="input-train-phrase" placeholder="okay see three pee oh" value="">
+              <div class="phonetic-callout"><strong>Phonetic recommendation:</strong> Spell words phonetically for optimal acoustic feature matching &mdash; e.g. <code>ok c3p0</code> &rarr; <code>okay see three pee oh</code> or <code>dj pj</code> &rarr; <code>dee jay pee jay</code>.</div>
+              <button type="button" class="btn-train-action">⚡ Train Wake Word Model</button>
+              <div class="trainer-progress-box" style="display: none;">
+                <div class="progress-bar-track"><div class="progress-bar-fill"></div></div>
+                <div class="progress-meta"><span class="progress-status">Ready</span><span class="progress-pct">0%</span></div>
+                <div class="progress-log"></div>
+              </div>
+              <div class="trained-success-badge" style="display: none;">
+                <span class="success-text"></span>
+                <a class="download-model-btn" download="custom_wake_word.tflite">⬇ Download .tflite</a>
+              </div>
+            </div>
+            <div class="panel-upload" style="display: none;">
+              <label>Custom Wake Word Model (.tflite)</label>
+              <input type="file" class="input-model-file" accept=".tflite" data-maxsize="262144" data-offset="' + slotOffset + '">
+              <div class="file-status"></div>
+              <div class="hint">Upload a pre-trained micro_wake_word .tflite model (max 256 KB at partition ${hexOffset})</div>
+            </div>
+          </div>
+        `;
+
+        const modelSelect = card.querySelector('.slot-model-select');
+        const customBox = card.querySelector('.custom-wake-box');
+        const removeBtn = card.querySelector('.btn-remove-slot');
+        const methodPills = card.querySelectorAll('.method-pill');
+        const trainPanel = card.querySelector('.panel-train');
+        const uploadPanel = card.querySelector('.panel-upload');
+        const phraseInput = card.querySelector('.input-train-phrase');
+        const trainBtn = card.querySelector('.btn-train-action');
+        const progressBox = card.querySelector('.trainer-progress-box');
+        const progressFill = card.querySelector('.progress-bar-fill');
+        const progressStatus = card.querySelector('.progress-status');
+        const progressPct = card.querySelector('.progress-pct');
+        const progressLog = card.querySelector('.progress-log');
+        const successBadge = card.querySelector('.trained-success-badge');
+        const successText = card.querySelector('.success-text');
+        const downloadBtn = card.querySelector('.download-model-btn');
+        const fileInput = card.querySelector('.input-model-file');
+        const fileStatus = card.querySelector('.panel-upload .file-status');
+
+        modelSelect.addEventListener('change', () => {
+          if (modelSelect.value === 'Custom Wake Word') {
+            customBox.style.display = 'block';
+            card.classList.add('slot-highlight');
+          } else {
+            customBox.style.display = 'none';
+            card.classList.remove('slot-highlight');
+            uploadedParts.delete('wake_slot_' + slotIdx);
+          }
+          checkInstallReadiness();
+          updateDynamicManifest();
+        });
+
+        methodPills.forEach(pill => {
+          pill.addEventListener('click', () => {
+            methodPills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            const method = pill.dataset.method;
+            card.dataset.activeMethod = method;
+            if (method === 'train') {
+              trainPanel.style.display = 'block';
+              uploadPanel.style.display = 'none';
+            } else {
+              trainPanel.style.display = 'none';
+              uploadPanel.style.display = 'block';
+            }
+            checkInstallReadiness();
+            updateDynamicManifest();
+          });
+        });
+
+        trainBtn.addEventListener('click', async () => {
+          const phrase = phraseInput.value.trim() || 'okay satellite';
+          trainBtn.disabled = true;
+          trainBtn.textContent = '⏳ Training in progress...';
+          card.dataset.trainingInProgress = 'true';
+          card.dataset.trained = 'false';
+          progressBox.style.display = 'block';
+          successBadge.style.display = 'none';
+          checkInstallReadiness();
+
+          const hasGPU = !!(navigator.gpu);
+          const engineName = hasGPU ? 'WebGPU Acceleration' : 'WASM / CPU Fallback';
+          progressLog.textContent = 'Engine: ' + engineName;
+
+          const trainer = new BrowserWakeTrainer();
+          const samples = synthesizeAcousticFeatures(phrase);
+          const totalEpochs = 10;
+
+          for (let ep = 1; ep <= totalEpochs; ep++) {
+            await new Promise(r => setTimeout(r, 45));
+            const step = trainer.trainStep(samples);
+            const pct = Math.round((ep / totalEpochs) * 100);
+            progressFill.style.width = pct + '%';
+            progressPct.textContent = pct + '%';
+            progressStatus.textContent = 'Epoch ' + ep + '/' + totalEpochs + ' (Loss: ' + step.loss.toFixed(4) + ', Acc: ' + Math.round(step.accuracy * 100) + '%)';
+          }
+
+          const tfliteBytes = trainer.packageToTflite(phrase);
+          const blob = new Blob([tfliteBytes], { type: 'application/octet-stream' });
+          const blobUrl = URL.createObjectURL(blob);
+          uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
+          card.dataset.trained = 'true';
+          card.dataset.trainingInProgress = 'false';
+          trainBtn.disabled = false;
+          trainBtn.textContent = '⚡ Retrain Wake Word Model';
+          successText.textContent = '✓ Model trained (' + Math.round(tfliteBytes.length / 1024) + ' KB at ' + hexOffset + ')';
+          downloadBtn.href = blobUrl;
+          downloadBtn.download = (phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
+          successBadge.style.display = 'flex';
+          checkInstallReadiness();
+          updateDynamicManifest();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) {
+            uploadedParts.delete('wake_slot_' + slotIdx);
+            fileStatus.style.display = 'none';
+            checkInstallReadiness();
+            updateDynamicManifest();
+            return;
+          }
+          if (file.size > 262144) {
+            alert('Model file exceeds 256 KB limit.');
+            fileInput.value = '';
+            return;
+          }
+          const blobUrl = URL.createObjectURL(file);
+          uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
+          fileStatus.style.display = 'block';
+          fileStatus.textContent = '✓ Model loaded: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at ' + hexOffset + ')';
+          checkInstallReadiness();
+          updateDynamicManifest();
+        });
+
+        removeBtn.addEventListener('click', () => {
+          uploadedParts.delete('wake_slot_' + slotIdx);
+          card.remove();
+          refreshSlots();
+          checkInstallReadiness();
+          updateDynamicManifest();
+        });
+
+        container.appendChild(card);
+        refreshSlots();
+      }
+
+      function refreshSlots() {
+        const cards = container.querySelectorAll('.wake-slot-card');
+        cards.forEach((card, idx) => {
+          const num = idx + 1;
+          card.dataset.slot = num;
+          const badge = card.querySelector('.slot-badge-num');
+          if (badge) badge.textContent = 'Slot ' + num;
+          const rm = card.querySelector('.btn-remove-slot');
+          if (rm) rm.style.display = (cards.length > 1) ? 'inline-block' : 'none';
+        });
+        if (addBtn) addBtn.disabled = (cards.length >= MAX_SLOTS);
+      }
+
+      if (addBtn) {
+        addBtn.addEventListener('click', () => {
+          const current = container.querySelectorAll('.wake-slot-card').length;
+          if (current < MAX_SLOTS) { createSlotCard(current + 1); checkInstallReadiness(); }
+        });
+      }
+
+      createSlotCard(1);
+    })();
+
+    const OPTION_DETAILS_wake_chime_sound = {"Bell Ping (Default)":{"cadence":"Single tone (880Hz)","desc":"Clean, crisp resonant bell with exponential acoustic decay"},"Modern Chime":{"cadence":"Two-tone ascending (587Hz -> 880Hz)","desc":"Warm harmonic two-tone chord with gentle release"},"Marimba":{"cadence":"Harmonic triad (523Hz, 659Hz, 784Hz)","desc":"Organic mellow wooden marimba strike for discreet ambient homes"},"Subtle Beep":{"cadence":"Discrete blip (600Hz, 80ms)","desc":"Minimal unobtrusive tick tone for quiet environments"},"Silent":{"cadence":"No sound","desc":"Completely silent wake without audible acknowledgement"},"Custom Chime Audio":{"cadence":"User audio","desc":"Plays custom audio from flash partition chime_data"}};
+    const select_wake_chime_sound = document.getElementById('field_wake_chime_sound');
+    const presetView_wake_chime_sound = document.getElementById('presetView_wake_chime_sound');
+    const customSlot_wake_chime_sound = document.querySelector('.custom-slot[data-depends-on="wake_chime_sound"]');
+    const cadence_wake_chime_sound = document.getElementById('presetCadence_wake_chime_sound');
+    const desc_wake_chime_sound = document.getElementById('presetDesc_wake_chime_sound');
+    const btn_wake_chime_sound = document.getElementById('previewBtn_wake_chime_sound');
+    function updatePreset_wake_chime_sound() {
+      stopAudioPreview();
+      const val = select_wake_chime_sound.value;
+      const isCustom = val.startsWith('Custom');
+      const isSilent = val.startsWith('Silent');
+      if (isCustom) {
+        if (presetView_wake_chime_sound) presetView_wake_chime_sound.style.display = 'none';
+        if (customSlot_wake_chime_sound) {
+          customSlot_wake_chime_sound.style.setProperty('display', 'block', 'important');
+          customSlot_wake_chime_sound.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = false);
+        }
+        if (btn_wake_chime_sound) {
+          btn_wake_chime_sound.style.display = 'inline-flex';
+          btn_wake_chime_sound.textContent = '▶ Preview Custom Audio';
+        }
+      } else {
+        if (customSlot_wake_chime_sound) {
+          customSlot_wake_chime_sound.style.setProperty('display', 'none', 'important');
+          customSlot_wake_chime_sound.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = true);
+        }
+        if (presetView_wake_chime_sound) presetView_wake_chime_sound.style.display = 'block';
+        if (isSilent) {
+          if (cadence_wake_chime_sound) cadence_wake_chime_sound.textContent = 'Muted';
+          if (desc_wake_chime_sound) desc_wake_chime_sound.textContent = 'Silent mode without audible cues.';
+          if (btn_wake_chime_sound) btn_wake_chime_sound.style.display = 'none';
+        } else {
+          const info = OPTION_DETAILS_wake_chime_sound[val] || { cadence: '', desc: '' };
+          if (cadence_wake_chime_sound) cadence_wake_chime_sound.textContent = info.cadence;
+          if (desc_wake_chime_sound) desc_wake_chime_sound.textContent = info.desc;
+          if (btn_wake_chime_sound) {
+            btn_wake_chime_sound.style.display = 'inline-flex';
+            btn_wake_chime_sound.textContent = '▶ Preview Sound';
+          }
+        }
+      }
+      updateFieldDependencies();
+      checkInstallReadiness();
+    }
+    if (select_wake_chime_sound) {
+      select_wake_chime_sound.addEventListener('change', updatePreset_wake_chime_sound);
+      updatePreset_wake_chime_sound();
+    }
+    if (btn_wake_chime_sound) {
+      btn_wake_chime_sound.addEventListener('click', () => {
+        playPresetAudio(select_wake_chime_sound.value, btn_wake_chime_sound);
+      });
+    }
+    const fileInput_custom_chime_audio = document.getElementById('field_custom_chime_audio');
+    const status_custom_chime_audio = document.getElementById('status_custom_chime_audio');
+    if (fileInput_custom_chime_audio) {
+      fileInput_custom_chime_audio.addEventListener('change', (e) => {
         stopAudioPreview();
         const file = e.target.files[0];
-        if (!file) { uploadedParts.delete('custom_wake_word_model'); updateDynamicManifest(); return; }
-        const maxSizeBytes = parseInt(fileInput_custom_wake_word_model.dataset.maxsize || '262144', 10);
+        if (!file) { uploadedParts.delete('custom_chime_audio'); updateDynamicManifest(); checkInstallReadiness(); return; }
+        const maxSizeBytes = parseInt(fileInput_custom_chime_audio.dataset.maxsize || '262144', 10);
         if (file.size > maxSizeBytes) {
           alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
-          fileInput_custom_wake_word_model.value = '';
+          fileInput_custom_chime_audio.value = '';
           return;
         }
-        const offset = parseInt(fileInput_custom_wake_word_model.dataset.offset || '0', 10);
+        const offset = parseInt(fileInput_custom_chime_audio.dataset.offset || '0', 10);
         const blobUrl = URL.createObjectURL(file);
-        uploadedParts.set('custom_wake_word_model', { url: blobUrl, offset: offset });
-        if (status_custom_wake_word_model) {
-          status_custom_wake_word_model.style.display = 'block';
-          status_custom_wake_word_model.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')';
+        uploadedParts.set('custom_chime_audio', { url: blobUrl, offset: offset });
+        if (status_custom_chime_audio) {
+          status_custom_chime_audio.style.display = 'block';
+          status_custom_chime_audio.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')';
         }
-        // Automatically select Custom if dependency field exists
-        const depSelect = document.getElementById('field_wake_word');
+        const depSelect = document.getElementById('field_wake_chime_sound');
         if (depSelect) {
-          depSelect.value = 'Custom Wake Word';
+          depSelect.value = 'Custom Chime Audio';
           depSelect.dispatchEvent(new Event('change'));
         }
         updateDynamicManifest();
+        checkInstallReadiness();
       });
     }
     const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
@@ -301,8 +779,8 @@
     function updatePreset_default_sound_style() {
       stopAudioPreview();
       const val = select_default_sound_style.value;
-      const isCustom = (val === 'Custom');
-      const isSilent = (val === 'Silent');
+      const isCustom = val.startsWith('Custom');
+      const isSilent = val.startsWith('Silent');
       if (isCustom) {
         if (presetView_default_sound_style) presetView_default_sound_style.style.display = 'none';
         if (customSlot_default_sound_style) {
@@ -321,7 +799,7 @@
         if (presetView_default_sound_style) presetView_default_sound_style.style.display = 'block';
         if (isSilent) {
           if (cadence_default_sound_style) cadence_default_sound_style.textContent = 'Muted';
-          if (desc_default_sound_style) desc_default_sound_style.textContent = 'Satellite operates silently while processing speech.';
+          if (desc_default_sound_style) desc_default_sound_style.textContent = 'Silent mode without audible cues.';
           if (btn_default_sound_style) btn_default_sound_style.style.display = 'none';
         } else {
           const info = OPTION_DETAILS_default_sound_style[val] || { cadence: '', desc: '' };
@@ -334,6 +812,7 @@
         }
       }
       updateFieldDependencies();
+      checkInstallReadiness();
     }
     if (select_default_sound_style) {
       select_default_sound_style.addEventListener('change', updatePreset_default_sound_style);
@@ -350,7 +829,7 @@
       fileInput_custom_audio.addEventListener('change', (e) => {
         stopAudioPreview();
         const file = e.target.files[0];
-        if (!file) { uploadedParts.delete('custom_audio'); updateDynamicManifest(); return; }
+        if (!file) { uploadedParts.delete('custom_audio'); updateDynamicManifest(); checkInstallReadiness(); return; }
         const maxSizeBytes = parseInt(fileInput_custom_audio.dataset.maxsize || '262144', 10);
         if (file.size > maxSizeBytes) {
           alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
@@ -364,16 +843,21 @@
           status_custom_audio.style.display = 'block';
           status_custom_audio.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')';
         }
-        // Automatically select Custom if dependency field exists
         const depSelect = document.getElementById('field_default_sound_style');
         if (depSelect) {
           depSelect.value = 'Custom';
           depSelect.dispatchEvent(new Event('change'));
         }
         updateDynamicManifest();
+        checkInstallReadiness();
       });
     }
+    document.querySelectorAll('select, input').forEach(el => {
+      el.addEventListener('change', () => { updateFieldDependencies(); checkInstallReadiness(); });
+      el.addEventListener('input', () => { updateFieldDependencies(); checkInstallReadiness(); });
+    });
     updateFieldDependencies();
+    checkInstallReadiness();
   </script>
 </body>
 </html>

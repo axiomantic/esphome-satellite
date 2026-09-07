@@ -29,36 +29,44 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
     description = "Espressif ESP32-S3-BOX / BOX-3 with integrated display and dual microphones"
   )
 
-  # Wake Word Selector
-  installer.addSelectField(
-    name = "wake_word",
-    label = "Active Wake Word Model(s)",
-    options = @["Okay Nabu (Default)", "Hey Jarvis", "Alexa", "All 3 Models (Concurrent)", "Custom Wake Word"],
-    defaultVal = "Okay Nabu (Default)",
-    description = "On-device micro-wake-word models. ESP32-S3 with 8MB PSRAM supports up to 3 concurrent models in parallel without reflashing.",
-    hasAudioPreview = false
+  # Wake Word Selector (Up to 3 Concurrent Models)
+  installer.addWakeWordSlotsField(
+    name = "wake_words",
+    label = "Active Wake Word Models (Up to 3 Concurrent)",
+    options = @["Okay Nabu (Default)", "Hey Jarvis", "Alexa"],
+    maxSlots = 3,
+    slotOffsets = @[0x3B0000'u32, 0x3F0000'u32, 0x430000'u32],
+    description = "ESP32-S3 hardware neural accelerator runs up to 3 wake word models concurrently in parallel. Add slots to configure multiple active wake words."
   )
 
-  installer.addTextField(
-    name = "custom_wake_word_phrase",
-    label = "Phonetic Wake Word Phrase",
-    placeholder = "okay see three pee oh",
-    calloutHtml = "<strong>Phonetic spelling recommendation:</strong> Spell words phonetically for optimal acoustic feature matching &mdash; e.g. <code>ok c3p0</code> &rarr; <code>okay see three pee oh</code> or <code>dj pj</code> &rarr; <code>dee jay pee jay</code>.",
-    description = "Phonetic representation used by the wake word model engine and WASM/WebGPU generator",
-    dependsOnField = "wake_word",
-    dependsOnValue = "Custom Wake Word"
+  # Wake Chime Selector
+  installer.addSelectField(
+    name = "wake_chime_sound",
+    label = "Wake Chime Sound",
+    options = @["Bell Ping (Default)", "Modern Chime", "Marimba", "Subtle Beep", "Silent", "Custom Chime Audio"],
+    defaultVal = "Bell Ping (Default)",
+    description = "Acoustic acknowledgement chime played immediately upon wake word detection before opening the microphone",
+    hasAudioPreview = true,
+    optionDetails = @[
+      optionDetail("Bell Ping (Default)", "Single tone (880Hz)", "Clean, crisp resonant bell with exponential acoustic decay"),
+      optionDetail("Modern Chime", "Two-tone ascending (587Hz -> 880Hz)", "Warm harmonic two-tone chord with gentle release"),
+      optionDetail("Marimba", "Harmonic triad (523Hz, 659Hz, 784Hz)", "Organic mellow wooden marimba strike for discreet ambient homes"),
+      optionDetail("Subtle Beep", "Discrete blip (600Hz, 80ms)", "Minimal unobtrusive tick tone for quiet environments"),
+      optionDetail("Silent", "No sound", "Completely silent wake without audible acknowledgement"),
+      optionDetail("Custom Chime Audio", "User audio", "Plays custom audio from flash partition chime_data")
+    ]
   )
 
   installer.addFileField(
-    name = "custom_wake_word_model",
-    label = "Custom Wake Word Model (.tflite)",
-    accept = ".tflite",
-    partition = "wake_model",
-    maxSize = 262144,
-    flashOffset = 0x3B0000'u32,
-    description = "Upload a pre-trained micro_wake_word model or one generated with the browser WASM/WebGPU trainer",
-    dependsOnField = "wake_word",
-    dependsOnValue = "Custom Wake Word"
+    name = "custom_chime_audio",
+    label = "Custom Wake Chime Audio (.wav)",
+    accept = ".wav,audio/wav",
+    partition = "chime_data",
+    maxSize = 131072,
+    flashOffset = 0x390000'u32,
+    description = "Upload an uncompressed mono PCM WAV audio file to flash into the dedicated chime_data partition",
+    dependsOnField = "wake_chime_sound",
+    dependsOnValue = "Custom Chime Audio"
   )
 
   # Processing Sound Style
@@ -84,7 +92,7 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
     label = "Custom Audio Feedback Loop (.wav)",
     accept = ".wav,audio/wav",
     partition = "sound_data",
-    maxSize = 262144,
+    maxSize = 131072,
     flashOffset = 0x370000'u32,
     description = "Upload an uncompressed mono PCM WAV audio file to flash into the dedicated sound_data partition",
     dependsOnField = "default_sound_style",
