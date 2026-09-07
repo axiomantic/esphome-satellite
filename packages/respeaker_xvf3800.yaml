@@ -91,13 +91,25 @@ microphone:
 
 micro_wake_word:
   models:
+    - model: ../assets/models/clemens.json
     - model: okay_nabu
   on_wake_word_detected:
     - lambda: |-
+        if (id(active_wake_word).state != "All" &&
+            id(active_wake_word).state != wake_word &&
+            !(id(active_wake_word).state == "Mr. Clemens" && (wake_word == "Mr. Clemens" || wake_word == "clemens")) &&
+            !(id(active_wake_word).state == "Okay Nabu" && wake_word == "okay_nabu")) {
+          ESP_LOGD("satellite", "Ignored wake word '%s' (active: '%s')", wake_word.c_str(), id(active_wake_word).state.c_str());
+          return;
+        }
         call_nim_wake_word(wake_word.c_str(), 0);
+    - voice_assistant.start:
+        wake_word: !lambda return wake_word;
 
 voice_assistant:
+  id: va
   microphone: board_mic
+  use_wake_word: true
   on_start:
     - lambda: |-
         call_nim_chime_done(true);
@@ -121,6 +133,18 @@ voice_assistant:
         call_nim_disconnected();
 
 select:
+  - platform: template
+    id: active_wake_word
+    name: "Active Wake Word"
+    icon: "mdi:ear-hearing"
+    optimistic: true
+    initial_option: "Mr. Clemens"
+    restore_value: true
+    options:
+      - "Mr. Clemens"
+      - "Okay Nabu"
+      - "All"
+
   - platform: template
     id: processing_sound
     name: "Processing Sound"

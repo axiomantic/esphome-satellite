@@ -95,14 +95,14 @@ jobs:
       # CONDITIONAL HTML GENERATION (Only when generate_web.nim changed or missing)
       # =========================================================================
       - name: Check out nim-esphome
-        if: steps.plan.outputs.regen_html == 'true'
+        if: steps.plan.outputs.regen_html == 'true' || steps.plan.outputs.build_firmware == 'true'
         uses: actions/checkout@v4
         with:
           repository: axiomantic/nim-esphome
           path: nim-esphome
 
       - name: Cache asdf tools
-        if: steps.plan.outputs.regen_html == 'true'
+        if: steps.plan.outputs.regen_html == 'true' || steps.plan.outputs.build_firmware == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.asdf
@@ -111,7 +111,7 @@ jobs:
             asdf-nim-${{ runner.os }}-
 
       - name: Install Nim (latest)
-        if: steps.plan.outputs.regen_html == 'true'
+        if: steps.plan.outputs.regen_html == 'true' || steps.plan.outputs.build_firmware == 'true'
         uses: asdf-vm/actions/install@v4
         with:
           tool_versions: |
