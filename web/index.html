@@ -392,11 +392,15 @@
             el.style.display = info.nativeUsb ? '' : 'none';
           });
           updateDynamicManifest();
+          saveInstallerState();
         }
       });
     }
     const installBtn = document.getElementById('installBtn');
     const uploadedParts = new Map();
+    const cachedFileStore = {};
+    const FORM_STORAGE_KEY = 'esphome_installer_state_v1';
+    let isRestoringState = false;
     let activeManifestUrl = null;
     let activeAudioCtx = null;
     let activeAudioTimer = null;
@@ -404,6 +408,141 @@
     const PRESET_MODELS = {};
     const PRESET_AUDIO = {};
     let WAKE_OFFSETS = [];
+
+    function uint8ToBase64(u8) {
+      let binary = '';
+      const len = u8.byteLength;
+      for (let i = 0; i < len; i++) binary += String.fromCharCode(u8[i]);
+      return window.btoa(binary);
+    }
+
+    function base64ToUint8(b64) {
+      const binary = window.atob(b64);
+      const len = binary.length;
+      const u8 = new Uint8Array(len);
+      for (let i = 0; i < len; i++) u8[i] = binary.charCodeAt(i);
+      return u8;
+    }
+
+    function getSavedInstallerState() {
+      try {
+        return JSON.parse(localStorage.getItem(FORM_STORAGE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveInstallerState() {
+      if (isRestoringState) return;
+      try {
+        const state = {
+          target: '',
+          fields: {},
+          wakeSlots: [],
+          files: {}
+        };
+        const targetSelect = document.getElementById('field_hardware_target');
+        if (targetSelect) state.target = targetSelect.value;
+        document.querySelectorAll('select, input:not([type=file]):not([type=button]):not([type=submit]), textarea').forEach(el => {
+          if (!el.id || el.id === 'field_hardware_target' || el.id.startsWith('slot_select_') || el.classList.contains('select-cached-model')) return;
+          if (el.type === 'checkbox') state.fields[el.id] = el.checked;
+          else state.fields[el.id] = el.value;
+        });
+        const slotCards = document.querySelectorAll('.wake-slot-card');
+        slotCards.forEach((card, idx) => {
+          const num = card.dataset.slot || (idx + 1);
+          const sel = card.querySelector('.slot-model-select');
+          const cachedSel = card.querySelector('.select-cached-model');
+          state.wakeSlots.push({
+            slot: num,
+            model: sel ? sel.value : '',
+            cachedId: cachedSel ? cachedSel.value : ''
+          });
+        });
+        let totalFileSize = 0;
+        for (const [key, f] of Object.entries(cachedFileStore)) {
+          if (f && f.b64) {
+            totalFileSize += f.b64.length;
+            if (totalFileSize < 2500000) {
+              state.files[key] = f;
+            } else {
+              console.warn('Skipping caching file ' + key + ' to keep localStorage under quota limits');
+            }
+          }
+        }
+        localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.warn('Could not save installer state to localStorage:', e);
+      }
+    }
+
+    function restoreCachedFiles(filesObj) {
+      if (!filesObj || typeof filesObj !== 'object') return;
+      for (const [key, f] of Object.entries(filesObj)) {
+        if (!f || !f.b64) continue;
+        try {
+          cachedFileStore[key] = f;
+          const bytes = base64ToUint8(f.b64);
+          const blob = new Blob([bytes], { type: f.type || 'application/octet-stream' });
+          const blobUrl = URL.createObjectURL(blob);
+          uploadedParts.set(key, { url: blobUrl, offset: f.offset, name: f.name, size: f.size });
+          const fileStatus = document.getElementById('status_' + key);
+          if (fileStatus) {
+            fileStatus.style.display = 'block';
+            fileStatus.innerHTML = ICONS.check + ' <span>Saved file restored: ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB at 0x' + f.offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-restored-file" data-file-key="' + key + '" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+            const rmBtn = fileStatus.querySelector('.btn-clear-restored-file');
+            if (rmBtn) {
+              rmBtn.addEventListener('click', () => {
+                delete cachedFileStore[key];
+                uploadedParts.delete(key);
+                fileStatus.style.display = 'none';
+                const inp = document.getElementById('field_' + key);
+                if (inp) inp.value = '';
+                updateDynamicManifest();
+                checkInstallReadiness();
+                saveInstallerState();
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Error restoring cached file ' + key + ':', err);
+        }
+      }
+    }
+
+    function restoreInstallerState() {
+      const state = getSavedInstallerState();
+      if (!state || Object.keys(state).length === 0) return;
+      isRestoringState = true;
+      try {
+        if (state.files) {
+          restoreCachedFiles(state.files);
+        }
+        const targetSelect = document.getElementById('field_hardware_target');
+        if (targetSelect && state.target && typeof TARGET_MAP !== 'undefined' && TARGET_MAP[state.target]) {
+          targetSelect.value = state.target;
+          const info = TARGET_MAP[state.target];
+          if (info) {
+            const targetDesc = document.getElementById('target_desc');
+            if (targetDesc && info.desc) targetDesc.textContent = info.desc;
+            document.querySelectorAll('.native-usb-warning').forEach(el => {
+              el.style.display = info.nativeUsb ? '' : 'none';
+            });
+          }
+        }
+        if (state.fields) {
+          for (const [id, val] of Object.entries(state.fields)) {
+            const el = document.getElementById(id);
+            if (el && el.type !== 'file') {
+              if (el.type === 'checkbox') el.checked = !!val;
+              else el.value = val;
+            }
+          }
+        }
+      } finally {
+        isRestoringState = false;
+      }
+    }
 
     function stopAudioPreview() {
       if (activeAudioTimer) { clearInterval(activeAudioTimer); activeAudioTimer = null; }
@@ -444,14 +583,27 @@
         return;
       }
       if (styleName.startsWith('Custom')) {
+        let matchedPart = null;
+        const isChime = styleName.toLowerCase().includes('chime') || (btn && btn.id && btn.id.includes('chime'));
         for (const [key, part] of uploadedParts.entries()) {
-          if (part.url && (key.includes('sound') || key.includes('audio') || key.includes('chime'))) {
-            const audio = new Audio(part.url);
-            activeAudioElement = audio;
-            audio.onended = () => stopAudioPreview();
-            audio.play().catch(() => stopAudioPreview());
-            return;
+          if (!part.url) continue;
+          if (isChime && key.includes('chime')) { matchedPart = part; break; }
+          else if (!isChime && (key.includes('sound') || key.includes('audio')) && !key.includes('chime')) { matchedPart = part; break; }
+        }
+        if (!matchedPart) {
+          for (const [key, part] of uploadedParts.entries()) {
+            if (part.url && (key.includes('sound') || key.includes('audio') || key.includes('chime'))) {
+              matchedPart = part;
+              break;
+            }
           }
+        }
+        if (matchedPart) {
+          const audio = new Audio(matchedPart.url);
+          activeAudioElement = audio;
+          audio.onended = () => stopAudioPreview();
+          audio.play().catch(() => stopAudioPreview());
+          return;
         }
         alert('Please select or upload a custom .wav audio file first to preview.');
         stopAudioPreview();
@@ -528,12 +680,13 @@
               let isOverridden = false;
               const off = info.offset || 0x370000;
               for (const [upKey, _] of uploadedParts.entries()) {
-                if (off >= 0x390000 && upKey.includes('chime')) {
-                  isOverridden = true;
-                  break;
-                } else if (off < 0x390000 && (upKey.includes('sound') || upKey.includes('audio'))) {
-                  isOverridden = true;
-                  break;
+                const grp = document.getElementById('group_' + upKey);
+                if (grp && grp.dataset.dependsOn && grp.dataset.dependsVal) {
+                  const pEl = document.getElementById('field_' + grp.dataset.dependsOn);
+                  if (pEl && pEl.value === grp.dataset.dependsVal) {
+                    if (off >= 0x390000 && upKey.includes('chime')) { isOverridden = true; break; }
+                    else if (off < 0x390000 && (upKey.includes('sound') || upKey.includes('audio'))) { isOverridden = true; break; }
+                  }
                 }
               }
               if (!isOverridden) {
@@ -544,6 +697,13 @@
         }
       }
       for (const [name, part] of uploadedParts.entries()) {
+        if (name.startsWith('wake_slot_')) {
+          const slotIdx = name.replace('wake_slot_', '');
+          const card = document.getElementById('wake_slot_card_' + slotIdx);
+          if (!card) continue;
+          const modelSel = card.querySelector('.slot-model-select');
+          if (modelSel && modelSel.value !== 'Custom Wake Word') continue;
+        }
         const group = document.getElementById('group_' + name);
         if (group) {
           const parentName = group.dataset.dependsOn;
@@ -598,6 +758,25 @@
           }
         }
       }
+      if (canInstall) {
+        for (const group of document.querySelectorAll('[data-depends-on]')) {
+          const parentName = group.dataset.dependsOn;
+          const expectedVal = group.dataset.dependsVal;
+          const parentEl = document.getElementById('field_' + parentName);
+          if (parentEl && parentEl.value === expectedVal) {
+            const fileInp = group.querySelector('input[type="file"]');
+            if (fileInp) {
+              const fieldName = fileInp.id.replace('field_', '');
+              if (!uploadedParts.has(fieldName)) {
+                canInstall = false;
+                const label = group.querySelector('label');
+                reason = 'Please select or upload a file for ' + (label ? label.textContent : fieldName) + ' before installing.';
+                break;
+              }
+            }
+          }
+        }
+      }
       if (installBtnEl) {
         if (!canInstall) {
           installBtnEl.disabled = true;
@@ -636,6 +815,7 @@
       });
       updateDynamicManifest();
     }
+    restoreInstallerState();
 
     (function initWakeWordSlots() {
       const PRESETS = ["Okay Nabu (Default)","Hey Jarvis","Alexa","Mr. Clemens","Custom Wake Word"];
@@ -646,21 +826,6 @@
       const container = document.getElementById('slotsList_wake_words');
       const addBtn = document.getElementById('btnAddSlot_wake_words');
       let slotCount = 0;
-
-      function uint8ToBase64(u8) {
-        let binary = '';
-        const len = u8.byteLength;
-        for (let i = 0; i < len; i++) binary += String.fromCharCode(u8[i]);
-        return window.btoa(binary);
-      }
-
-      function base64ToUint8(b64) {
-        const binary = window.atob(b64);
-        const len = binary.length;
-        const u8 = new Uint8Array(len);
-        for (let i = 0; i < len; i++) u8[i] = binary.charCodeAt(i);
-        return u8;
-      }
 
       const MWW_CACHE_KEY = 'esphome_mww_cache_v1';
 
@@ -729,7 +894,7 @@
         });
       }
 
-      function createSlotCard(slotIdx) {
+      function createSlotCard(slotIdx, initialData) {
         slotCount++;
         const card = document.createElement('div');
         card.className = 'wake-slot-card';
@@ -790,6 +955,33 @@
         const uploadDownloadBtn = card.querySelector('.upload-download-btn');
         const uploadDefaultHint = card.querySelector('.upload-default-hint');
 
+        if (initialData && initialData.model) {
+          modelSelect.value = initialData.model;
+          if (initialData.model === 'Custom Wake Word') {
+            customBox.style.display = 'block';
+            card.classList.add('slot-highlight');
+            const cachedSlotFile = cachedFileStore['wake_slot_' + slotIdx];
+            if (cachedSlotFile && cachedSlotFile.b64) {
+              const bytes = base64ToUint8(cachedSlotFile.b64);
+              const blob = new Blob([bytes], { type: 'application/octet-stream' });
+              const blobUrl = URL.createObjectURL(blob);
+              uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset, name: cachedSlotFile.name, size: cachedSlotFile.size });
+              fileStatus.style.display = 'block';
+              fileStatus.innerHTML = ICONS.check + ' <span>Saved model loaded: ' + cachedSlotFile.name + ' (' + Math.round(cachedSlotFile.size / 1024) + ' KB at ' + hexOffset + ')</span>';
+              uploadDownloadBtn.href = blobUrl;
+              uploadDownloadBtn.download = cachedSlotFile.name;
+              uploadActionsBar.style.display = 'flex';
+              if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
+            } else if (initialData.cachedId) {
+              const cache = getMwwCache();
+              if (cache[initialData.cachedId]) {
+                selectCached.value = initialData.cachedId;
+                btnCacheLoad.click();
+              }
+            }
+          }
+        }
+
         modelSelect.addEventListener('change', () => {
           if (modelSelect.value === 'Custom Wake Word') {
             customBox.style.display = 'block';
@@ -798,9 +990,11 @@
             customBox.style.display = 'none';
             card.classList.remove('slot-highlight');
             uploadedParts.delete('wake_slot_' + slotIdx);
+            delete cachedFileStore['wake_slot_' + slotIdx];
           }
           checkInstallReadiness();
           updateDynamicManifest();
+          saveInstallerState();
         });
 
         btnCacheLoad.addEventListener('click', () => {
@@ -812,16 +1006,24 @@
             const bytes = base64ToUint8(item.b64);
             const blob = new Blob([bytes], { type: 'application/octet-stream' });
             const blobUrl = URL.createObjectURL(blob);
-            uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
+            const fileName = (item.phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
+            uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset, name: fileName, size: bytes.length });
+            cachedFileStore['wake_slot_' + slotIdx] = {
+              name: fileName,
+              size: bytes.length,
+              type: 'application/octet-stream',
+              offset: slotOffset,
+              b64: item.b64
+            };
             fileStatus.style.display = 'block';
             fileStatus.innerHTML = ICONS.check + ' <span>Loaded from cache: "' + item.phrase + '" (' + Math.round(bytes.length / 1024) + ' KB at ' + hexOffset + ')</span>';
-            const fileName = (item.phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
             uploadDownloadBtn.href = blobUrl;
             uploadDownloadBtn.download = fileName;
             uploadActionsBar.style.display = 'flex';
             if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
             checkInstallReadiness();
             updateDynamicManifest();
+            saveInstallerState();
           }
         });
 
@@ -844,11 +1046,13 @@
           const file = e.target.files[0];
           if (!file) {
             uploadedParts.delete('wake_slot_' + slotIdx);
+            delete cachedFileStore['wake_slot_' + slotIdx];
             fileStatus.style.display = 'none';
             uploadActionsBar.style.display = 'none';
             if (uploadDefaultHint) uploadDefaultHint.style.display = 'block';
             checkInstallReadiness();
             updateDynamicManifest();
+            saveInstallerState();
             return;
           }
           if (file.size > 262144) {
@@ -857,7 +1061,7 @@
             return;
           }
           const blobUrl = URL.createObjectURL(file);
-          uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
+          uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset, name: file.name, size: file.size });
           fileStatus.style.display = 'block';
           fileStatus.innerHTML = ICONS.check + ' <span>Model loaded: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at ' + hexOffset + ')</span>';
           uploadDownloadBtn.href = blobUrl;
@@ -870,8 +1074,17 @@
             try {
               const arrBuf = evt.target.result;
               const u8 = new Uint8Array(arrBuf);
+              const b64 = uint8ToBase64(u8);
               const modelName = file.name.replace(/\.tflite$/i, '').replace(/[-_]/g, ' ');
               saveMwwCache(modelName, u8, { source: 'upload', filename: file.name });
+              cachedFileStore['wake_slot_' + slotIdx] = {
+                name: file.name,
+                size: file.size,
+                type: 'application/octet-stream',
+                offset: slotOffset,
+                b64: b64
+              };
+              saveInstallerState();
             } catch (err) {
               console.warn('Could not cache uploaded model:', err);
             }
@@ -884,10 +1097,12 @@
 
         removeBtn.addEventListener('click', () => {
           uploadedParts.delete('wake_slot_' + slotIdx);
+          delete cachedFileStore['wake_slot_' + slotIdx];
           card.remove();
           refreshSlots();
           checkInstallReadiness();
           updateDynamicManifest();
+          saveInstallerState();
         });
 
         container.appendChild(card);
@@ -911,11 +1126,17 @@
       if (addBtn) {
         addBtn.addEventListener('click', () => {
           const current = container.querySelectorAll('.wake-slot-card').length;
-          if (current < MAX_SLOTS) { createSlotCard(current + 1); checkInstallReadiness(); }
+          if (current < MAX_SLOTS) { createSlotCard(current + 1); checkInstallReadiness(); saveInstallerState(); }
         });
       }
 
-      createSlotCard(1);
+      const savedState = getSavedInstallerState();
+      const savedSlots = (savedState && Array.isArray(savedState.wakeSlots) && savedState.wakeSlots.length > 0)
+        ? savedState.wakeSlots
+        : [{ slot: 1, model: PRESETS[0] }];
+      savedSlots.forEach((sData, idx) => {
+        createSlotCard(idx + 1, sData);
+      });
     })();
 
     Object.assign(PRESET_AUDIO, {"Modern Chime":{"preview":"sounds/modern-chime.mp3","flash":"sounds/modern-chime.wav","offset":3735552},"Crystal Glass":{"preview":"sounds/crystal-glass.mp3","flash":"sounds/crystal-glass.wav","offset":3735552},"Warm Kalimba":{"preview":"sounds/warm-kalimba.mp3","flash":"sounds/warm-kalimba.wav","offset":3735552},"Meditation Bell":{"preview":"sounds/meditation-bell.mp3","flash":"sounds/meditation-bell.wav","offset":3735552}});
@@ -979,7 +1200,14 @@
       fileInput_custom_chime_audio.addEventListener('change', (e) => {
         stopAudioPreview();
         const file = e.target.files[0];
-        if (!file) { uploadedParts.delete('custom_chime_audio'); updateDynamicManifest(); checkInstallReadiness(); return; }
+        if (!file) {
+          uploadedParts.delete('custom_chime_audio');
+          delete cachedFileStore['custom_chime_audio'];
+          updateDynamicManifest();
+          checkInstallReadiness();
+          saveInstallerState();
+          return;
+        }
         const maxSizeBytes = parseInt(fileInput_custom_chime_audio.dataset.maxsize || '262144', 10);
         if (file.size > maxSizeBytes) {
           alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
@@ -988,11 +1216,41 @@
         }
         const offset = parseInt(fileInput_custom_chime_audio.dataset.offset || '0', 10);
         const blobUrl = URL.createObjectURL(file);
-        uploadedParts.set('custom_chime_audio', { url: blobUrl, offset: offset });
+        uploadedParts.set('custom_chime_audio', { url: blobUrl, offset: offset, name: file.name, size: file.size });
         if (status_custom_chime_audio) {
           status_custom_chime_audio.style.display = 'block';
-          status_custom_chime_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span>';
+          status_custom_chime_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-file" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+          const clrBtn = status_custom_chime_audio.querySelector('.btn-clear-file');
+          if (clrBtn) {
+            clrBtn.addEventListener('click', () => {
+              fileInput_custom_chime_audio.value = '';
+              uploadedParts.delete('custom_chime_audio');
+              delete cachedFileStore['custom_chime_audio'];
+              status_custom_chime_audio.style.display = 'none';
+              updateDynamicManifest();
+              checkInstallReadiness();
+              saveInstallerState();
+            });
+          }
         }
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          try {
+            const arrBuf = evt.target.result;
+            const u8 = new Uint8Array(arrBuf);
+            cachedFileStore['custom_chime_audio'] = {
+              name: file.name,
+              size: file.size,
+              type: file.type || 'audio/wav',
+              offset: offset,
+              b64: uint8ToBase64(u8)
+            };
+            saveInstallerState();
+          } catch (err) {
+            console.warn('Could not cache file:', err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
         const depSelect = document.getElementById('field_wake_chime_sound');
         if (depSelect) {
           depSelect.value = 'Custom Chime Audio';
@@ -1063,7 +1321,14 @@
       fileInput_custom_audio.addEventListener('change', (e) => {
         stopAudioPreview();
         const file = e.target.files[0];
-        if (!file) { uploadedParts.delete('custom_audio'); updateDynamicManifest(); checkInstallReadiness(); return; }
+        if (!file) {
+          uploadedParts.delete('custom_audio');
+          delete cachedFileStore['custom_audio'];
+          updateDynamicManifest();
+          checkInstallReadiness();
+          saveInstallerState();
+          return;
+        }
         const maxSizeBytes = parseInt(fileInput_custom_audio.dataset.maxsize || '262144', 10);
         if (file.size > maxSizeBytes) {
           alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
@@ -1072,11 +1337,41 @@
         }
         const offset = parseInt(fileInput_custom_audio.dataset.offset || '0', 10);
         const blobUrl = URL.createObjectURL(file);
-        uploadedParts.set('custom_audio', { url: blobUrl, offset: offset });
+        uploadedParts.set('custom_audio', { url: blobUrl, offset: offset, name: file.name, size: file.size });
         if (status_custom_audio) {
           status_custom_audio.style.display = 'block';
-          status_custom_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span>';
+          status_custom_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-file" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+          const clrBtn = status_custom_audio.querySelector('.btn-clear-file');
+          if (clrBtn) {
+            clrBtn.addEventListener('click', () => {
+              fileInput_custom_audio.value = '';
+              uploadedParts.delete('custom_audio');
+              delete cachedFileStore['custom_audio'];
+              status_custom_audio.style.display = 'none';
+              updateDynamicManifest();
+              checkInstallReadiness();
+              saveInstallerState();
+            });
+          }
         }
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          try {
+            const arrBuf = evt.target.result;
+            const u8 = new Uint8Array(arrBuf);
+            cachedFileStore['custom_audio'] = {
+              name: file.name,
+              size: file.size,
+              type: file.type || 'audio/wav',
+              offset: offset,
+              b64: uint8ToBase64(u8)
+            };
+            saveInstallerState();
+          } catch (err) {
+            console.warn('Could not cache file:', err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
         const depSelect = document.getElementById('field_default_sound_style');
         if (depSelect) {
           depSelect.value = 'Custom';
@@ -1087,11 +1382,12 @@
       });
     }
     document.querySelectorAll('select, input').forEach(el => {
-      el.addEventListener('change', () => { updateFieldDependencies(); checkInstallReadiness(); });
-      el.addEventListener('input', () => { updateFieldDependencies(); checkInstallReadiness(); });
+      el.addEventListener('change', () => { updateFieldDependencies(); checkInstallReadiness(); saveInstallerState(); });
+      el.addEventListener('input', () => { updateFieldDependencies(); checkInstallReadiness(); saveInstallerState(); });
     });
     updateFieldDependencies();
     checkInstallReadiness();
+    updateDynamicManifest();
 
     // Success Modal Logic
     const installBtnEl = document.getElementById('installBtn');
