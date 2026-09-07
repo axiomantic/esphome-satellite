@@ -24,6 +24,7 @@ esphome:
     - ../src/xvf3800_hardware.h
     - ../src/sound_data.h
     - ../src/pcm_sound_player.h
+    - ../src/wake_partition_loader.h
   build_flags:
     - -Wno-write-strings
   on_boot:
@@ -32,20 +33,18 @@ esphome:
         - lambda: |-
             esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
             esphome::get_pcm_sound_player().set_speaker(id(board_speaker));
+            esphome::get_pcm_sound_player().init_partitions();
             esphome::get_pcm_sound_player().set_on_finished([]() {
               id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
             });
             id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+        - lambda: |-
+            esphome::wake_loader::get_wake_partition_loader().init(id(mww), id(active_wake_word));
         - micro_wake_word.start:
         - lambda: |-
             std::string opt = id(active_wake_word).current_option();
-            if (opt == "Mr. Clemens") {
-              id(clemens_model).enable();
-              id(nabu_model).disable();
-            } else if (opt == "Okay Nabu") {
-              id(clemens_model).disable();
-              id(nabu_model).enable();
-            }
+            esphome::wake_loader::get_wake_partition_loader().handle_active_wake_word_change(
+                opt, id(clemens_model), id(nabu_model));
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -234,7 +233,7 @@ micro_wake_word:
                 - lambda: |-
                     std::string opt = id(wake_chime_sound).current_option();
                     float vol = id(wake_chime_volume).state / 100.0f;
-                    esphome::get_pcm_sound_player().play_sound(opt, false, vol);
+                    esphome::get_pcm_sound_player().play_chime(opt, false, vol);
                 - delay: 350ms
           - if:
               condition:
@@ -262,7 +261,7 @@ voice_assistant:
         call_nim_speech_ended();
         std::string opt = id(processing_sound).current_option();
         float vol = id(processing_sound_volume).state / 100.0f;
-        esphome::get_pcm_sound_player().play_sound(opt, true, vol);
+        esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
   on_stt_end:
     - lambda: |-
         std::string s = x;
@@ -294,6 +293,14 @@ voice_assistant:
         if (should_cancel) {
           ESP_LOGI("voice_assistant", "Cancellation word detected in '%s'. Aborting listening.", s.c_str());
           esphome::get_pcm_sound_player().stop();
+          if (id(cancel_sound_switch).state) {
+            std::string opt = id(cancel_sound_sound).current_option();
+            if (opt == "Match Wake Chime") {
+              opt = id(wake_chime_sound).current_option();
+            }
+            float vol = id(cancel_sound_volume).state / 100.0f;
+            esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+          }
           id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
           id(va).request_stop();
           call_nim_stop_word();
@@ -302,7 +309,7 @@ voice_assistant:
             call_nim_speech_ended();
             std::string opt = id(processing_sound).current_option();
             float vol = id(processing_sound_volume).state / 100.0f;
-            esphome::get_pcm_sound_player().play_sound(opt, true, vol);
+            esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
           }
         }
   on_tts_start:
@@ -321,6 +328,14 @@ voice_assistant:
   on_error:
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
+        if (id(cancel_sound_switch).state && (code == "timeout" || code == "cancelled" || code == "canceled")) {
+          std::string opt = id(cancel_sound_sound).current_option();
+          if (opt == "Match Wake Chime") {
+            opt = id(wake_chime_sound).current_option();
+          }
+          float vol = id(cancel_sound_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+        }
         id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         call_nim_error(code.c_str());
   on_client_connected:
@@ -370,16 +385,8 @@ select:
       - "All"
     set_action:
       - lambda: |-
-          if (x == "Mr. Clemens") {
-            id(clemens_model).enable();
-            id(nabu_model).disable();
-          } else if (x == "Okay Nabu") {
-            id(clemens_model).disable();
-            id(nabu_model).enable();
-          } else {
-            id(clemens_model).enable();
-            id(nabu_model).enable();
-          }
+          esphome::wake_loader::get_wake_partition_loader().handle_active_wake_word_change(
+              x, id(clemens_model), id(nabu_model));
 
   - platform: template
     id: processing_sound
@@ -413,7 +420,7 @@ select:
       - lambda: |-
           call_nim_action_set_processing_sound(x.c_str());
           float vol = id(processing_sound_volume).state / 100.0f;
-          esphome::get_pcm_sound_player().play_sound(x, false, vol);
+          esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
 
   - platform: template
     id: wake_chime_sound
@@ -447,7 +454,46 @@ select:
       - lambda: |-
           call_nim_action_set_chime_sound(x.c_str());
           float vol = id(wake_chime_volume).state / 100.0f;
-          esphome::get_pcm_sound_player().play_sound(x, false, vol);
+          esphome::get_pcm_sound_player().play_chime(x, false, vol);
+
+  - platform: template
+    id: cancel_sound_sound
+    name: "Cancel Sound"
+    icon: "mdi:bell-cancel"
+    entity_category: config
+    optimistic: true
+    initial_option: "Match Wake Chime"
+    restore_value: true
+    options:
+      - "Match Wake Chime"
+      - "Bell Ping"
+      - "Modern Chime"
+      - "Crystal Glass"
+      - "Warm Kalimba"
+      - "Meditation Bell"
+      - "Marimba"
+      - "Subtle Beep"
+      - "Bamboo Chime"
+      - "Tibetan Bowl"
+      - "Acoustic Harp"
+      - "Woodblock"
+      - "Ceramic Bell"
+      - "Neon Shimmer"
+      - "Prism Ping"
+      - "Cyber Bloom"
+      - "Quantum Beep"
+      - "Aero Chime"
+      - "Silent"
+    set_action:
+      - lambda: |-
+          if (x != "Silent") {
+            std::string opt = x;
+            if (opt == "Match Wake Chime") {
+              opt = id(wake_chime_sound).current_option();
+            }
+            float vol = id(cancel_sound_volume).state / 100.0f;
+            esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+          }
 
   - platform: template
     id: led_pattern
@@ -494,7 +540,7 @@ number:
       - lambda: |-
           call_nim_action_set_processing_volume(x);
           std::string opt = id(processing_sound).current_option();
-          esphome::get_pcm_sound_player().play_sound(opt, false, x / 100.0f);
+          esphome::get_pcm_sound_player().play_processing_sound(opt, false, x / 100.0f);
 
   - platform: template
     id: wake_chime_volume
@@ -511,7 +557,28 @@ number:
       - lambda: |-
           call_nim_action_set_chime_volume(x);
           std::string opt = id(wake_chime_sound).current_option();
-          esphome::get_pcm_sound_player().play_sound(opt, false, x / 100.0f);
+          esphome::get_pcm_sound_player().play_chime(opt, false, x / 100.0f);
+
+  - platform: template
+    id: cancel_sound_volume
+    name: "Cancel Sound Volume"
+    icon: "mdi:volume-medium"
+    entity_category: config
+    min_value: 0
+    max_value: 100
+    step: 5
+    initial_value: 80
+    restore_value: true
+    optimistic: true
+    set_action:
+      - lambda: |-
+          if (id(cancel_sound_switch).state) {
+            std::string opt = id(cancel_sound_sound).current_option();
+            if (opt == "Match Wake Chime") {
+              opt = id(wake_chime_sound).current_option();
+            }
+            esphome::get_pcm_sound_player().play_cancel_sound(opt, false, x / 100.0f);
+          }
 
   - platform: template
     id: led_brightness
@@ -547,6 +614,14 @@ switch:
     icon: "mdi:bell-ring"
     entity_category: config
     optimistic: true
+
+  - platform: template
+    id: cancel_sound_switch
+    name: "Cancel Sound"
+    icon: "mdi:bell-cancel"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
 
 interval:
   - interval: 50ms

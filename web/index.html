@@ -172,95 +172,144 @@
       <div class="hint" id="target_desc">Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation</div>
     </div>
     <div class="fields-container">
-      <div class="form-group" id="group_wake_words" data-field="wake_words">
-        <label for="field_wake_words">Active Wake Word Models (Up to 3 Concurrent)</label>
-        <div class="wake-slots-container" id="wakeSlotsContainer_wake_words" data-field="wake_words" data-max-slots="3">
-          <div id="slotsList_wake_words" class="slots-list"></div>
-          <button type="button" class="btn-add-slot" id="btnAddSlot_wake_words"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> <span>Add Wake Word Model Slot</span></button>
-        </div>
-        <div class="hint">ESP32-S3 hardware neural accelerator runs up to 3 wake word models concurrently in parallel. Add slots to configure multiple active wake words.</div>
-      </div>
-      <div class="form-group" id="group_wake_chime_sound" data-field="wake_chime_sound">
-        <label for="field_wake_chime_sound">Wake Chime Sound</label>
-        <select id="field_wake_chime_sound">
-          <option value="Bell Ping (Default)" selected>Bell Ping (Default)</option>
-          <option value="Modern Chime">Modern Chime</option>
-          <option value="Crystal Glass">Crystal Glass</option>
-          <option value="Warm Kalimba">Warm Kalimba</option>
-          <option value="Meditation Bell">Meditation Bell</option>
-          <option value="Marimba">Marimba</option>
-          <option value="Subtle Beep">Subtle Beep</option>
-          <option value="Bamboo Chime">Bamboo Chime</option>
-          <option value="Tibetan Bowl">Tibetan Bowl</option>
-          <option value="Acoustic Harp">Acoustic Harp</option>
-          <option value="Woodblock">Woodblock</option>
-          <option value="Ceramic Bell">Ceramic Bell</option>
-          <option value="Neon Shimmer">Neon Shimmer</option>
-          <option value="Prism Ping">Prism Ping</option>
-          <option value="Cyber Bloom">Cyber Bloom</option>
-          <option value="Quantum Beep">Quantum Beep</option>
-          <option value="Aero Chime">Aero Chime</option>
-          <option value="Silent">Silent</option>
-          <option value="Custom Chime Audio">Custom Chime Audio</option>
-        </select>
-        <div class="preset-card" id="presetCard_wake_chime_sound">
-          <div class="preset-view" id="presetView_wake_chime_sound">
-            <div class="preset-header">
-              <span class="preset-badge" id="presetCadence_wake_chime_sound"></span>
+      <div class="form-group" id="group_custom_wake_word" data-field="custom_wake_word">
+        <label for="field_custom_wake_word">Custom Wake Word Model (.tflite)</label>
+        <div class="custom-wake-box" id="wakeBox_custom_wake_word">
+          <input type="file" id="field_custom_wake_word" accept=".tflite" data-offset="5308416" data-maxsize="524288">
+          <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
+            <div style="flex: 2;">
+              <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
+              <input type="text" id="field_custom_wake_word_phrase" placeholder="e.g. Hey Jarvis or Marvin" value="">
             </div>
-            <p class="preset-desc" id="presetDesc_wake_chime_sound"></p>
-          </div>
-          <div class="custom-slot" id="group_custom_chime_audio" data-field="custom_chime_audio" data-depends-on="wake_chime_sound" data-depends-val="Custom Chime Audio" style="display: none;">
-            <input type="file" id="field_custom_chime_audio" accept=".wav,audio/wav" data-offset="3735552" data-maxsize="131072" disabled>
-            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 128 KB.<br>Flashed to dedicated chime_data partition at 0x390000.</div>
-            <div class="file-status" id="status_custom_chime_audio"></div>
-          </div>
-          <div class="preview-actions">
-            <button type="button" class="preview-btn" id="previewBtn_wake_chime_sound"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
-          </div>
-        </div>
-        <div class="hint">Acoustic acknowledgement chime played immediately upon wake word detection before opening the microphone</div>
-      </div>
-      <div class="form-group" id="group_default_sound_style" data-field="default_sound_style">
-        <label for="field_default_sound_style">Default Processing Sound Style</label>
-        <select id="field_default_sound_style">
-          <option value="Spinner" selected>Spinner</option>
-          <option value="Pulse">Pulse</option>
-          <option value="Sonar">Sonar</option>
-          <option value="Tick">Tick</option>
-          <option value="Typewriter">Typewriter</option>
-          <option value="Clockwork">Clockwork</option>
-          <option value="Water Droplets">Water Droplets</option>
-          <option value="Raindrops">Raindrops</option>
-          <option value="Forest Stream">Forest Stream</option>
-          <option value="Campfire Ember">Campfire Ember</option>
-          <option value="Shishi-Odoshi">Shishi-Odoshi</option>
-          <option value="Soft Footsteps">Soft Footsteps</option>
-          <option value="Radar Ping">Radar Ping</option>
-          <option value="Data Crunch">Data Crunch</option>
-          <option value="Telemetry Blip">Telemetry Blip</option>
-          <option value="Quantum Flux">Quantum Flux</option>
-          <option value="Retro Terminal">Retro Terminal</option>
-          <option value="Silent">Silent</option>
-          <option value="Custom">Custom</option>
-        </select>
-        <div class="preset-card" id="presetCard_default_sound_style">
-          <div class="preset-view" id="presetView_default_sound_style">
-            <div class="preset-header">
-              <span class="preset-badge" id="presetCadence_default_sound_style"></span>
+            <div style="flex: 1;">
+              <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Probability Cutoff</label>
+              <input type="number" id="field_custom_wake_word_cutoff" min="0.05" max="0.99" step="0.01" value="0.40">
             </div>
-            <p class="preset-desc" id="presetDesc_default_sound_style"></p>
           </div>
-          <div class="custom-slot" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom" style="display: none;">
-            <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144" disabled>
-            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to dedicated sound_data partition at 0x370000.</div>
-            <div class="file-status" id="status_custom_audio"></div>
-          </div>
-          <div class="preview-actions">
-            <button type="button" class="preview-btn" id="previewBtn_default_sound_style"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
-          </div>
+          <div class="format-callout"><strong>Dedicated Partition:</strong> Flashed to <code>wake_model</code> at 0x510000 (512 KB). Automatic 64-byte header is prepended before flashing so firmware dynamically registers the wake word in Home Assistant.</div>
+          <div class="file-status" id="status_custom_wake_word"></div>
         </div>
-        <div class="hint">Acoustic feedback rhythm played while the assistant is processing speech</div>
+        <div class="hint">Optional: Upload a microWakeWord .tflite model to flash directly into the dedicated wake_model partition (0x510000). At boot, the satellite automatically detects the model header, registers your custom wake word, and exposes it in Home Assistant alongside Okay Nabu and Mr. Clemens without re-compiling firmware.</div>
+      </div>
+      <div class="form-group" id="group_wake_chimes" data-field="wake_chimes">
+        <label for="field_wake_chimes">Built-in Wake Chimes (17 Acoustic Themes)</label>
+        <div class="showcase-card" id="showcaseCard_wake_chimes">
+          <div class="showcase-header">
+            <span class="showcase-tag">Included in Firmware</span>
+          </div>
+          <select id="field_wake_chimes">
+            <option value="Bell Ping (Default)" selected>Bell Ping (Default)</option>
+            <option value="Modern Chime">Modern Chime</option>
+            <option value="Crystal Glass">Crystal Glass</option>
+            <option value="Warm Kalimba">Warm Kalimba</option>
+            <option value="Meditation Bell">Meditation Bell</option>
+            <option value="Marimba">Marimba</option>
+            <option value="Subtle Beep">Subtle Beep</option>
+            <option value="Bamboo Chime">Bamboo Chime</option>
+            <option value="Tibetan Bowl">Tibetan Bowl</option>
+            <option value="Acoustic Harp">Acoustic Harp</option>
+            <option value="Woodblock">Woodblock</option>
+            <option value="Ceramic Bell">Ceramic Bell</option>
+            <option value="Neon Shimmer">Neon Shimmer</option>
+            <option value="Prism Ping">Prism Ping</option>
+            <option value="Cyber Bloom">Cyber Bloom</option>
+            <option value="Quantum Beep">Quantum Beep</option>
+            <option value="Aero Chime">Aero Chime</option>
+          </select>
+          <div class="preset-card" id="presetCard_wake_chimes">
+            <div class="preset-view" id="presetView_wake_chimes">
+              <div class="preset-header">
+                <span class="preset-badge" id="presetCadence_wake_chimes"></span>
+              </div>
+              <p class="preset-desc" id="presetDesc_wake_chimes"></p>
+            </div>
+            <div class="preview-actions">
+              <button type="button" class="preview-btn" id="previewBtn_wake_chimes"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
+            </div>
+          </div>
+          <div class="showcase-note">Pre-compiled in firmware. Selectable anytime in Home Assistant without reflashing.</div>
+        </div>
+        <div class="hint">Acoustic acknowledgement chime played immediately upon wake word detection before opening the microphone. Pre-compiled in firmware and switchable anytime in Home Assistant.</div>
+      </div>
+      <div class="form-group" id="group_processing_sounds" data-field="processing_sounds">
+        <label for="field_processing_sounds">Built-in Processing Sounds (17 Acoustic Themes)</label>
+        <div class="showcase-card" id="showcaseCard_processing_sounds">
+          <div class="showcase-header">
+            <span class="showcase-tag">Included in Firmware</span>
+          </div>
+          <select id="field_processing_sounds">
+            <option value="Spinner (Default)" selected>Spinner (Default)</option>
+            <option value="Pulse">Pulse</option>
+            <option value="Sonar">Sonar</option>
+            <option value="Tick">Tick</option>
+            <option value="Typewriter">Typewriter</option>
+            <option value="Clockwork">Clockwork</option>
+            <option value="Water Droplets">Water Droplets</option>
+            <option value="Raindrops">Raindrops</option>
+            <option value="Forest Stream">Forest Stream</option>
+            <option value="Campfire Ember">Campfire Ember</option>
+            <option value="Shishi-Odoshi">Shishi-Odoshi</option>
+            <option value="Soft Footsteps">Soft Footsteps</option>
+            <option value="Radar Ping">Radar Ping</option>
+            <option value="Data Crunch">Data Crunch</option>
+            <option value="Telemetry Blip">Telemetry Blip</option>
+            <option value="Quantum Flux">Quantum Flux</option>
+            <option value="Retro Terminal">Retro Terminal</option>
+          </select>
+          <div class="preset-card" id="presetCard_processing_sounds">
+            <div class="preset-view" id="presetView_processing_sounds">
+              <div class="preset-header">
+                <span class="preset-badge" id="presetCadence_processing_sounds"></span>
+              </div>
+              <p class="preset-desc" id="presetDesc_processing_sounds"></p>
+            </div>
+            <div class="preview-actions">
+              <button type="button" class="preview-btn" id="previewBtn_processing_sounds"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
+            </div>
+          </div>
+          <div class="showcase-note">Pre-compiled in firmware. Selectable anytime in Home Assistant without reflashing.</div>
+        </div>
+        <div class="hint">Continuous acoustic feedback looped while the assistant processes speech. Pre-compiled in firmware with seamless zero-gap playback and selectable in Home Assistant.</div>
+      </div>
+      <div class="form-group" id="group_cancel_sounds" data-field="cancel_sounds">
+        <label for="field_cancel_sounds">Built-in Cancel Sounds (17 Acoustic Themes)</label>
+        <div class="showcase-card" id="showcaseCard_cancel_sounds">
+          <div class="showcase-header">
+            <span class="showcase-tag">Included in Firmware</span>
+          </div>
+          <select id="field_cancel_sounds">
+            <option value="Bell Ping (Default)" selected>Bell Ping (Default)</option>
+            <option value="Modern Chime">Modern Chime</option>
+            <option value="Crystal Glass">Crystal Glass</option>
+            <option value="Warm Kalimba">Warm Kalimba</option>
+            <option value="Meditation Bell">Meditation Bell</option>
+            <option value="Marimba">Marimba</option>
+            <option value="Subtle Beep">Subtle Beep</option>
+            <option value="Bamboo Chime">Bamboo Chime</option>
+            <option value="Tibetan Bowl">Tibetan Bowl</option>
+            <option value="Acoustic Harp">Acoustic Harp</option>
+            <option value="Woodblock">Woodblock</option>
+            <option value="Ceramic Bell">Ceramic Bell</option>
+            <option value="Neon Shimmer">Neon Shimmer</option>
+            <option value="Prism Ping">Prism Ping</option>
+            <option value="Cyber Bloom">Cyber Bloom</option>
+            <option value="Quantum Beep">Quantum Beep</option>
+            <option value="Aero Chime">Aero Chime</option>
+          </select>
+          <div class="preset-card" id="presetCard_cancel_sounds">
+            <div class="preset-view" id="presetView_cancel_sounds">
+              <div class="preset-header">
+                <span class="preset-badge" id="presetCadence_cancel_sounds"></span>
+              </div>
+              <p class="preset-desc" id="presetDesc_cancel_sounds"></p>
+            </div>
+            <div class="preview-actions">
+              <button type="button" class="preview-btn" id="previewBtn_cancel_sounds"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
+            </div>
+          </div>
+          <div class="showcase-note">Pre-compiled in firmware. Selectable anytime in Home Assistant without reflashing.</div>
+        </div>
+        <div class="hint">Audible cancellation tone played when a cancellation phrase ('stop', 'cancel', 'nevermind') is heard or speech recognition is aborted. Pre-compiled in firmware and selectable in Home Assistant.</div>
       </div>
     </div>
     <div class="actions">
@@ -448,6 +497,31 @@
       return u8;
     }
 
+    function packWakeModelHeader(rawModelBuffer, phrase, cutoff) {
+      const HEADER_SIZE = 64;
+      const headerBuf = new ArrayBuffer(HEADER_SIZE);
+      const view = new DataView(headerBuf);
+      const u8Header = new Uint8Array(headerBuf);
+      view.setUint32(0, 0x57414B45, true);
+      view.setUint16(4, 1, true);
+      view.setUint16(6, 0, true);
+      view.setUint32(8, rawModelBuffer.byteLength, true);
+      const cutoffVal = parseFloat(cutoff);
+      const quantizedCutoff = isNaN(cutoffVal) ? 102 : Math.max(1, Math.min(255, Math.round(cutoffVal * 255)));
+      view.setUint8(12, quantizedCutoff);
+      view.setUint8(13, 5);
+      view.setUint16(14, 40, true);
+      const cleanPhrase = (phrase || 'Custom Wake Word').trim().slice(0, 31);
+      for (let i = 0; i < cleanPhrase.length; i++) {
+        u8Header[16 + i] = cleanPhrase.charCodeAt(i);
+      }
+      u8Header[16 + cleanPhrase.length] = 0;
+      const combined = new Uint8Array(HEADER_SIZE + rawModelBuffer.byteLength);
+      combined.set(u8Header, 0);
+      combined.set(new Uint8Array(rawModelBuffer), HEADER_SIZE);
+      return combined;
+    }
+
     function getSavedInstallerState() {
       try {
         return JSON.parse(localStorage.getItem(FORM_STORAGE_KEY) || '{}');
@@ -574,7 +648,11 @@
       if (activeAudioElement) { activeAudioElement.pause(); activeAudioElement = null; }
       document.querySelectorAll('.preview-btn').forEach(btn => {
         btn.classList.remove('playing');
-        btn.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
+        if (btn.classList.contains('btn-play-uploaded')) {
+          btn.innerHTML = ICONS.play + ' <span>Preview</span>';
+        } else {
+          btn.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
+        }
       });
     }
 
@@ -694,30 +772,6 @@
         if (info) {
           manifest.builds[0].parts[0].path = info.bin;
           if (info.chip) manifest.builds[0].chipFamily = info.chip;
-        }
-      }
-      if (typeof PRESET_AUDIO !== 'undefined') {
-        for (const [key, info] of Object.entries(PRESET_AUDIO)) {
-          if (!info || !info.flash) continue;
-          for (const sel of document.querySelectorAll('select')) {
-            if (sel.value === key) {
-              let isOverridden = false;
-              const off = info.offset || 0x370000;
-              for (const [upKey, _] of uploadedParts.entries()) {
-                const grp = document.getElementById('group_' + upKey);
-                if (grp && grp.dataset.dependsOn && grp.dataset.dependsVal) {
-                  const pEl = document.getElementById('field_' + grp.dataset.dependsOn);
-                  if (pEl && pEl.value === grp.dataset.dependsVal) {
-                    if (off >= 0x390000 && upKey.includes('chime')) { isOverridden = true; break; }
-                    else if (off < 0x390000 && (upKey.includes('sound') || upKey.includes('audio'))) { isOverridden = true; break; }
-                  }
-                }
-              }
-              if (!isOverridden) {
-                manifest.builds[0].parts.push({ path: info.flash, offset: off });
-              }
-            }
-          }
         }
       }
       for (const [name, part] of uploadedParts.entries()) {
@@ -841,568 +895,147 @@
     }
     restoreInstallerState();
 
-    (function initWakeWordSlots() {
-      const PRESETS = ["Okay Nabu (Default)","Hey Jarvis","Alexa","Mr. Clemens","Custom Wake Word"];
-      const OFFSETS = [3866624,4128768,4390912];
-      Object.assign(PRESET_MODELS, {"Mr. Clemens":"models/clemens.tflite"});
-      WAKE_OFFSETS = OFFSETS;
-      const MAX_SLOTS = 3;
-      const container = document.getElementById('slotsList_wake_words');
-      const addBtn = document.getElementById('btnAddSlot_wake_words');
-      let slotCount = 0;
+    const wakeFileInput_custom_wake_word = document.getElementById('field_custom_wake_word');
+    const wakePhraseInput_custom_wake_word = document.getElementById('field_custom_wake_word_phrase');
+    const wakeCutoffInput_custom_wake_word = document.getElementById('field_custom_wake_word_cutoff');
+    const wakeStatus_custom_wake_word = document.getElementById('status_custom_wake_word');
+    let wakeModelRawBuffer_custom_wake_word = null;
+    let wakeFileName_custom_wake_word = '';
 
-      const MWW_CACHE_KEY = 'esphome_mww_cache_v1';
-
-      function getMwwCache() {
-        try {
-          return JSON.parse(localStorage.getItem(MWW_CACHE_KEY) || '{}');
-        } catch (e) {
-          return {};
-        }
-      }
-
-      function saveMwwCache(phrase, u8Array, meta) {
-        try {
-          meta = meta || {};
-          const cache = getMwwCache();
-          const cleanId = (phrase || 'wake_word').toLowerCase().replace(/[^a-z0-9]/g, '_');
-          cache[cleanId] = {
-            id: cleanId,
-            phrase: phrase,
-            b64: uint8ToBase64(u8Array),
-            size: u8Array.length,
-            filename: meta.filename || (cleanId + '.tflite'),
-            timestamp: Date.now()
-          };
-          localStorage.setItem(MWW_CACHE_KEY, JSON.stringify(cache));
-          updateAllCacheSelectors();
-          return cleanId;
-        } catch (e) {
-          console.warn('LocalStorage save failed:', e);
-          return null;
-        }
-      }
-
-      function deleteMwwCache(id) {
-        try {
-          const cache = getMwwCache();
-          delete cache[id];
-          localStorage.setItem(MWW_CACHE_KEY, JSON.stringify(cache));
-          updateAllCacheSelectors();
-        } catch (e) {
-          console.warn('LocalStorage delete failed:', e);
-        }
-      }
-
-      function updateAllCacheSelectors() {
-        const cache = getMwwCache();
-        const entries = Object.values(cache);
-        document.querySelectorAll('.wake-slot-card').forEach(c => {
-          const bar = c.querySelector('.cached-models-bar');
-          const sel = c.querySelector('.select-cached-model');
-          if (!bar || !sel) return;
-          const currentVal = sel.value;
-          sel.innerHTML = '<option value="">-- Load from Saved Models (' + entries.length + ') --</option>';
-          if (entries.length === 0) {
-            bar.style.display = 'none';
-          } else {
-            bar.style.display = 'flex';
-            entries.forEach(entry => {
-              const opt = document.createElement('option');
-              opt.value = entry.id;
-              opt.textContent = entry.phrase + ' (' + Math.round(entry.size / 1024) + ' KB)';
-              sel.appendChild(opt);
-            });
-            if (currentVal && cache[currentVal]) sel.value = currentVal;
-          }
-        });
-      }
-
-      function createSlotCard(slotIdx, initialData) {
-        slotCount++;
-        const card = document.createElement('div');
-        card.className = 'wake-slot-card';
-        card.id = 'wake_slot_card_' + slotIdx;
-        card.dataset.slot = slotIdx;
-        const slotOffset = OFFSETS[slotIdx - 1] || (0x3B0000 + (slotIdx - 1) * 0x40000);
-        const hexOffset = '0x' + slotOffset.toString(16).toUpperCase();
-
-        let selectHtml = '<select class="slot-model-select" id="slot_select_' + slotIdx + '">';
-        PRESETS.forEach(p => { selectHtml += '<option value="' + p + '">' + p + '</option>'; });
-        selectHtml += '</select>';
-
-        card.innerHTML = `
-          <div class="slot-header">
-            <span class="slot-title"><span class="slot-badge-num">Slot ${slotIdx}</span> Active Wake Model</span>
-            <button type="button" class="btn-remove-slot" style="display: none;">${ICONS.x} <span>Remove</span></button>
-          </div>
-          ${selectHtml}
-          <div class="custom-wake-box" style="display: none;">
-            <div class="custom-wake-guide">
-              <div class="guide-title">${ICONS.book} <span>Train Your Custom Wake Word</span></div>
-              <div class="guide-text">microWakeWord models require neural network training with speech and background noise datasets. Train your custom model using the official Google Colab notebook, then upload the resulting <code>.tflite</code> file below:</div>
-              <div class="guide-links">
-                <a class="guide-link" href="https://colab.research.google.com/github/kahrendt/microWakeWord/blob/main/notebooks/microWakeWord_model_training.ipynb" target="_blank" rel="noopener">${ICONS.external} <span>Open 1-Click Colab Trainer</span></a>
-                <a class="guide-link" href="https://github.com/kahrendt/microWakeWord" target="_blank" rel="noopener">${ICONS.external} <span>microWakeWord GitHub Docs</span></a>
-              </div>
-            </div>
-            <div class="upload-box">
-              <div class="cached-models-bar" style="display: none;">
-                <span class="cached-models-label">${ICONS.database} <span>Saved:</span></span>
-                <select class="select-cached-model">
-                  <option value="">-- Load from Browser Cache --</option>
-                </select>
-                <button type="button" class="btn-cache-action btn-cache-load">Load</button>
-                <button type="button" class="btn-cache-action btn-cache-delete" title="Delete from cache">${ICONS.x}</button>
-              </div>
-              <label>Upload microWakeWord Model (.tflite)</label>
-              <input type="file" class="input-model-file" accept=".tflite" data-maxsize="262144" data-offset="${slotOffset}">
-              <div class="file-status" style="display: none;"></div>
-              <div class="upload-actions-bar" style="display: none;">
-                <div class="hint" style="margin: 0;">Flashed to safe partition <code>${hexOffset}</code></div>
-                <a class="download-model-btn upload-download-btn" download="model.tflite" title="Download loaded .tflite model">${ICONS.download} <span>Download .tflite</span></a>
-              </div>
-              <div class="hint upload-default-hint">Target partition: <code>${hexOffset}</code> (max 256 KB)</div>
-            </div>
-          </div>
-        `;
-
-        const modelSelect = card.querySelector('.slot-model-select');
-        const customBox = card.querySelector('.custom-wake-box');
-        const removeBtn = card.querySelector('.btn-remove-slot');
-        const fileInput = card.querySelector('.input-model-file');
-        const fileStatus = card.querySelector('.file-status');
-        const selectCached = card.querySelector('.select-cached-model');
-        const btnCacheLoad = card.querySelector('.btn-cache-load');
-        const btnCacheDelete = card.querySelector('.btn-cache-delete');
-        const uploadActionsBar = card.querySelector('.upload-actions-bar');
-        const uploadDownloadBtn = card.querySelector('.upload-download-btn');
-        const uploadDefaultHint = card.querySelector('.upload-default-hint');
-
-        if (initialData && initialData.model) {
-          modelSelect.value = initialData.model;
-          if (initialData.model === 'Custom Wake Word') {
-            customBox.style.display = 'block';
-            card.classList.add('slot-highlight');
-            const cachedSlotFile = cachedFileStore['wake_slot_' + slotIdx];
-            if (cachedSlotFile && cachedSlotFile.b64) {
-              const bytes = base64ToUint8(cachedSlotFile.b64);
-              const blob = new Blob([bytes], { type: 'application/octet-stream' });
-              const blobUrl = URL.createObjectURL(blob);
-              uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset, name: cachedSlotFile.name, size: cachedSlotFile.size });
-              fileStatus.style.display = 'block';
-              fileStatus.innerHTML = ICONS.check + ' <span>Saved model loaded: ' + cachedSlotFile.name + ' (' + Math.round(cachedSlotFile.size / 1024) + ' KB at ' + hexOffset + ')</span>';
-              uploadDownloadBtn.href = blobUrl;
-              uploadDownloadBtn.download = cachedSlotFile.name;
-              uploadActionsBar.style.display = 'flex';
-              if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
-            } else if (initialData.cachedId) {
-              const cache = getMwwCache();
-              if (cache[initialData.cachedId]) {
-                selectCached.value = initialData.cachedId;
-                btnCacheLoad.click();
-              }
-            }
-          }
-        }
-
-        modelSelect.addEventListener('change', () => {
-          if (modelSelect.value === 'Custom Wake Word') {
-            customBox.style.display = 'block';
-            card.classList.add('slot-highlight');
-          } else {
-            customBox.style.display = 'none';
-            card.classList.remove('slot-highlight');
-            uploadedParts.delete('wake_slot_' + slotIdx);
-            delete cachedFileStore['wake_slot_' + slotIdx];
-          }
-          checkInstallReadiness();
-          updateDynamicManifest();
-          saveInstallerState();
-        });
-
-        btnCacheLoad.addEventListener('click', () => {
-          const chosenId = selectCached.value;
-          if (!chosenId) return;
-          const cache = getMwwCache();
-          const item = cache[chosenId];
-          if (item && item.b64) {
-            const bytes = base64ToUint8(item.b64);
-            const blob = new Blob([bytes], { type: 'application/octet-stream' });
-            const blobUrl = URL.createObjectURL(blob);
-            const fileName = (item.phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
-            uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset, name: fileName, size: bytes.length });
-            cachedFileStore['wake_slot_' + slotIdx] = {
-              name: fileName,
-              size: bytes.length,
-              type: 'application/octet-stream',
-              offset: slotOffset,
-              b64: item.b64
-            };
-            fileStatus.style.display = 'block';
-            fileStatus.innerHTML = ICONS.check + ' <span>Loaded from cache: "' + item.phrase + '" (' + Math.round(bytes.length / 1024) + ' KB at ' + hexOffset + ')</span>';
-            uploadDownloadBtn.href = blobUrl;
-            uploadDownloadBtn.download = fileName;
-            uploadActionsBar.style.display = 'flex';
-            if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
-            checkInstallReadiness();
+    function registerCustomWakeWord_custom_wake_word() {
+      if (!wakeModelRawBuffer_custom_wake_word) return;
+      const phrase = (wakePhraseInput_custom_wake_word ? wakePhraseInput_custom_wake_word.value : '') || 'Custom Wake Word';
+      const cutoff = (wakeCutoffInput_custom_wake_word ? wakeCutoffInput_custom_wake_word.value : '0.40');
+      const offset = parseInt(wakeFileInput_custom_wake_word.dataset.offset || '5308416', 10);
+      const combined = packWakeModelHeader(wakeModelRawBuffer_custom_wake_word, phrase, cutoff);
+      const blob = new Blob([combined], { type: 'application/octet-stream' });
+      const blobUrl = URL.createObjectURL(blob);
+      uploadedParts.set('custom_wake_word', { url: blobUrl, offset: offset, name: wakeFileName_custom_wake_word, size: combined.byteLength });
+      if (wakeStatus_custom_wake_word) {
+        wakeStatus_custom_wake_word.style.display = 'block';
+        wakeStatus_custom_wake_word.innerHTML = ICONS.check + ' <span>Ready to flash: ' + wakeFileName_custom_wake_word + ' with phrase &ldquo;' + phrase + '&rdquo; (' + Math.round(combined.byteLength / 1024) + ' KB at dedicated partition 0x' + offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-file" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+        const clrBtn = wakeStatus_custom_wake_word.querySelector('.btn-clear-file');
+        if (clrBtn) {
+          clrBtn.addEventListener('click', () => {
+            wakeFileInput_custom_wake_word.value = '';
+            wakeModelRawBuffer_custom_wake_word = null;
+            wakeFileName_custom_wake_word = '';
+            uploadedParts.delete('custom_wake_word');
+            delete cachedFileStore['custom_wake_word'];
+            wakeStatus_custom_wake_word.style.display = 'none';
             updateDynamicManifest();
-            saveInstallerState();
-          }
-        });
-
-        selectCached.addEventListener('change', () => {
-          if (selectCached.value) btnCacheLoad.click();
-        });
-
-        btnCacheDelete.addEventListener('click', () => {
-          const chosenId = selectCached.value;
-          if (!chosenId) return;
-          const cache = getMwwCache();
-          const item = cache[chosenId];
-          const name = item ? item.phrase : chosenId;
-          if (confirm('Remove "' + name + '" from saved browser storage?')) {
-            deleteMwwCache(chosenId);
-          }
-        });
-
-        fileInput.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (!file) {
-            uploadedParts.delete('wake_slot_' + slotIdx);
-            delete cachedFileStore['wake_slot_' + slotIdx];
-            fileStatus.style.display = 'none';
-            uploadActionsBar.style.display = 'none';
-            if (uploadDefaultHint) uploadDefaultHint.style.display = 'block';
             checkInstallReadiness();
-            updateDynamicManifest();
             saveInstallerState();
-            return;
-          }
-          if (file.size > 262144) {
-            alert('Model file exceeds 256 KB limit.');
-            fileInput.value = '';
-            return;
-          }
-          const blobUrl = URL.createObjectURL(file);
-          uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset, name: file.name, size: file.size });
-          fileStatus.style.display = 'block';
-          fileStatus.innerHTML = ICONS.check + ' <span>Model loaded: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at ' + hexOffset + ')</span>';
-          uploadDownloadBtn.href = blobUrl;
-          uploadDownloadBtn.download = file.name;
-          uploadActionsBar.style.display = 'flex';
-          if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
+          });
+        }
+      }
+      updateDynamicManifest();
+      checkInstallReadiness();
+      saveInstallerState();
+    }
 
-          const reader = new FileReader();
-          reader.onload = function(evt) {
-            try {
-              const arrBuf = evt.target.result;
-              const u8 = new Uint8Array(arrBuf);
-              const b64 = uint8ToBase64(u8);
-              const modelName = file.name.replace(/\.tflite$/i, '').replace(/[-_]/g, ' ');
-              saveMwwCache(modelName, u8, { source: 'upload', filename: file.name });
-              cachedFileStore['wake_slot_' + slotIdx] = {
-                name: file.name,
-                size: file.size,
-                type: 'application/octet-stream',
-                offset: slotOffset,
-                b64: b64
-              };
-              saveInstallerState();
-            } catch (err) {
-              console.warn('Could not cache uploaded model:', err);
-            }
-          };
-          reader.readAsArrayBuffer(file);
-
-          checkInstallReadiness();
+    if (wakeFileInput_custom_wake_word) {
+      wakeFileInput_custom_wake_word.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) {
+          wakeModelRawBuffer_custom_wake_word = null;
+          wakeFileName_custom_wake_word = '';
+          uploadedParts.delete('custom_wake_word');
+          delete cachedFileStore['custom_wake_word'];
           updateDynamicManifest();
-        });
-
-        removeBtn.addEventListener('click', () => {
-          uploadedParts.delete('wake_slot_' + slotIdx);
-          delete cachedFileStore['wake_slot_' + slotIdx];
-          card.remove();
-          refreshSlots();
           checkInstallReadiness();
-          updateDynamicManifest();
           saveInstallerState();
-        });
-
-        container.appendChild(card);
-        refreshSlots();
-        updateAllCacheSelectors();
-      }
-
-      function refreshSlots() {
-        const cards = container.querySelectorAll('.wake-slot-card');
-        cards.forEach((card, idx) => {
-          const num = idx + 1;
-          card.dataset.slot = num;
-          const badge = card.querySelector('.slot-badge-num');
-          if (badge) badge.textContent = 'Slot ' + num;
-          const rm = card.querySelector('.btn-remove-slot');
-          if (rm) rm.style.display = (cards.length > 1) ? 'inline-flex' : 'none';
-        });
-        if (addBtn) addBtn.disabled = (cards.length >= MAX_SLOTS);
-      }
-
-      if (addBtn) {
-        addBtn.addEventListener('click', () => {
-          const current = container.querySelectorAll('.wake-slot-card').length;
-          if (current < MAX_SLOTS) { createSlotCard(current + 1); checkInstallReadiness(); saveInstallerState(); }
-        });
-      }
-
-      const savedState = getSavedInstallerState();
-      const savedSlots = (savedState && Array.isArray(savedState.wakeSlots) && savedState.wakeSlots.length > 0)
-        ? savedState.wakeSlots
-        : [{ slot: 1, model: PRESETS[0] }];
-      savedSlots.forEach((sData, idx) => {
-        createSlotCard(idx + 1, sData);
+          return;
+        }
+        const maxSizeBytes = parseInt(wakeFileInput_custom_wake_word.dataset.maxsize || '524288', 10);
+        if (file.size > maxSizeBytes) {
+          alert('Model exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
+          wakeFileInput_custom_wake_word.value = '';
+          return;
+        }
+        wakeFileName_custom_wake_word = file.name;
+        if (wakePhraseInput_custom_wake_word && (!wakePhraseInput_custom_wake_word.value || wakePhraseInput_custom_wake_word.value.trim() === '')) {
+          const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+          wakePhraseInput_custom_wake_word.value = rawName.replace(/\b\w/g, l => l.toUpperCase());
+        }
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          wakeModelRawBuffer_custom_wake_word = evt.target.result;
+          registerCustomWakeWord_custom_wake_word();
+        };
+        reader.readAsArrayBuffer(file);
       });
-    })();
-
+    }
+    if (wakePhraseInput_custom_wake_word) {
+      wakePhraseInput_custom_wake_word.addEventListener('input', registerCustomWakeWord_custom_wake_word);
+    }
+    if (wakeCutoffInput_custom_wake_word) {
+      wakeCutoffInput_custom_wake_word.addEventListener('input', registerCustomWakeWord_custom_wake_word);
+    }
     Object.assign(PRESET_AUDIO, {"Bell Ping (Default)":{"preview":"sounds/bell-ping.mp3","flash":"sounds/bell-ping.wav","offset":3735552},"Modern Chime":{"preview":"sounds/modern-chime.mp3","flash":"sounds/modern-chime.wav","offset":3735552},"Crystal Glass":{"preview":"sounds/crystal-glass.mp3","flash":"sounds/crystal-glass.wav","offset":3735552},"Warm Kalimba":{"preview":"sounds/warm-kalimba.mp3","flash":"sounds/warm-kalimba.wav","offset":3735552},"Meditation Bell":{"preview":"sounds/meditation-bell.mp3","flash":"sounds/meditation-bell.wav","offset":3735552},"Marimba":{"preview":"sounds/marimba.mp3","flash":"sounds/marimba.wav","offset":3735552},"Subtle Beep":{"preview":"sounds/subtle-beep.mp3","flash":"sounds/subtle-beep.wav","offset":3735552},"Bamboo Chime":{"preview":"sounds/bamboo-chime.mp3","flash":"sounds/bamboo-chime.wav","offset":3735552},"Tibetan Bowl":{"preview":"sounds/tibetan-bowl.mp3","flash":"sounds/tibetan-bowl.wav","offset":3735552},"Acoustic Harp":{"preview":"sounds/acoustic-harp.mp3","flash":"sounds/acoustic-harp.wav","offset":3735552},"Woodblock":{"preview":"sounds/woodblock.mp3","flash":"sounds/woodblock.wav","offset":3735552},"Ceramic Bell":{"preview":"sounds/ceramic-bell.mp3","flash":"sounds/ceramic-bell.wav","offset":3735552},"Neon Shimmer":{"preview":"sounds/neon-shimmer.mp3","flash":"sounds/neon-shimmer.wav","offset":3735552},"Prism Ping":{"preview":"sounds/prism-ping.mp3","flash":"sounds/prism-ping.wav","offset":3735552},"Cyber Bloom":{"preview":"sounds/cyber-bloom.mp3","flash":"sounds/cyber-bloom.wav","offset":3735552},"Quantum Beep":{"preview":"sounds/quantum-beep.mp3","flash":"sounds/quantum-beep.wav","offset":3735552},"Aero Chime":{"preview":"sounds/aero-chime.mp3","flash":"sounds/aero-chime.wav","offset":3735552}});
-    const OPTION_DETAILS_wake_chime_sound = {"Bell Ping (Default)":{"cadence":"Single tone (880Hz)","desc":"Clean, crisp resonant bell with exponential acoustic decay (CC0)"},"Modern Chime":{"cadence":"Two-tone ascending chord","desc":"Modern minimalist crisp ascending harmonic chime (Kenney CC0)"},"Crystal Glass":{"cadence":"Crystal ping resonance","desc":"Modern minimalist delicate crystal resonance ping (CC0)"},"Warm Kalimba":{"cadence":"Dual-tine acoustic strike","desc":"Organic acoustic thumb piano with wooden body resonance (CC0)"},"Meditation Bell":{"cadence":"Tibetan singing bowl","desc":"Organic acoustic singing bowl with deep harmonic decay (CC0)"},"Marimba":{"cadence":"Harmonic triad (523Hz, 659Hz, 784Hz)","desc":"Organic mellow wooden marimba strike for discreet ambient homes (CC0)"},"Subtle Beep":{"cadence":"Discrete blip (600Hz, 80ms)","desc":"Minimal unobtrusive tick tone for quiet environments (CC0)"},"Bamboo Chime":{"cadence":"Natural bamboo wind chime","desc":"Organic acoustic hollow bamboo tubes resonant strike (CC0)"},"Tibetan Bowl":{"cadence":"Himalayan brass bowl (432Hz)","desc":"Organic acoustic singing bowl with golden overtone bloom (CC0)"},"Acoustic Harp":{"cadence":"Concert harp pluck","desc":"Organic acoustic ascending two-string concert harp pluck (CC-BY dobroide)"},"Woodblock":{"cadence":"Hardwood temple block","desc":"Organic natural rosewood temple block strike (Kenney CC0)"},"Ceramic Bell":{"cadence":"Glazed porcelain bell","desc":"Organic crystalline earthenware bell with high-frequency glaze shimmer (CC0)"},"Neon Shimmer":{"cadence":"Lush analog FM chord","desc":"Modern digital warm FM synth chord with soft glowing decay (Kenney CC0)"},"Prism Ping":{"cadence":"Glass-digital harmonic ping","desc":"Modern digital pristine glass-synth chime with overtone sparkle (CC0)"},"Cyber Bloom":{"cadence":"Ascending synth arpeggio","desc":"Modern digital ascending D5-A5-D6 synth arpeggio (Kenney CC0)"},"Quantum Beep":{"cadence":"Precision micro-tone","desc":"Modern digital precision dual-transient interface acknowledge (Kenney CC0)"},"Aero Chime":{"cadence":"Spatial synth swell","desc":"Modern digital airy spatial two-tone electronic acknowledgement (CC0)"},"Silent":{"cadence":"No sound","desc":"Completely silent wake without audible acknowledgement"},"Custom Chime Audio":{"cadence":"User audio","desc":"Plays custom audio from flash partition chime_data"}};
-    const select_wake_chime_sound = document.getElementById('field_wake_chime_sound');
-    const presetView_wake_chime_sound = document.getElementById('presetView_wake_chime_sound');
-    const customSlot_wake_chime_sound = document.querySelector('.custom-slot[data-depends-on="wake_chime_sound"]');
-    const cadence_wake_chime_sound = document.getElementById('presetCadence_wake_chime_sound');
-    const desc_wake_chime_sound = document.getElementById('presetDesc_wake_chime_sound');
-    const btn_wake_chime_sound = document.getElementById('previewBtn_wake_chime_sound');
-    function updatePreset_wake_chime_sound() {
+    const OPTION_DETAILS_wake_chimes = {"Bell Ping (Default)":{"cadence":"Single tone (880Hz)","desc":"Clean, crisp resonant bell with exponential acoustic decay (CC0)"},"Modern Chime":{"cadence":"Two-tone ascending chord","desc":"Modern minimalist crisp ascending harmonic chime (Kenney CC0)"},"Crystal Glass":{"cadence":"Crystal ping resonance","desc":"Modern minimalist delicate crystal resonance ping (CC0)"},"Warm Kalimba":{"cadence":"Dual-tine acoustic strike","desc":"Organic acoustic thumb piano with wooden body resonance (CC0)"},"Meditation Bell":{"cadence":"Tibetan singing bowl","desc":"Organic acoustic singing bowl with deep harmonic decay (CC0)"},"Marimba":{"cadence":"Harmonic triad (523Hz, 659Hz, 784Hz)","desc":"Organic mellow wooden marimba strike for discreet ambient homes (CC0)"},"Subtle Beep":{"cadence":"Discrete blip (600Hz, 80ms)","desc":"Minimal unobtrusive tick tone for quiet environments (CC0)"},"Bamboo Chime":{"cadence":"Natural bamboo wind chime","desc":"Organic acoustic hollow bamboo tubes resonant strike (CC0)"},"Tibetan Bowl":{"cadence":"Himalayan brass bowl (432Hz)","desc":"Organic acoustic singing bowl with golden overtone bloom (CC0)"},"Acoustic Harp":{"cadence":"Concert harp pluck","desc":"Organic acoustic ascending two-string concert harp pluck (CC-BY dobroide)"},"Woodblock":{"cadence":"Hardwood temple block","desc":"Organic natural rosewood temple block strike (Kenney CC0)"},"Ceramic Bell":{"cadence":"Glazed porcelain bell","desc":"Organic crystalline earthenware bell with high-frequency glaze shimmer (CC0)"},"Neon Shimmer":{"cadence":"Lush analog FM chord","desc":"Modern digital warm FM synth chord with soft glowing decay (Kenney CC0)"},"Prism Ping":{"cadence":"Glass-digital harmonic ping","desc":"Modern digital pristine glass-synth chime with overtone sparkle (CC0)"},"Cyber Bloom":{"cadence":"Ascending synth arpeggio","desc":"Modern digital ascending D5-A5-D6 synth arpeggio (Kenney CC0)"},"Quantum Beep":{"cadence":"Precision micro-tone","desc":"Modern digital precision dual-transient interface acknowledge (Kenney CC0)"},"Aero Chime":{"cadence":"Spatial synth swell","desc":"Modern digital airy spatial two-tone electronic acknowledgement (CC0)"}};
+    const select_wake_chimes = document.getElementById('field_wake_chimes');
+    const cadence_wake_chimes = document.getElementById('presetCadence_wake_chimes');
+    const desc_wake_chimes = document.getElementById('presetDesc_wake_chimes');
+    const btn_wake_chimes = document.getElementById('previewBtn_wake_chimes');
+    function updateShowcase_wake_chimes() {
       stopAudioPreview();
-      const val = select_wake_chime_sound.value;
-      const isCustom = val.startsWith('Custom');
-      const isSilent = val.startsWith('Silent');
-      if (isCustom) {
-        if (presetView_wake_chime_sound) presetView_wake_chime_sound.style.display = 'none';
-        if (customSlot_wake_chime_sound) {
-          customSlot_wake_chime_sound.style.setProperty('display', 'block', 'important');
-          customSlot_wake_chime_sound.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = false);
-        }
-        if (btn_wake_chime_sound) {
-          btn_wake_chime_sound.style.display = 'inline-flex';
-          btn_wake_chime_sound.innerHTML = ICONS.play + ' <span>Preview Custom Audio</span>';
-        }
-      } else {
-        if (customSlot_wake_chime_sound) {
-          customSlot_wake_chime_sound.style.setProperty('display', 'none', 'important');
-          customSlot_wake_chime_sound.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = true);
-        }
-        if (presetView_wake_chime_sound) presetView_wake_chime_sound.style.display = 'block';
-        if (isSilent) {
-          if (cadence_wake_chime_sound) cadence_wake_chime_sound.textContent = 'Muted';
-          if (desc_wake_chime_sound) desc_wake_chime_sound.textContent = 'Silent mode without audible cues.';
-          if (btn_wake_chime_sound) btn_wake_chime_sound.style.display = 'none';
-        } else {
-          const info = OPTION_DETAILS_wake_chime_sound[val] || { cadence: '', desc: '' };
-          if (cadence_wake_chime_sound) cadence_wake_chime_sound.textContent = info.cadence;
-          if (desc_wake_chime_sound) desc_wake_chime_sound.textContent = info.desc;
-          if (btn_wake_chime_sound) {
-            btn_wake_chime_sound.style.display = 'inline-flex';
-            btn_wake_chime_sound.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
-          }
-        }
-      }
-      updateFieldDependencies();
-      checkInstallReadiness();
+      const val = select_wake_chimes.value;
+      const info = OPTION_DETAILS_wake_chimes[val] || { cadence: '', desc: '' };
+      if (cadence_wake_chimes) cadence_wake_chimes.textContent = info.cadence;
+      if (desc_wake_chimes) desc_wake_chimes.textContent = info.desc;
     }
-    if (select_wake_chime_sound) {
-      select_wake_chime_sound.addEventListener('change', updatePreset_wake_chime_sound);
-      updatePreset_wake_chime_sound();
+    if (select_wake_chimes) {
+      select_wake_chimes.addEventListener('change', updateShowcase_wake_chimes);
+      updateShowcase_wake_chimes();
     }
-    if (btn_wake_chime_sound) {
-      btn_wake_chime_sound.addEventListener('click', () => {
-        playPresetAudio(select_wake_chime_sound.value, btn_wake_chime_sound);
+    if (btn_wake_chimes) {
+      btn_wake_chimes.addEventListener('click', () => {
+        playPresetAudio(select_wake_chimes.value, btn_wake_chimes);
       });
     }
-    const fileInput_custom_chime_audio = document.getElementById('field_custom_chime_audio');
-    const status_custom_chime_audio = document.getElementById('status_custom_chime_audio');
-    if (fileInput_custom_chime_audio) {
-      fileInput_custom_chime_audio.addEventListener('change', (e) => {
-        stopAudioPreview();
-        const file = e.target.files[0];
-        if (!file) {
-          uploadedParts.delete('custom_chime_audio');
-          delete cachedFileStore['custom_chime_audio'];
-          updateDynamicManifest();
-          checkInstallReadiness();
-          saveInstallerState();
-          return;
-        }
-        const maxSizeBytes = parseInt(fileInput_custom_chime_audio.dataset.maxsize || '262144', 10);
-        if (file.size > maxSizeBytes) {
-          alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
-          fileInput_custom_chime_audio.value = '';
-          return;
-        }
-        const offset = parseInt(fileInput_custom_chime_audio.dataset.offset || '0', 10);
-        const blobUrl = URL.createObjectURL(file);
-        uploadedParts.set('custom_chime_audio', { url: blobUrl, offset: offset, name: file.name, size: file.size });
-        if (status_custom_chime_audio) {
-          status_custom_chime_audio.style.display = 'block';
-          status_custom_chime_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-file" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
-          const clrBtn = status_custom_chime_audio.querySelector('.btn-clear-file');
-          if (clrBtn) {
-            clrBtn.addEventListener('click', () => {
-              fileInput_custom_chime_audio.value = '';
-              uploadedParts.delete('custom_chime_audio');
-              delete cachedFileStore['custom_chime_audio'];
-              status_custom_chime_audio.style.display = 'none';
-              updateDynamicManifest();
-              checkInstallReadiness();
-              saveInstallerState();
-            });
-          }
-        }
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          try {
-            const arrBuf = evt.target.result;
-            const u8 = new Uint8Array(arrBuf);
-            cachedFileStore['custom_chime_audio'] = {
-              name: file.name,
-              size: file.size,
-              type: file.type || 'audio/wav',
-              offset: offset,
-              b64: uint8ToBase64(u8)
-            };
-            saveInstallerState();
-          } catch (err) {
-            console.warn('Could not cache file:', err);
-          }
-        };
-        reader.readAsArrayBuffer(file);
-        const depSelect = document.getElementById('field_wake_chime_sound');
-        if (depSelect) {
-          depSelect.value = 'Custom Chime Audio';
-          depSelect.dispatchEvent(new Event('change'));
-        }
-        updateDynamicManifest();
-        checkInstallReadiness();
-      });
-    }
-    Object.assign(PRESET_AUDIO, {"Spinner":{"preview":"sounds/spinner.mp3","flash":"sounds/spinner.wav","offset":3604480},"Pulse":{"preview":"sounds/pulse.mp3","flash":"sounds/pulse.wav","offset":3604480},"Sonar":{"preview":"sounds/sonar.mp3","flash":"sounds/sonar.wav","offset":3604480},"Tick":{"preview":"sounds/tick.mp3","flash":"sounds/tick.wav","offset":3604480},"Typewriter":{"preview":"sounds/typewriter.mp3","flash":"sounds/typewriter.wav","offset":3604480},"Clockwork":{"preview":"sounds/clockwork.mp3","flash":"sounds/clockwork.wav","offset":3604480},"Water Droplets":{"preview":"sounds/water-droplets.mp3","flash":"sounds/water-droplets.wav","offset":3604480},"Raindrops":{"preview":"sounds/raindrops.mp3","flash":"sounds/raindrops.wav","offset":3604480},"Forest Stream":{"preview":"sounds/forest-stream.mp3","flash":"sounds/forest-stream.wav","offset":3604480},"Campfire Ember":{"preview":"sounds/campfire-ember.mp3","flash":"sounds/campfire-ember.wav","offset":3604480},"Shishi-Odoshi":{"preview":"sounds/shishi-odoshi.mp3","flash":"sounds/shishi-odoshi.wav","offset":3604480},"Soft Footsteps":{"preview":"sounds/soft-footsteps.mp3","flash":"sounds/soft-footsteps.wav","offset":3604480},"Radar Ping":{"preview":"sounds/radar-ping.mp3","flash":"sounds/radar-ping.wav","offset":3604480},"Data Crunch":{"preview":"sounds/data-crunch.mp3","flash":"sounds/data-crunch.wav","offset":3604480},"Telemetry Blip":{"preview":"sounds/telemetry-blip.mp3","flash":"sounds/telemetry-blip.wav","offset":3604480},"Quantum Flux":{"preview":"sounds/quantum-flux.mp3","flash":"sounds/quantum-flux.wav","offset":3604480},"Retro Terminal":{"preview":"sounds/retro-terminal.mp3","flash":"sounds/retro-terminal.wav","offset":3604480}});
-    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback (Kenney CC0)"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence (CC0)"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking (CC0)"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing (Kenney CC0)"},"Typewriter":{"cadence":"Mechanical rhythm","desc":"Soft acoustic typewriter keystrokes and mechanical chatter during LLM processing (CC0)"},"Clockwork":{"cadence":"Watchmaker escapement","desc":"Modern minimalist precision escapement tick-tock with subtle gear movement (CC0)"},"Water Droplets":{"cadence":"Bubbly acoustic resonance","desc":"Organic acoustic water droplets dripping into a calm pool (CC0)"},"Raindrops":{"cadence":"Rain on foliage cadence","desc":"Organic acoustic raindrops tapping softly on broad forest leaves (CC0)"},"Forest Stream":{"cadence":"Mountain brook flow","desc":"Organic gentle bubbling mountain brook stream with water eddies (CC0)"},"Campfire Ember":{"cadence":"Wood crackle & pops","desc":"Organic cozy woodfire crackles and soft ember pops (CC0)"},"Shishi-Odoshi":{"cadence":"Bamboo rocker on stone","desc":"Organic Japanese bamboo water rocker trickle and stone clack (CC-BY sonicfury)"},"Soft Footsteps":{"cadence":"Paced footsteps on wood","desc":"Organic subtle leather steps on hardwood indicating active thought (CC0)"},"Radar Ping":{"cadence":"Sci-fi radar pulse","desc":"Modern digital periodic radar sweep with resonant acoustic decay (Kenney CC0)"},"Data Crunch":{"cadence":"Telemetry packet chatter","desc":"Modern digital micro-packet processing chatter rhythm (CC0)"},"Telemetry Blip":{"cadence":"Satellite tracking pulse","desc":"Modern digital dual-harmonic instrument tracking blips (Kenney CC0)"},"Quantum Flux":{"cadence":"LFO analog undulation","desc":"Modern digital smooth undulating electronic rhythm (CC0)"},"Retro Terminal":{"cadence":"Relay & tape flutter","desc":"Modern digital vintage computer relay clicks and magnetic tape chatter (CC0)"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
-    const select_default_sound_style = document.getElementById('field_default_sound_style');
-    const presetView_default_sound_style = document.getElementById('presetView_default_sound_style');
-    const customSlot_default_sound_style = document.querySelector('.custom-slot[data-depends-on="default_sound_style"]');
-    const cadence_default_sound_style = document.getElementById('presetCadence_default_sound_style');
-    const desc_default_sound_style = document.getElementById('presetDesc_default_sound_style');
-    const btn_default_sound_style = document.getElementById('previewBtn_default_sound_style');
-    function updatePreset_default_sound_style() {
+    Object.assign(PRESET_AUDIO, {"Spinner (Default)":{"preview":"sounds/spinner.mp3","flash":"sounds/spinner.wav","offset":3604480},"Pulse":{"preview":"sounds/pulse.mp3","flash":"sounds/pulse.wav","offset":3604480},"Sonar":{"preview":"sounds/sonar.mp3","flash":"sounds/sonar.wav","offset":3604480},"Tick":{"preview":"sounds/tick.mp3","flash":"sounds/tick.wav","offset":3604480},"Typewriter":{"preview":"sounds/typewriter.mp3","flash":"sounds/typewriter.wav","offset":3604480},"Clockwork":{"preview":"sounds/clockwork.mp3","flash":"sounds/clockwork.wav","offset":3604480},"Water Droplets":{"preview":"sounds/water-droplets.mp3","flash":"sounds/water-droplets.wav","offset":3604480},"Raindrops":{"preview":"sounds/raindrops.mp3","flash":"sounds/raindrops.wav","offset":3604480},"Forest Stream":{"preview":"sounds/forest-stream.mp3","flash":"sounds/forest-stream.wav","offset":3604480},"Campfire Ember":{"preview":"sounds/campfire-ember.mp3","flash":"sounds/campfire-ember.wav","offset":3604480},"Shishi-Odoshi":{"preview":"sounds/shishi-odoshi.mp3","flash":"sounds/shishi-odoshi.wav","offset":3604480},"Soft Footsteps":{"preview":"sounds/soft-footsteps.mp3","flash":"sounds/soft-footsteps.wav","offset":3604480},"Radar Ping":{"preview":"sounds/radar-ping.mp3","flash":"sounds/radar-ping.wav","offset":3604480},"Data Crunch":{"preview":"sounds/data-crunch.mp3","flash":"sounds/data-crunch.wav","offset":3604480},"Telemetry Blip":{"preview":"sounds/telemetry-blip.mp3","flash":"sounds/telemetry-blip.wav","offset":3604480},"Quantum Flux":{"preview":"sounds/quantum-flux.mp3","flash":"sounds/quantum-flux.wav","offset":3604480},"Retro Terminal":{"preview":"sounds/retro-terminal.mp3","flash":"sounds/retro-terminal.wav","offset":3604480}});
+    const OPTION_DETAILS_processing_sounds = {"Spinner (Default)":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback (Kenney CC0)"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence (CC0)"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking (CC0)"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing (Kenney CC0)"},"Typewriter":{"cadence":"Mechanical rhythm","desc":"Soft acoustic typewriter keystrokes and mechanical chatter during LLM processing (CC0)"},"Clockwork":{"cadence":"Watchmaker escapement","desc":"Precision escapement tick-tock with seamless loop timing (CC0)"},"Water Droplets":{"cadence":"Bubbly acoustic resonance","desc":"Organic acoustic water droplets dripping into a calm pool (CC0)"},"Raindrops":{"cadence":"Rain on foliage cadence","desc":"Organic acoustic raindrops tapping softly on broad forest leaves (CC0)"},"Forest Stream":{"cadence":"Mountain brook flow","desc":"Organic gentle bubbling mountain brook stream with water eddies (CC0)"},"Campfire Ember":{"cadence":"Wood crackle & pops","desc":"Organic cozy woodfire crackles and soft ember pops (CC0)"},"Shishi-Odoshi":{"cadence":"Bamboo rocker on stone","desc":"Organic Japanese bamboo water rocker trickle and stone clack (CC-BY sonicfury)"},"Soft Footsteps":{"cadence":"Paced footsteps on wood","desc":"Organic subtle leather steps on hardwood indicating active thought (CC0)"},"Radar Ping":{"cadence":"Sci-fi radar pulse","desc":"Modern digital periodic radar sweep with resonant acoustic decay (Kenney CC0)"},"Data Crunch":{"cadence":"Telemetry packet chatter","desc":"Modern digital micro-packet processing chatter rhythm (CC0)"},"Telemetry Blip":{"cadence":"Satellite tracking pulse","desc":"Modern digital dual-harmonic instrument tracking blips (Kenney CC0)"},"Quantum Flux":{"cadence":"LFO analog undulation","desc":"Modern digital smooth undulating electronic rhythm (CC0)"},"Retro Terminal":{"cadence":"Relay & tape flutter","desc":"Modern digital vintage computer relay clicks and magnetic tape chatter (CC0)"}};
+    const select_processing_sounds = document.getElementById('field_processing_sounds');
+    const cadence_processing_sounds = document.getElementById('presetCadence_processing_sounds');
+    const desc_processing_sounds = document.getElementById('presetDesc_processing_sounds');
+    const btn_processing_sounds = document.getElementById('previewBtn_processing_sounds');
+    function updateShowcase_processing_sounds() {
       stopAudioPreview();
-      const val = select_default_sound_style.value;
-      const isCustom = val.startsWith('Custom');
-      const isSilent = val.startsWith('Silent');
-      if (isCustom) {
-        if (presetView_default_sound_style) presetView_default_sound_style.style.display = 'none';
-        if (customSlot_default_sound_style) {
-          customSlot_default_sound_style.style.setProperty('display', 'block', 'important');
-          customSlot_default_sound_style.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = false);
-        }
-        if (btn_default_sound_style) {
-          btn_default_sound_style.style.display = 'inline-flex';
-          btn_default_sound_style.innerHTML = ICONS.play + ' <span>Preview Custom Audio</span>';
-        }
-      } else {
-        if (customSlot_default_sound_style) {
-          customSlot_default_sound_style.style.setProperty('display', 'none', 'important');
-          customSlot_default_sound_style.querySelectorAll('input, select, button, textarea').forEach(el => el.disabled = true);
-        }
-        if (presetView_default_sound_style) presetView_default_sound_style.style.display = 'block';
-        if (isSilent) {
-          if (cadence_default_sound_style) cadence_default_sound_style.textContent = 'Muted';
-          if (desc_default_sound_style) desc_default_sound_style.textContent = 'Silent mode without audible cues.';
-          if (btn_default_sound_style) btn_default_sound_style.style.display = 'none';
-        } else {
-          const info = OPTION_DETAILS_default_sound_style[val] || { cadence: '', desc: '' };
-          if (cadence_default_sound_style) cadence_default_sound_style.textContent = info.cadence;
-          if (desc_default_sound_style) desc_default_sound_style.textContent = info.desc;
-          if (btn_default_sound_style) {
-            btn_default_sound_style.style.display = 'inline-flex';
-            btn_default_sound_style.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
-          }
-        }
-      }
-      updateFieldDependencies();
-      checkInstallReadiness();
+      const val = select_processing_sounds.value;
+      const info = OPTION_DETAILS_processing_sounds[val] || { cadence: '', desc: '' };
+      if (cadence_processing_sounds) cadence_processing_sounds.textContent = info.cadence;
+      if (desc_processing_sounds) desc_processing_sounds.textContent = info.desc;
     }
-    if (select_default_sound_style) {
-      select_default_sound_style.addEventListener('change', updatePreset_default_sound_style);
-      updatePreset_default_sound_style();
+    if (select_processing_sounds) {
+      select_processing_sounds.addEventListener('change', updateShowcase_processing_sounds);
+      updateShowcase_processing_sounds();
     }
-    if (btn_default_sound_style) {
-      btn_default_sound_style.addEventListener('click', () => {
-        playPresetAudio(select_default_sound_style.value, btn_default_sound_style);
+    if (btn_processing_sounds) {
+      btn_processing_sounds.addEventListener('click', () => {
+        playPresetAudio(select_processing_sounds.value, btn_processing_sounds);
       });
     }
-    const fileInput_custom_audio = document.getElementById('field_custom_audio');
-    const status_custom_audio = document.getElementById('status_custom_audio');
-    if (fileInput_custom_audio) {
-      fileInput_custom_audio.addEventListener('change', (e) => {
-        stopAudioPreview();
-        const file = e.target.files[0];
-        if (!file) {
-          uploadedParts.delete('custom_audio');
-          delete cachedFileStore['custom_audio'];
-          updateDynamicManifest();
-          checkInstallReadiness();
-          saveInstallerState();
-          return;
-        }
-        const maxSizeBytes = parseInt(fileInput_custom_audio.dataset.maxsize || '262144', 10);
-        if (file.size > maxSizeBytes) {
-          alert('File exceeds maximum allowed size of ' + Math.round(maxSizeBytes / 1024) + ' KB');
-          fileInput_custom_audio.value = '';
-          return;
-        }
-        const offset = parseInt(fileInput_custom_audio.dataset.offset || '0', 10);
-        const blobUrl = URL.createObjectURL(file);
-        uploadedParts.set('custom_audio', { url: blobUrl, offset: offset, name: file.name, size: file.size });
-        if (status_custom_audio) {
-          status_custom_audio.style.display = 'block';
-          status_custom_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-file" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
-          const clrBtn = status_custom_audio.querySelector('.btn-clear-file');
-          if (clrBtn) {
-            clrBtn.addEventListener('click', () => {
-              fileInput_custom_audio.value = '';
-              uploadedParts.delete('custom_audio');
-              delete cachedFileStore['custom_audio'];
-              status_custom_audio.style.display = 'none';
-              updateDynamicManifest();
-              checkInstallReadiness();
-              saveInstallerState();
-            });
-          }
-        }
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          try {
-            const arrBuf = evt.target.result;
-            const u8 = new Uint8Array(arrBuf);
-            cachedFileStore['custom_audio'] = {
-              name: file.name,
-              size: file.size,
-              type: file.type || 'audio/wav',
-              offset: offset,
-              b64: uint8ToBase64(u8)
-            };
-            saveInstallerState();
-          } catch (err) {
-            console.warn('Could not cache file:', err);
-          }
-        };
-        reader.readAsArrayBuffer(file);
-        const depSelect = document.getElementById('field_default_sound_style');
-        if (depSelect) {
-          depSelect.value = 'Custom';
-          depSelect.dispatchEvent(new Event('change'));
-        }
-        updateDynamicManifest();
-        checkInstallReadiness();
+    Object.assign(PRESET_AUDIO, {"Bell Ping (Default)":{"preview":"sounds/cancel-bell-ping.mp3","flash":"sounds/cancel-bell-ping.wav","offset":3604480},"Modern Chime":{"preview":"sounds/cancel-modern-chime.mp3","flash":"sounds/cancel-modern-chime.wav","offset":3604480},"Crystal Glass":{"preview":"sounds/cancel-crystal-glass.mp3","flash":"sounds/cancel-crystal-glass.wav","offset":3604480},"Warm Kalimba":{"preview":"sounds/cancel-warm-kalimba.mp3","flash":"sounds/cancel-warm-kalimba.wav","offset":3604480},"Meditation Bell":{"preview":"sounds/cancel-meditation-bell.mp3","flash":"sounds/cancel-meditation-bell.wav","offset":3604480},"Marimba":{"preview":"sounds/cancel-marimba.mp3","flash":"sounds/cancel-marimba.wav","offset":3604480},"Subtle Beep":{"preview":"sounds/cancel-subtle-beep.mp3","flash":"sounds/cancel-subtle-beep.wav","offset":3604480},"Bamboo Chime":{"preview":"sounds/cancel-bamboo-chime.mp3","flash":"sounds/cancel-bamboo-chime.wav","offset":3604480},"Tibetan Bowl":{"preview":"sounds/cancel-tibetan-bowl.mp3","flash":"sounds/cancel-tibetan-bowl.wav","offset":3604480},"Acoustic Harp":{"preview":"sounds/cancel-acoustic-harp.mp3","flash":"sounds/cancel-acoustic-harp.wav","offset":3604480},"Woodblock":{"preview":"sounds/cancel-woodblock.mp3","flash":"sounds/cancel-woodblock.wav","offset":3604480},"Ceramic Bell":{"preview":"sounds/cancel-ceramic-bell.mp3","flash":"sounds/cancel-ceramic-bell.wav","offset":3604480},"Neon Shimmer":{"preview":"sounds/cancel-neon-shimmer.mp3","flash":"sounds/cancel-neon-shimmer.wav","offset":3604480},"Prism Ping":{"preview":"sounds/cancel-prism-ping.mp3","flash":"sounds/cancel-prism-ping.wav","offset":3604480},"Cyber Bloom":{"preview":"sounds/cancel-cyber-bloom.mp3","flash":"sounds/cancel-cyber-bloom.wav","offset":3604480},"Quantum Beep":{"preview":"sounds/cancel-quantum-beep.mp3","flash":"sounds/cancel-quantum-beep.wav","offset":3604480},"Aero Chime":{"preview":"sounds/cancel-aero-chime.mp3","flash":"sounds/cancel-aero-chime.wav","offset":3604480}});
+    const OPTION_DETAILS_cancel_sounds = {"Bell Ping (Default)":{"cadence":"Descending bell tone","desc":"Crisp descending bell cancellation tone (CC0)"},"Modern Chime":{"cadence":"Two-tone descending chord","desc":"Clean downward harmonic resolve (Kenney CC0)"},"Crystal Glass":{"cadence":"Downward crystal ping","desc":"Gentle descending crystal note (CC0)"},"Warm Kalimba":{"cadence":"Dual-tine downward strike","desc":"Warm downward wooden thumb piano resolve (CC0)"},"Meditation Bell":{"cadence":"Descending brass resonance","desc":"Gentle calming singing bowl dampening tone (CC0)"},"Marimba":{"cadence":"Descending wooden triad","desc":"Discreet descending marimba strike (CC0)"},"Subtle Beep":{"cadence":"Descending blip (80ms)","desc":"Minimal downward cancellation tick (CC0)"},"Bamboo Chime":{"cadence":"Descending bamboo tap","desc":"Natural wood tap cancellation (CC0)"},"Tibetan Bowl":{"cadence":"Calm bowl release","desc":"Warm resonant bowl release tone (CC0)"},"Acoustic Harp":{"cadence":"Descending harp pluck","desc":"Gentle downward acoustic harp glissando note (CC-BY dobroide)"},"Woodblock":{"cadence":"Downward temple block","desc":"Natural temple block cancellation click (Kenney CC0)"},"Ceramic Bell":{"cadence":"Porcelain dampening","desc":"High-frequency earthenware tone release (CC0)"},"Neon Shimmer":{"cadence":"Descending FM synth","desc":"Warm analog FM downward sweep (Kenney CC0)"},"Prism Ping":{"cadence":"Descending glass sparkle","desc":"Digital downward prism tone (CC0)"},"Cyber Bloom":{"cadence":"Descending synth arpeggio","desc":"Futuristic descending electronic resolve (Kenney CC0)"},"Quantum Beep":{"cadence":"Dual-tone micro abort","desc":"Fast low-profile cancellation beep (Kenney CC0)"},"Aero Chime":{"cadence":"Descending spatial swell","desc":"Spatial downward atmospheric electronic note (CC0)"}};
+    const select_cancel_sounds = document.getElementById('field_cancel_sounds');
+    const cadence_cancel_sounds = document.getElementById('presetCadence_cancel_sounds');
+    const desc_cancel_sounds = document.getElementById('presetDesc_cancel_sounds');
+    const btn_cancel_sounds = document.getElementById('previewBtn_cancel_sounds');
+    function updateShowcase_cancel_sounds() {
+      stopAudioPreview();
+      const val = select_cancel_sounds.value;
+      const info = OPTION_DETAILS_cancel_sounds[val] || { cadence: '', desc: '' };
+      if (cadence_cancel_sounds) cadence_cancel_sounds.textContent = info.cadence;
+      if (desc_cancel_sounds) desc_cancel_sounds.textContent = info.desc;
+    }
+    if (select_cancel_sounds) {
+      select_cancel_sounds.addEventListener('change', updateShowcase_cancel_sounds);
+      updateShowcase_cancel_sounds();
+    }
+    if (btn_cancel_sounds) {
+      btn_cancel_sounds.addEventListener('click', () => {
+        playPresetAudio(select_cancel_sounds.value, btn_cancel_sounds);
       });
     }
     document.querySelectorAll('select, input').forEach(el => {

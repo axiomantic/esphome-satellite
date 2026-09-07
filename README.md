@@ -84,7 +84,11 @@ Once the board has rebooted into ESPHome, connect using either method:
 
 1. In Home Assistant, navigate to **Settings > Voice Assistants**.
 2. Assign the satellite to your desired voice pipeline (Home Assistant Cloud, Whisper/Piper, or local Ollama LLM).
-3. On the device card in Home Assistant, you can change your **Wake Chime** (*Modern Chime*, *Crystal Glass*, *Warm Kalimba*, *Meditation Bell*, *Bell Ping*, *Marimba*, *Subtle Beep*) and **Processing Sound** (*Typewriter*, *Clockwork*, *Water Droplets*, *Spinner*, *Pulse*, *Sonar*, *Tick*) at any time!
+3. On the device card in Home Assistant, customize your audio feedback across 17 pre-compiled acoustic themes:
+   - **Wake Chime**: *Bell Ping*, *Modern Chime*, *Crystal Glass*, *Warm Kalimba*, *Meditation Bell*, *Marimba*, *Subtle Beep*, *Bamboo Chime*, *Tibetan Bowl*, *Acoustic Harp*, *Woodblock*, *Ceramic Bell*, *Neon Shimmer*, *Prism Ping*, *Cyber Bloom*, *Quantum Beep*, *Aero Chime*, or *Silent*.
+   - **Processing Sound**: *Spinner*, *Pulse*, *Sonar*, *Tick*, *Typewriter*, *Clockwork* (seamless zero-gap loop), *Water Droplets*, *Raindrops*, *Forest Stream*, *Campfire Ember*, *Shishi-Odoshi*, *Soft Footsteps*, *Radar Ping*, *Data Crunch*, *Telemetry Blip*, *Quantum Flux*, *Retro Terminal*, or *Silent*.
+   - **Cancel Sound**: *Match Wake Chime*, any of the 17 themed cancel resolves, or *Silent*.
+   - **Active Wake Word**: *Mr. Clemens*, *Okay Nabu*, your flashed custom wake word model, or *All*.
 
 > **Manual / Source Builds**: See the full [**Integration Guide for ESPHome**](#integration-guide-for-esphome) below for custom YAML overrides, external component configuration, and C ABI bridge bindings.
 
@@ -391,15 +395,16 @@ packages:
 
 ---
 
-## Audio Feedback & Processing Sound Loop
+## Audio Feedback, Processing Loops & Cancel Sounds
 
 When a user finishes speaking, voice assistants often experience variable cloud latencies (1-5 seconds) while Speech-to-Text (STT) and Large Language Models (LLM) synthesize a response. Without feedback, users wonder if their command was received.
 
-`esphome-satellite` implements a non-blocking, zero-allocation audio processing loop:
+`esphome-satellite` implements a non-blocking, zero-allocation audio processing engine:
 
-- **Automatic Start**: When VAD detects speech has finished (`onSpeechEnded`), the processing loop immediately starts playing continuous cadence ticks or chimes.
-- **Immediate Interruption**: As soon as the first TTS audio packet arrives (`onTtsStarted`), or if a stop word/error occurs, the loop stops immediately with zero tail latency.
-- **Configurable Styles**: Select from multiple sound designs (`Silent`, `Spinner`, `Pulse`, `Sonar`, `Tick`) directly from Home Assistant.
+- **17 Pre-compiled Acoustic Themes**: Includes 17 matching sets of Wake Chimes, Processing Loops, and Cancel Sounds encoded as compact high-fidelity IMA-ADPCM in flash.
+- **Seamless Zero-Gap Processing Loops**: The clockwork, spinner, pulse, and stream loops are mathematically tuned for continuous, seamless looping without rhythm stutter.
+- **Dedicated Cancel Sounds**: Playing when a cancellation word (*"stop"*, *"cancel"*, *"nevermind"*) is spoken or voice interaction times out.
+- **Custom Wake Word Flash-at-Install**: Upload any microWakeWord `.tflite` model directly in the browser installer. Pre-compiled firmware detects the partition header at boot, loads the model, and exposes it in Home Assistant.
 
 ---
 
@@ -407,12 +412,19 @@ When a user finishes speaking, voice assistants often experience variable cloud 
 
 `esphome-satellite` exposes native Home Assistant entities generated via `nim-esphome`'s declarative controls DSL, enabling runtime configuration from your dashboards without reflashing:
 
-| Entity ID | Domain | Type / Range | Description |
+| Entity ID | Domain | Type / Options | Description |
 |---|---|---|---|
-| `select.processing_sound` | `select` | `Silent`, `Spinner`, `Pulse`, `Sonar`, `Tick` | Audio loop style played while the server processes the command. |
-| `number.processing_sound_volume` | `number` | `0` – `100%` (step `5%`) | Volume level for the intermediate processing loop audio. |
-| `switch.wake_chime` | `switch` | `on` / `off` | Toggles whether the satellite plays an acknowledgement chime on wake word. |
-| `number.wake_chime_volume` | `number` | `0` – `100%` (step `5%`) | Volume level for the wake acknowledgement chime. |
+| `select.active_wake_word` | `select` | `Mr. Clemens`, `Okay Nabu`, `<Custom Model>`, `All` | Active wake word detection model run on-device. |
+| `select.wake_chime_sound` | `select` | 17 Acoustic Themes, `Silent` | Acknowledgement chime played immediately upon wake word detection. |
+| `switch.wake_chime` | `switch` | `on` / `off` | Master toggle for wake acknowledgement chime playback. |
+| `number.wake_chime_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for wake chimes. |
+| `select.processing_sound` | `select` | 17 Acoustic Themes, `Silent` | Continuous audio loop played while speech is processing. |
+| `switch.processing_sound_switch` | `switch` | `on` / `off` | Master toggle for intermediate processing audio loop. |
+| `number.processing_sound_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for intermediate processing loop. |
+| `select.cancel_sound` | `select` | `Match Wake Chime`, 17 Acoustic Themes, `Silent` | Audible resolve played when speech recognition is cancelled or times out. |
+| `switch.cancel_sound_switch` | `switch` | `on` / `off` | Master toggle for cancel sound playback. |
+| `number.cancel_sound_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for cancel sounds. |
+| `switch.mic_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |
 
 All control settings are saved to on-device NVS flash memory and persist across power cycles.
 

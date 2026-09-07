@@ -32,7 +32,7 @@ rm -rf packages/.esphome/build/*/src/esphome/components/nim
 
 VERSION=$(grep -E '^\s*version\s*=' esphome_satellite.nimble | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
 echo "Compiling packages/respeaker_xvf3800.yaml for version v$VERSION..."
-"${CMD[@]}" compile -s version "$VERSION" packages/respeaker_xvf3800.yaml
+"${CMD[@]}" -s version "$VERSION" compile packages/respeaker_xvf3800.yaml
 
 # Find factory and ota binaries
 FACTORY_BIN=$(find . -type f -name "firmware.factory.bin" -not -path "*/.git/*" -not -path "./web/*" | head -n 1)
