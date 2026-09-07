@@ -8,6 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>esphome-satellite Web Installer</title>
   <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <script type="module" src="https://unpkg.com/improv-wifi-serial-sdk@2.5.0/dist/web/serial-launch-button.js?module"></script>
   <style>
     :root { --primary: #3b82f6; --primary-hover: #2563eb; --bg: #0b0f19; --card: #151e2e; --card-inner: #0d1524; --text: #f8fafc; --muted: #94a3b8; --border: #24324a; --accent-badge: rgba(16, 185, 129, 0.15); --accent-badge-text: #34d399; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; margin: 0; padding: 24px; display: flex; align-items: center; justify-content: center; }
@@ -76,7 +77,14 @@
     button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
     button.install-btn:hover { background: var(--primary-hover); }
     .action-buttons-row { width: 100%; display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
-    .action-buttons-row esp-web-install-button { flex: 2; min-width: 220px; }
+    .action-buttons-row esp-web-install-button { flex: 2; min-width: 180px; }
+    .action-buttons-row improv-wifi-serial-launch-button { flex: 1.5; min-width: 160px; }
+    button.wifi-btn { background: #0284c7; color: white; border: none; padding: 14px 18px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    button.wifi-btn:hover { background: #0369a1; }
+    .modal-wifi-btn { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+    .modal-wifi-btn:hover { background: #0369a1; }
+    .btn-guide-wifi { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-guide-wifi:hover { background: #0369a1; }
     .erase-btn { flex: 1; min-width: 180px; background: #1e293b; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 14px 18px; font-size: 0.92rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
     .erase-btn:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
     .erase-status { width: 100%; box-sizing: border-box; border-radius: 6px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5; margin-top: 4px; text-align: left; }
@@ -210,9 +218,16 @@
           <button slot="activate" class="install-btn">Install Firmware</button>
           <span slot="unsupported">WebSerial is not supported in this browser. Please use Chrome or Edge on desktop.</span>
         </esp-web-install-button>
+        <improv-wifi-serial-launch-button>
+          <button slot="activate" class="wifi-btn" title="Configure Wi-Fi credentials directly over USB without re-flashing">
+            <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+            <span>Configure Wi-Fi</span>
+          </button>
+          <span slot="unsupported"></span>
+        </improv-wifi-serial-launch-button>
         <button type="button" id="btnEraseDevice" class="erase-btn" title="Completely wipe all flash partitions, cached Wi-Fi credentials, and NVS settings">
           <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          <span>Erase Device (Factory Reset)</span>
+          <span>Erase Device</span>
         </button>
       </div>
       <div id="eraseStatus" class="erase-status" style="display: none;"></div>
@@ -229,8 +244,16 @@
           <div class="step-number">1</div>
           <div class="step-content">
             <h4>Connect to Wi-Fi</h4>
-            <p>Keep the USB cable plugged in. The installer modal will automatically prompt <strong>"CONNECT TO WI-FI"</strong> over WebSerial immediately after flashing finishes. Select your 2.4 GHz network and enter your password.</p>
-            <div class="step-tip"><strong>Fallback Hotspot:</strong> If the prompt is missed or USB is disconnected, connect your phone or laptop to the open Wi-Fi network <code>Satellite Fallback Hotspot</code> and navigate to <code>http://192.168.4.1</code> to enter Wi-Fi credentials.</div>
+            <p>On ESP32-S3 native USB boards, the serial connection drops when the chip reboots after flashing. You can connect your satellite to Wi-Fi using either method below:</p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0;">
+              <improv-wifi-serial-launch-button>
+                <button slot="activate" class="btn-guide-wifi">
+                  <svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                  <span>Configure Wi-Fi via USB (Improv)</span>
+                </button>
+              </improv-wifi-serial-launch-button>
+            </div>
+            <div class="step-tip"><strong>Method B (Fallback Hotspot):</strong> Connect your phone or laptop to the open Wi-Fi network <code>Satellite Fallback Hotspot</code>. The captive portal at <code>http://192.168.4.1</code> opens automatically to enter your Wi-Fi credentials.</div>
           </div>
         </div>
         <div class="guide-step">
@@ -1064,8 +1087,16 @@
           <div class="next-step-item">
             <span class="num">1</span>
             <div>
-              <strong>Connect Wi-Fi:</strong> The browser installer dialog will prompt <strong>"CONNECT TO WI-FI"</strong>. Select your 2.4 GHz network and enter your password.
-              <div class="subtext">If closed or skipped, connect your phone to <code>Satellite Fallback Hotspot</code> and navigate to <code>http://192.168.4.1</code>.</div>
+              <strong>Connect Wi-Fi:</strong> The board has rebooted into your new firmware.
+              <div style="margin: 6px 0;">
+                <improv-wifi-serial-launch-button>
+                  <button slot="activate" class="modal-wifi-btn">
+                    <svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                    <span>Configure Wi-Fi via USB</span>
+                  </button>
+                </improv-wifi-serial-launch-button>
+              </div>
+              <div class="subtext"><strong>Or via Wi-Fi:</strong> Connect your phone or PC to <code>Satellite Fallback Hotspot</code> and open <code>http://192.168.4.1</code>.</div>
             </div>
           </div>
           <div class="next-step-item">
