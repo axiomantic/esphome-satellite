@@ -40,18 +40,37 @@ packages:
 
 Follow these steps right after flashing to connect the satellite to your network and Home Assistant:
 
-1. **Connect to Wi-Fi**:
-   - On your computer or phone, open your Wi-Fi settings and connect to the temporary hotspot named **`Satellite Fallback Hotspot`**.
-   - A captive portal popup will appear automatically (if not, navigate to `http://192.168.4.1` in your browser).
-   - Select your home Wi-Fi network, enter your password, and click **Save**. The satellite will reboot and join your local network.
-2. **Adopt in Home Assistant**:
-   - In Home Assistant, open **Settings > Devices & Services**.
-   - Your satellite will automatically appear under **Discovered** via the ESPHome native API integration.
-   - Click **Configure**, complete the prompts, and assign the satellite to an area.
-3. **Configure Voice Assistant**:
-   - In Home Assistant, navigate to **Settings > Voice Assistants**.
-   - Ensure the satellite is mapped to your desired voice pipeline (such as Home Assistant Cloud, Whisper/Piper, or local LLM pipelines).
-   - Test by speaking your configured wake word (e.g. *"Okay Nabu"*).
+#### Step 1: Power-Cycle the Board (Required on ESP32-S3)
+
+> [!IMPORTANT]
+> **ESP32-S3 Native USB Bootloader Quirk:**
+> Devices using the ESP32-S3 native USB-Serial-JTAG controller (such as the Seeed ReSpeaker Lite XVF3800) remain halted in the ROM Bootloader after flashing or erasing via WebSerial. Because native USB lacks hardware RTS/DTR auto-reset circuits, the browser cannot trigger a cold boot.
+>
+> **You must physically unplug and reconnect the USB-C cable** (or tap the **RST** button on the board) right after flashing!
+> 
+> *If you attempt to configure Wi-Fi before power-cycling, the installer will report `⚠️ An error occurred. Improv Wi-Fi Serial not detected` because the firmware has not booted yet.*
+
+#### Step 2: Connect to Wi-Fi
+
+Once the board has rebooted into ESPHome, connect using either method:
+
+- **Method A: USB Serial (Improv Wi-Fi)**:
+  On the [Web Installer page](https://axiomantic.github.io/esphome-satellite/), click the **Configure Wi-Fi** button. The browser will discover the device via Improv Serial and prompt you to select your Wi-Fi network and enter your password.
+- **Method B: Fallback Wi-Fi Hotspot**:
+  On your phone or laptop, open your Wi-Fi settings and connect to the temporary open access point named **`Satellite Fallback Hotspot`**. The captive portal will open automatically at `http://192.168.4.1` where you can enter your Wi-Fi credentials.
+
+#### Step 3: Adopt in Home Assistant
+
+1. In Home Assistant, open **Settings > Devices & Services**.
+2. Your satellite will automatically appear highlighted at the top under **Discovered** (as **Voice Satellite**).
+3. Click **Configure**, then click **Submit** (no API encryption key is required).
+4. Assign the device to an area.
+
+#### Step 4: Configure Voice Assistant & Audio Presets
+
+1. In Home Assistant, navigate to **Settings > Voice Assistants**.
+2. Assign the satellite to your desired voice pipeline (Home Assistant Cloud, Whisper/Piper, or local Ollama LLM).
+3. On the device card in Home Assistant, you can change your **Wake Chime** (*Modern Chime*, *Crystal Glass*, *Warm Kalimba*, *Meditation Bell*, *Bell Ping*, *Marimba*, *Subtle Beep*) and **Processing Sound** (*Typewriter*, *Clockwork*, *Water Droplets*, *Spinner*, *Pulse*, *Sonar*, *Tick*) at any time!
 
 > 📖 **Manual / Source Builds**: See the full [**Integration Guide for ESPHome**](#integration-guide-for-esphome) below for custom YAML overrides, external component configuration, and C ABI bridge bindings.
 
