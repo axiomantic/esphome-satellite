@@ -317,8 +317,13 @@
           <div class="step-number">2</div>
           <div class="step-content">
             <h4>Add in Home Assistant</h4>
-            <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new <strong>esphome-satellite Web Installer</strong> will appear highlighted at the top under <strong>Discovered</strong>.</p>
-            <p>Click <strong>Configure</strong>, then click <strong>Submit</strong>. This firmware connects without an encryption key. If Home Assistant prompts for an <strong>Encryption Key</strong>, it is detecting a pre-existing cached discovery or factory firmware — cancel that prompt and add the device via <strong>Add Integration &rarr; ESPHome</strong> using its IP or hostname.</p>
+            <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new device will appear under <strong>Discovered</strong> as <strong>Voice Satellite</strong> (e.g. <code>Voice Satellite ba2c6c</code>).</p>
+            <p>Click <strong>Configure</strong>, then click <strong>Submit</strong>.</p>
+            <div style="background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6; padding: 10px 14px; margin: 10px 0; border-radius: 6px; font-size: 0.85rem; line-height: 1.5; color: #cbd5e1;">
+              <strong style="color: #60a5fa;">🔑 No Encryption Key Needed:</strong> This firmware connects without an API encryption key.<br/>
+              <div style="margin-top: 6px;"><strong>⚠️ If Home Assistant prompts for an Encryption Key:</strong><br/>Brand-new boards ship with Seeed's encrypted factory firmware. If Home Assistant discovered the board before it was flashed, it cached a requirement for an encryption key and will reject a blank field with <em>"not all required fields are filled in"</em>.</div>
+              <div style="margin-top: 6px;"><strong>👉 How to Fix in 10 Seconds:</strong> Cancel the prompt, click <strong>Add Integration &rarr; ESPHome</strong>, and enter your device IP (or <code>esphome-satellite-&lt;mac&gt;.local</code>) and port <code>6053</code>. It connects directly with zero encryption prompts!</div>
+            </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0;">
               <a href="https://my.home-assistant.io/redirect/config_flow_start?domain=esphome" target="_blank" class="btn-guide-ha">
                 <svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
@@ -1710,9 +1715,11 @@
           <div class="next-step-item">
             <span class="num">2</span>
             <div>
-              <strong>Add in Home Assistant:</strong> Open Home Assistant &rarr; <strong>Settings &rarr; Devices &amp; Services</strong>. Look under <strong>Discovered</strong> for <strong>esphome-satellite Web Installer</strong> and click <strong>Configure</strong>.
-              <div class="subtext" style="background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6; padding: 6px 10px; margin-top: 6px; border-radius: 4px; color: #93c5fd;">
-                <strong>🔑 Encryption Key Prompt:</strong> This firmware connects without an encryption key. If Home Assistant prompts for one, it is reading a cached discovery flow from Seeed's factory firmware. Simply dismiss/cancel that prompt and add via <strong>Add Integration &rarr; ESPHome</strong> using its IP or <code>.local</code> address.
+              <strong>Add in Home Assistant:</strong> Open Home Assistant &rarr; <strong>Settings &rarr; Devices &amp; Services</strong>. Look under <strong>Discovered</strong> for <strong>Voice Satellite</strong> (e.g. <code>Voice Satellite ba2c6c</code>) and click <strong>Configure &rarr; Submit</strong>.
+              <div class="subtext" style="background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6; padding: 10px 12px; margin-top: 8px; border-radius: 6px; color: #cbd5e1; line-height: 1.45;">
+                <strong style="color: #60a5fa;">🔑 No Encryption Key Needed:</strong> This firmware connects without an encryption key.<br/>
+                <div style="margin-top: 4px;"><strong>⚠️ If prompted for an Encryption Key:</strong> Brand-new boards ship with Seeed's encrypted firmware. If Home Assistant saw the board before it was flashed, it cached that requirement and will reject blank entries with <em>"not all required fields are filled in"</em>.</div>
+                <div style="margin-top: 4px;"><strong>👉 10-Second Fix:</strong> Cancel the prompt, go to <strong>Add Integration &rarr; ESPHome</strong>, and enter your device IP (or <code>esphome-satellite-&lt;mac&gt;.local</code>) and port <code>6053</code> to connect directly!</div>
               </div>
             </div>
           </div>

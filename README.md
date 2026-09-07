@@ -62,9 +62,23 @@ Once the board has rebooted into ESPHome, connect using either method:
 #### Step 3: Adopt in Home Assistant
 
 1. In Home Assistant, open **Settings > Devices & Services**.
-2. Your satellite will automatically appear highlighted at the top under **Discovered** (as **Voice Satellite**).
-3. Click **Configure**, then click **Submit** (no API encryption key is required).
+2. Your satellite will automatically appear highlighted at the top under **Discovered** as **Voice Satellite** (e.g., `Voice Satellite ba2c6c` or `Voice Satellite 46cbe8`).
+3. Click **Configure**, then click **Submit**.
 4. Assign the device to an area.
+
+> [!TIP]
+> **No Encryption Key Required & Troubleshooting "Encryption Key" Prompt:**
+>
+> - **Zero Encryption Key**: `esphome-satellite` connects via standard ESPHome API without requiring an encryption key (`noise_psk: ""`).
+> - **Why Home Assistant might ask for an "Encryption key"**:
+>   Brand-new Seeed ReSpeaker boards ship with Seeed's proprietary encrypted ESPHome firmware pre-installed. If Home Assistant discovered the board before it was erased and flashed, Home Assistant created an in-memory discovery session marked with `noise_required: true`. In Home Assistant's schema, this makes the Encryption Key field mandatory—submitting a blank field is rejected with *"not all required fields are filled in"*.
+> - **How to Solve in 10 Seconds (Direct Manual Add)**:
+>   1. Cancel or close the prompt.
+>   2. In Home Assistant, go to **Settings > Devices & Services > Add Integration > ESPHome**.
+>   3. In **Host**, enter the device IP (or `esphome-satellite-<mac>.local`) and port `6053`.
+>   4. Click **Submit**—Home Assistant connects immediately with zero prompts for an encryption key!
+> - **Clear Stale Discovery Cache**: Alternatively, click **Ignore** on the discovered card and restart Home Assistant Core (**Developer Tools > YAML > Restart**) to flush the cached discovery session.
+> - **Clean Factory Erase**: When flashing a brand-new board from Seeed for the first time, always select **"Erase device"** in the Web Installer so all factory NVS encryption tokens and partitions are completely wiped.
 
 #### Step 4: Configure Voice Assistant & Audio Presets
 
