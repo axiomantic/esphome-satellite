@@ -300,7 +300,7 @@
           <div class="step-number">1</div>
           <div class="step-content">
             <h4>Reboot Board &amp; Connect to Wi-Fi</h4>
-            <div class="step-tip native-usb-warning" style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; margin-bottom: 10px;"><strong>⚠️ Essential for ESP32-S3 Native USB:</strong> Because this board uses native USB, software resets cannot exit the ROM bootloader after flashing or erasing. <strong>Unplug and reconnect the USB-C cable</strong> (or tap the <strong>RST</strong> button) once before configuring Wi-Fi! If you click before rebooting, it will report <em>"Improv Wi-Fi Serial not detected"</em> because ESPHome has not booted yet.</div>
+            <div class="step-tip native-usb-warning" style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; margin-bottom: 10px;"><strong>Important for ESP32-S3 Native USB:</strong> Because this board uses native USB, software resets cannot exit the ROM bootloader after flashing or erasing. <strong>Unplug and reconnect the USB-C cable</strong> (or tap the <strong>RST</strong> button) once before configuring Wi-Fi! If you click before rebooting, it will report <em>"Improv Wi-Fi Serial not detected"</em> because ESPHome has not booted yet.</div>
             <p>Once replugged, connect your device to Wi-Fi using either method below:</p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0;">
               <improv-wifi-serial-launch-button>
@@ -320,9 +320,9 @@
             <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new device will appear under <strong>Discovered</strong> as <strong>Voice Satellite</strong> (e.g. <code>Voice Satellite ba2c6c</code>).</p>
             <p>Click <strong>Configure</strong>, then click <strong>Submit</strong>.</p>
             <div style="background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6; padding: 10px 14px; margin: 10px 0; border-radius: 6px; font-size: 0.85rem; line-height: 1.5; color: #cbd5e1;">
-              <strong style="color: #60a5fa;">🔑 No Encryption Key Needed:</strong> This firmware connects without an API encryption key.<br/>
-              <div style="margin-top: 6px;"><strong>⚠️ If Home Assistant prompts for an Encryption Key:</strong><br/>Brand-new boards ship with Seeed's encrypted factory firmware. If Home Assistant discovered the board before it was flashed, it cached a requirement for an encryption key and will reject a blank field with <em>"not all required fields are filled in"</em>.</div>
-              <div style="margin-top: 6px;"><strong>👉 How to Fix in 10 Seconds:</strong> Cancel the prompt, click <strong>Add Integration &rarr; ESPHome</strong>, and enter your device IP (or <code>esphome-satellite-&lt;mac&gt;.local</code>) and port <code>6053</code>. It connects directly with zero encryption prompts!</div>
+              <strong style="color: #60a5fa;">No Encryption Key Needed:</strong> This firmware connects without an API encryption key.<br/>
+              <div style="margin-top: 6px;"><strong>If Home Assistant prompts for an Encryption Key:</strong><br/>Brand-new boards ship with Seeed's encrypted factory firmware. If Home Assistant discovered the board before it was flashed, it cached a requirement for an encryption key and will reject a blank field with <em>"not all required fields are filled in"</em>.</div>
+              <div style="margin-top: 6px;"><strong>Quick Fix:</strong> Cancel the prompt, click <strong>Add Integration &rarr; ESPHome</strong>, and enter your device IP (or <code>esphome-satellite-&lt;mac&gt;.local</code>) and port <code>6053</code>. It connects directly with zero encryption prompts!</div>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0;">
               <a href="https://my.home-assistant.io/redirect/config_flow_start?domain=esphome" target="_blank" class="btn-guide-ha">
@@ -1463,7 +1463,7 @@
           eraseStatus.innerHTML = '<span class="spinner"></span> Erasing entire flash memory (wiping NVS, credentials, partitions)...';
           await esploader.eraseFlash();
           eraseStatus.className = 'erase-status success';
-          eraseStatus.innerHTML = ICONS.check + ' <strong>Flash erased successfully!</strong> All flash partitions and settings wiped.<br/><small style="display:block; margin-top:6px; opacity:0.85;">ℹ️ <em>Note: If you connect serial logs now, you will see <code>invalid header: 0xffffffff</code> repeating—this is normal when flash memory is empty!</em> If flashing does not start immediately, hold the <strong>BOOT</strong> button, tap <strong>RST</strong>, then release BOOT.</small><br/>You can now click <strong>Install Firmware</strong> above to flash clean firmware.';
+          eraseStatus.innerHTML = ICONS.check + ' <strong>Flash erased successfully!</strong> All flash partitions and settings wiped.<br/><small style="display:block; margin-top:6px; opacity:0.85;"><em>Note: If you connect serial logs now, you will see <code>invalid header: 0xffffffff</code> repeating—this is normal when flash memory is empty!</em> If flashing does not start immediately, hold the <strong>BOOT</strong> button, tap <strong>RST</strong>, then release BOOT.</small><br/>You can now click <strong>Install Firmware</strong> above to flash clean firmware.';
         } catch (err) {
           console.error('Erase error:', err);
           eraseStatus.className = 'erase-status error';
@@ -1693,7 +1693,7 @@
       <div class="modal-body">
         <p class="modal-intro">Your ESP32-S3 firmware has been flashed.</p>
         <div class="native-usb-warning" style="background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.45; color: #fef08a;">
-          <strong>🔌 Action Required (ESP32-S3):</strong><br/>
+          <strong>Action Required (ESP32-S3):</strong><br/>
           Because this board uses native USB, it stays in bootloader mode after flashing. <strong>Unplug and re-plug the USB-C cable</strong> (or press the board's <strong>RST</strong> button) right now to start ESPHome before clicking <em>Configure Wi-Fi</em>.
         </div>
         <div class="next-steps-list">
@@ -1717,9 +1717,9 @@
             <div>
               <strong>Add in Home Assistant:</strong> Open Home Assistant &rarr; <strong>Settings &rarr; Devices &amp; Services</strong>. Look under <strong>Discovered</strong> for <strong>Voice Satellite</strong> (e.g. <code>Voice Satellite ba2c6c</code>) and click <strong>Configure &rarr; Submit</strong>.
               <div class="subtext" style="background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6; padding: 10px 12px; margin-top: 8px; border-radius: 6px; color: #cbd5e1; line-height: 1.45;">
-                <strong style="color: #60a5fa;">🔑 No Encryption Key Needed:</strong> This firmware connects without an encryption key.<br/>
-                <div style="margin-top: 4px;"><strong>⚠️ If prompted for an Encryption Key:</strong> Brand-new boards ship with Seeed's encrypted firmware. If Home Assistant saw the board before it was flashed, it cached that requirement and will reject blank entries with <em>"not all required fields are filled in"</em>.</div>
-                <div style="margin-top: 4px;"><strong>👉 10-Second Fix:</strong> Cancel the prompt, go to <strong>Add Integration &rarr; ESPHome</strong>, and enter your device IP (or <code>esphome-satellite-&lt;mac&gt;.local</code>) and port <code>6053</code> to connect directly!</div>
+                <strong style="color: #60a5fa;">No Encryption Key Needed:</strong> This firmware connects without an encryption key.<br/>
+                <div style="margin-top: 4px;"><strong>If prompted for an Encryption Key:</strong> Brand-new boards ship with Seeed's encrypted firmware. If Home Assistant saw the board before it was flashed, it cached that requirement and will reject blank entries with <em>"not all required fields are filled in"</em>.</div>
+                <div style="margin-top: 4px;"><strong>Quick Fix:</strong> Cancel the prompt, go to <strong>Add Integration &rarr; ESPHome</strong>, and enter your device IP (or <code>esphome-satellite-&lt;mac&gt;.local</code>) and port <code>6053</code> to connect directly!</div>
               </div>
             </div>
           </div>
