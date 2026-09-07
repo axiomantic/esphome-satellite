@@ -367,6 +367,14 @@
           manifest.builds[0].parts.push({ path: PRESET_MODELS[modelSelect.value], offset: slotOffset });
         }
       }
+      const vTag = manifest.version ? ('?v=' + encodeURIComponent(manifest.version)) : '';
+      if (vTag && manifest.builds && manifest.builds[0] && manifest.builds[0].parts) {
+        manifest.builds[0].parts.forEach(p => {
+          if (p.path && !p.path.startsWith('blob:') && !p.path.includes('?')) {
+            p.path += vTag;
+          }
+        });
+      }
       const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
       if (activeManifestUrl) URL.revokeObjectURL(activeManifestUrl);
       activeManifestUrl = URL.createObjectURL(blob);

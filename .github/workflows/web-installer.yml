@@ -8,7 +8,20 @@ on:
       - "packages/**"
       - "src/**"
       - "scripts/**"
+      - "assets/**"
+      - "partitions.csv"
   workflow_dispatch:
+    inputs:
+      force_firmware_build:
+        description: "Force rebuild of ESPHome factory binaries (bypasses cache)"
+        required: false
+        type: boolean
+        default: false
+      force_html_regen:
+        description: "Force regeneration of web/index.html via nim-esphome DSL"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,35 +41,120 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
+      - name: Detect Changed Paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters:
+            firmware:
+              - 'packages/**'
+              - 'src/**'
+              - 'partitions.csv'
+              - 'scripts/build_factory_binary.sh'
+            web_generator:
+              - 'scripts/generate_web.nim'
+
+      - name: Evaluate Build Requirements
+        id: plan
+        run: |
+          REBUILD_FIRMWARE="false"
+          REGEN_HTML="false"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_firmware_build }}" = "true" ]; then
+            echo "::notice::Firmware rebuild explicitly requested via workflow_dispatch."
+            REBUILD_FIRMWARE="true"
+          elif [ ! -f "web/firmware-factory.bin" ] || [ ! -f "web/firmware-ota.bin" ]; then
+            echo "::notice::Factory or OTA binary not found in web/. Firmware build required."
+            REBUILD_FIRMWARE="true"
+          elif [ "${{ steps.filter.outputs.firmware }}" = "true" ]; then
+            echo "::notice::Firmware sources or configurations changed. Firmware build required."
+            REBUILD_FIRMWARE="true"
+          else
+            echo "::notice::Firmware sources unchanged and binaries present. Skipping 8-minute firmware rebuild."
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_html_regen }}" = "true" ]; then
+            REGEN_HTML="true"
+          elif [ ! -f "web/index.html" ]; then
+            echo "::notice::web/index.html missing. HTML regeneration required."
+            REGEN_HTML="true"
+          elif [ "${{ steps.filter.outputs.web_generator }}" = "true" ]; then
+            echo "::notice::scripts/generate_web.nim modified. HTML regeneration required."
+            REGEN_HTML="true"
+          else
+            echo "::notice::web/index.html is up to date. Skipping HTML regeneration."
+          fi
+
+          echo "build_firmware=$REBUILD_FIRMWARE" >> "$GITHUB_OUTPUT"
+          echo "regen_html=$REGEN_HTML" >> "$GITHUB_OUTPUT"
+
+      # =========================================================================
+      # CONDITIONAL HTML GENERATION (Only when generate_web.nim changed or missing)
+      # =========================================================================
       - name: Check out nim-esphome
+        if: steps.plan.outputs.regen_html == 'true'
         uses: actions/checkout@v4
         with:
           repository: axiomantic/nim-esphome
           path: nim-esphome
 
+      - name: Cache asdf tools
+        if: steps.plan.outputs.regen_html == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.asdf
+          key: asdf-nim-${{ runner.os }}-${{ hashFiles('.tool-versions') }}
+          restore-keys: |
+            asdf-nim-${{ runner.os }}-
+
       - name: Install Nim (latest)
+        if: steps.plan.outputs.regen_html == 'true'
         uses: asdf-vm/actions/install@v4
         with:
           tool_versions: |
             nim 2.2.10
 
       - name: Regenerate Web Installer HTML
+        if: steps.plan.outputs.regen_html == 'true'
         run: nim r --path:nim-esphome/src scripts/generate_web.nim
 
+      # =========================================================================
+      # CONDITIONAL FIRMWARE BUILD (Only when firmware configs change or missing)
+      # =========================================================================
       - name: Set up Python
+        if: steps.plan.outputs.build_firmware == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+
+      - name: Cache PlatformIO toolchains & ESPHome packages
+        if: steps.plan.outputs.build_firmware == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            packages/.esphome
+          key: pio-esphome-${{ runner.os }}-${{ hashFiles('packages/**', 'partitions.csv') }}
+          restore-keys: |
+            pio-esphome-${{ runner.os }}-
 
       - name: Install ESPHome
+        if: steps.plan.outputs.build_firmware == 'true'
         run: pip install esphome
 
       - name: Build Factory Binary
+        if: steps.plan.outputs.build_firmware == 'true'
         run: |
           chmod +x scripts/build_factory_binary.sh
           ./scripts/build_factory_binary.sh
 
+      # =========================================================================
+      # INSTANT GITHUB PAGES DEPLOYMENT
+      # =========================================================================
       - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
