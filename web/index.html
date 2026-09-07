@@ -244,8 +244,8 @@
           <div class="step-number">1</div>
           <div class="step-content">
             <h4>Reboot Board &amp; Connect to Wi-Fi</h4>
-            <div class="step-tip" style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; margin-bottom: 10px;"><strong>⚠️ Essential for ESP32-S3 (ReSpeaker Lite):</strong> Because this board uses native USB, software resets cannot exit the ROM bootloader after flashing or erasing. <strong>Unplug and reconnect the USB-C cable</strong> (or tap the <strong>RST</strong> button) once before configuring Wi-Fi! If you click before rebooting, it will report <em>"Improv Wi-Fi Serial not detected"</em> because ESPHome has not booted yet.</div>
-            <p>Once replugged, connect your satellite to Wi-Fi using either method below:</p>
+            <div class="step-tip native-usb-warning" style="background: rgba(234, 179, 8, 0.15); border-left: 3px solid #eab308; margin-bottom: 10px;"><strong>⚠️ Essential for ESP32-S3 Native USB:</strong> Because this board uses native USB, software resets cannot exit the ROM bootloader after flashing or erasing. <strong>Unplug and reconnect the USB-C cable</strong> (or tap the <strong>RST</strong> button) once before configuring Wi-Fi! If you click before rebooting, it will report <em>"Improv Wi-Fi Serial not detected"</em> because ESPHome has not booted yet.</div>
+            <p>Once replugged, connect your device to Wi-Fi using either method below:</p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0;">
               <improv-wifi-serial-launch-button>
                 <button slot="activate" class="btn-guide-wifi">
@@ -261,16 +261,15 @@
           <div class="step-number">2</div>
           <div class="step-content">
             <h4>Add in Home Assistant</h4>
-            <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new <strong>Voice Satellite</strong> will appear highlighted at the top under <strong>Discovered</strong>.</p>
+            <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new <strong>esphome-satellite Web Installer</strong> will appear highlighted at the top under <strong>Discovered</strong>.</p>
             <p>Click <strong>Configure</strong>, then click <strong>Submit</strong> (no encryption key required).</p>
           </div>
         </div>
         <div class="guide-step">
           <div class="step-number">3</div>
           <div class="step-content">
-            <h4>Configure Voice Assistant &amp; Audio Presets</h4>
-            <p>Go to <strong>Settings &rarr; Voice Assistants</strong> to link the satellite to your Assist pipeline (Cloud, Whisper/Piper, or Ollama).</p>
-            <p>On the device card, you can customize your <strong>Wake Chime</strong> (<em>Modern Chime</em>, <em>Crystal Glass</em>, <em>Warm Kalimba</em>, <em>Meditation Bell</em>) and <strong>Processing Sound</strong> (<em>Typewriter</em>, <em>Clockwork</em>, <em>Water Droplets</em>) anytime!</p>
+            <h4>Customize Device &amp; Audio Presets</h4>
+            <p>On the device card, you can customize your feedback styles, wake chimes, and runtime settings anytime directly from Home Assistant.</p>
           </div>
         </div>
         <div class="guide-step">
@@ -305,7 +304,7 @@
       new_install_prompt_erase: true,
       builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
     };
-    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation"},"Home Assistant Voice PE":{"bin":"firmware-voice-pe.bin","chip":"ESP32-S3","desc":"Official Home Assistant Voice PE smart speaker satellite with hardware mute switch"},"ESP32-S3-BOX / BOX-3":{"bin":"firmware-s3box.bin","chip":"ESP32-S3","desc":"Espressif ESP32-S3-BOX / BOX-3 with integrated display and dual microphones"}};
+    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation","nativeUsb":true},"Home Assistant Voice PE":{"bin":"firmware-voice-pe.bin","chip":"ESP32-S3","desc":"Official Home Assistant Voice PE smart speaker satellite with hardware mute switch","nativeUsb":true},"ESP32-S3-BOX / BOX-3":{"bin":"firmware-s3box.bin","chip":"ESP32-S3","desc":"Espressif ESP32-S3-BOX / BOX-3 with integrated display and dual microphones","nativeUsb":true}};
     const targetSelect = document.getElementById('field_hardware_target');
     const targetDesc = document.getElementById('target_desc');
     if (targetSelect) {
@@ -313,6 +312,9 @@
         const info = TARGET_MAP[targetSelect.value];
         if (info) {
           if (targetDesc && info.desc) targetDesc.textContent = info.desc;
+          document.querySelectorAll('.native-usb-warning').forEach(el => {
+            el.style.display = info.nativeUsb ? '' : 'none';
+          });
           updateDynamicManifest();
         }
       });
@@ -1083,8 +1085,8 @@
         </div>
       </div>
       <div class="modal-body">
-        <p class="modal-intro">Your ESP32-S3 voice satellite firmware has been flashed.</p>
-        <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.45; color: #fef08a;">
+        <p class="modal-intro">Your ESP32-S3 firmware has been flashed.</p>
+        <div class="native-usb-warning" style="background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.45; color: #fef08a;">
           <strong>🔌 Action Required (ESP32-S3):</strong><br/>
           Because this board uses native USB, it stays in bootloader mode after flashing. <strong>Unplug and re-plug the USB-C cable</strong> (or press the board's <strong>RST</strong> button) right now to start ESPHome before clicking <em>Configure Wi-Fi</em>.
         </div>
@@ -1092,7 +1094,7 @@
           <div class="next-step-item">
             <span class="num">1</span>
             <div>
-              <strong>Connect Wi-Fi:</strong> Once power-cycled, click below to send credentials over USB:
+              <strong>Connect Wi-Fi:</strong> Once power-cycled, connect your device:
               <div style="margin: 6px 0;">
                 <improv-wifi-serial-launch-button>
                   <button slot="activate" class="modal-wifi-btn">
@@ -1107,13 +1109,13 @@
           <div class="next-step-item">
             <span class="num">2</span>
             <div>
-              <strong>Add in Home Assistant:</strong> Open Home Assistant &rarr; <strong>Settings &rarr; Devices &amp; Services</strong>. Look under <strong>Discovered</strong> for <strong>Voice Satellite</strong>. Click <strong>Configure &rarr; Submit</strong> (no encryption key needed).
+              <strong>Add in Home Assistant:</strong> Open Home Assistant &rarr; <strong>Settings &rarr; Devices &amp; Services</strong>. Look under <strong>Discovered</strong> for <strong>esphome-satellite Web Installer</strong>. Click <strong>Configure &rarr; Submit</strong> (no encryption key needed).
             </div>
           </div>
           <div class="next-step-item">
             <span class="num">3</span>
             <div>
-              <strong>Voice &amp; Audio Presets:</strong> Link your Assist pipeline in <strong>Settings &rarr; Voice Assistants</strong>, and choose your favorite wake chime and processing loop right on the device card!
+              <strong>Customize Device Settings:</strong> Configure your entity options and runtime presets directly from the device card in Home Assistant.
             </div>
           </div>
         </div>
