@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-06
+
+### Added
+- Multi-slot wake word web installer supporting up to 3 concurrent microWakeWord models flashed to dedicated partitions (`0x3B0000`, `0x3F0000`, `0x430000`).
+- Integrated client-side in-browser wake word neural network trainer with acoustic feature synthesis, live epoch/loss/accuracy metrics, and `.tflite` model export.
+- Wake chime selector (`Bell Ping`, `Modern Chime`, `Marimba`, `Subtle Beep`, `Silent`, `Custom Chime Audio`) with live Web Audio API previews and custom chime partition flashing (`chime_data` at `0x390000`).
+- Firmware installation readiness gating with warning alerts preventing flashing while training or before required models are uploaded.
+- Firmware `select.wake_chime_sound` template entity and YAML package substitution for runtime chime configuration.
+
+## [0.3.1] - 2026-09-06
+
+### Fixed
+- Audio resampling tests and context assertions in test runner.
+
+## [0.3.0] - 2026-09-06
+
+### Added
+- ESP-Web-Tools web installer interface with dynamic manifest generation and custom audio flash support.
+
 ## [0.2.0] - 2026-09-06
 
 ### Added
@@ -35,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Granular error recovery transitions (`SilentDismiss`, `PipelineError`, `ConnectionError`).
 - High-performance zero-copy C ABI bridge (`nim_satellite_bridge.h`) and drop-in ESPHome YAML package.
 
-[Unreleased]: https://github.com/axiomantic/esphome-satellite/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/axiomantic/esphome-satellite/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/axiomantic/esphome-satellite/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/axiomantic/esphome-satellite/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/axiomantic/esphome-satellite/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/axiomantic/esphome-satellite/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/axiomantic/esphome-satellite/releases/tag/v0.1.0
