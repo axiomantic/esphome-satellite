@@ -71,11 +71,13 @@ class WakePartitionLoader {
       const WakeModelHeader *header = reinterpret_cast<const WakeModelHeader *>(slot.map_ptr);
       if (header->magic != WAKE_MAGIC) {
         ESP_LOGI(TAG, "No custom wake word model in %s (magic: 0x%08X)", part_names[i], (unsigned int)header->magic);
+        esp_partition_munmap(slot.map_handle);
         continue;
       }
 
       if (header->model_size < 1000 || header->model_size > (part->size - sizeof(WakeModelHeader))) {
         ESP_LOGW(TAG, "Invalid model size in %s header: %u bytes", part_names[i], (unsigned int)header->model_size);
+        esp_partition_munmap(slot.map_handle);
         continue;
       }
 

@@ -195,7 +195,7 @@
                 <span class="slot-title">Slot 1: <code>wake_model</code> (0x510000)</span>
                 <span class="slot-badge-num">256 KB max</span>
               </div>
-              <input type="file" id="slotFile_custom_wake_words_0" accept=".tflite" data-offset="5308416" data-maxsize="262144">
+              <input type="file" id="slotFile_custom_wake_words_0" accept=".tflite,.json" multiple data-offset="5308416" data-maxsize="262144">
               <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
                 <div style="flex: 2;">
                   <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
@@ -213,7 +213,7 @@
                 <span class="slot-title">Slot 2: <code>wake_model_2</code> (0x550000)</span>
                 <span class="slot-badge-num">256 KB max</span>
               </div>
-              <input type="file" id="slotFile_custom_wake_words_1" accept=".tflite" data-offset="5570560" data-maxsize="262144">
+              <input type="file" id="slotFile_custom_wake_words_1" accept=".tflite,.json" multiple data-offset="5570560" data-maxsize="262144">
               <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
                 <div style="flex: 2;">
                   <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
@@ -231,7 +231,7 @@
                 <span class="slot-title">Slot 3: <code>wake_model_3</code> (0x590000)</span>
                 <span class="slot-badge-num">256 KB max</span>
               </div>
-              <input type="file" id="slotFile_custom_wake_words_2" accept=".tflite" data-offset="5832704" data-maxsize="262144">
+              <input type="file" id="slotFile_custom_wake_words_2" accept=".tflite,.json" multiple data-offset="5832704" data-maxsize="262144">
               <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
                 <div style="flex: 2;">
                   <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
@@ -1026,7 +1026,27 @@
         saveInstallerState();
         return;
       }
-      const phrase = (phraseInp ? phraseInp.value : '') || ('Custom Wake Word ' + (slotIdx + 1));
+      const phrase = phraseInp ? phraseInp.value.trim() : '';
+      if (!phrase) {
+        uploadedParts.delete(partKey);
+        if (statusEl) {
+          statusEl.style.display = 'block';
+          statusEl.innerHTML = '<span style="color: #f59e0b;">Model loaded: ' + (slotFileNames_custom_wake_words[slotIdx] || 'model.tflite') + '. Please enter the wake word phrase above (or select companion .json).</span> <button type="button" class="btn-clear-slot" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+          const rmBtn = statusEl.querySelector('.btn-clear-slot');
+          if (rmBtn) {
+            rmBtn.addEventListener('click', () => {
+              slotBuffers_custom_wake_words[slotIdx] = null;
+              slotFileNames_custom_wake_words[slotIdx] = '';
+              if (fileInp) fileInp.value = '';
+              registerWakeSlot_custom_wake_words(slotIdx);
+            });
+          }
+        }
+        updateDynamicManifest();
+        checkInstallReadiness();
+        saveInstallerState();
+        return;
+      }
       const cutoff = (cutoffInp ? cutoffInp.value : '0.40');
       const offset = slotOffsets_custom_wake_words[slotIdx];
       const partName = slotPartitions_custom_wake_words[slotIdx];
@@ -1056,31 +1076,49 @@
     const sPhrase_custom_wake_words_0 = document.getElementById('slotPhrase_custom_wake_words_0');
     const sCutoff_custom_wake_words_0 = document.getElementById('slotCutoff_custom_wake_words_0');
     if (sFile_custom_wake_words_0) {
-      sFile_custom_wake_words_0.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) {
+      sFile_custom_wake_words_0.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) {
           slotBuffers_custom_wake_words[0] = null;
           slotFileNames_custom_wake_words[0] = '';
           registerWakeSlot_custom_wake_words(0);
           return;
         }
-        const maxBytes = parseInt(sFile_custom_wake_words_0.dataset.maxsize || '262144', 10);
-        if (file.size > maxBytes) {
-          alert('Model exceeds maximum allowed size of ' + Math.round(maxBytes / 1024) + ' KB');
-          sFile_custom_wake_words_0.value = '';
-          return;
+        const jsonFile = files.find(f => f.name.toLowerCase().endsWith('.json'));
+        const tfliteFile = files.find(f => f.name.toLowerCase().endsWith('.tflite') || f.name.toLowerCase().endsWith('.bin'));
+        if (jsonFile) {
+          try {
+            const jsonText = await jsonFile.text();
+            const meta = JSON.parse(jsonText);
+            if (meta.wake_word && sPhrase_custom_wake_words_0) {
+              sPhrase_custom_wake_words_0.value = meta.wake_word;
+            }
+            if (meta.micro && meta.micro.probability_cutoff && sCutoff_custom_wake_words_0) {
+              sCutoff_custom_wake_words_0.value = meta.micro.probability_cutoff;
+            }
+          } catch (err) {
+            console.warn('Error parsing wake word json:', err);
+          }
         }
-        slotFileNames_custom_wake_words[0] = file.name;
-        if (sPhrase_custom_wake_words_0 && (!sPhrase_custom_wake_words_0.value || sPhrase_custom_wake_words_0.value.trim() === '')) {
-          const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-          sPhrase_custom_wake_words_0.value = rawName.replace(/\b\w/g, l => l.toUpperCase());
-        }
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          slotBuffers_custom_wake_words[0] = evt.target.result;
+        if (tfliteFile) {
+          const maxBytes = parseInt(sFile_custom_wake_words_0.dataset.maxsize || '262144', 10);
+          if (tfliteFile.size > maxBytes) {
+            alert('Model exceeds maximum allowed size of ' + Math.round(maxBytes / 1024) + ' KB');
+            sFile_custom_wake_words_0.value = '';
+            return;
+          }
+          slotFileNames_custom_wake_words[0] = tfliteFile.name;
+          const rawBuf = await tfliteFile.arrayBuffer();
+          slotBuffers_custom_wake_words[0] = rawBuf;
           registerWakeSlot_custom_wake_words(0);
-        };
-        reader.readAsArrayBuffer(file);
+        } else if (jsonFile && !slotBuffers_custom_wake_words[0]) {
+          const statusEl = document.getElementById('slotStatus_custom_wake_words_0');
+          if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = '<span style="color: #60a5fa;">Loaded configuration for &ldquo;' + (sPhrase_custom_wake_words_0 ? sPhrase_custom_wake_words_0.value : 'Custom Wake Word') + '&rdquo;. Please also select the companion .tflite model file.</span>';
+          }
+          checkInstallReadiness();
+        }
       });
     }
     if (sPhrase_custom_wake_words_0) sPhrase_custom_wake_words_0.addEventListener('input', () => registerWakeSlot_custom_wake_words(0));
@@ -1089,31 +1127,49 @@
     const sPhrase_custom_wake_words_1 = document.getElementById('slotPhrase_custom_wake_words_1');
     const sCutoff_custom_wake_words_1 = document.getElementById('slotCutoff_custom_wake_words_1');
     if (sFile_custom_wake_words_1) {
-      sFile_custom_wake_words_1.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) {
+      sFile_custom_wake_words_1.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) {
           slotBuffers_custom_wake_words[1] = null;
           slotFileNames_custom_wake_words[1] = '';
           registerWakeSlot_custom_wake_words(1);
           return;
         }
-        const maxBytes = parseInt(sFile_custom_wake_words_1.dataset.maxsize || '262144', 10);
-        if (file.size > maxBytes) {
-          alert('Model exceeds maximum allowed size of ' + Math.round(maxBytes / 1024) + ' KB');
-          sFile_custom_wake_words_1.value = '';
-          return;
+        const jsonFile = files.find(f => f.name.toLowerCase().endsWith('.json'));
+        const tfliteFile = files.find(f => f.name.toLowerCase().endsWith('.tflite') || f.name.toLowerCase().endsWith('.bin'));
+        if (jsonFile) {
+          try {
+            const jsonText = await jsonFile.text();
+            const meta = JSON.parse(jsonText);
+            if (meta.wake_word && sPhrase_custom_wake_words_1) {
+              sPhrase_custom_wake_words_1.value = meta.wake_word;
+            }
+            if (meta.micro && meta.micro.probability_cutoff && sCutoff_custom_wake_words_1) {
+              sCutoff_custom_wake_words_1.value = meta.micro.probability_cutoff;
+            }
+          } catch (err) {
+            console.warn('Error parsing wake word json:', err);
+          }
         }
-        slotFileNames_custom_wake_words[1] = file.name;
-        if (sPhrase_custom_wake_words_1 && (!sPhrase_custom_wake_words_1.value || sPhrase_custom_wake_words_1.value.trim() === '')) {
-          const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-          sPhrase_custom_wake_words_1.value = rawName.replace(/\b\w/g, l => l.toUpperCase());
-        }
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          slotBuffers_custom_wake_words[1] = evt.target.result;
+        if (tfliteFile) {
+          const maxBytes = parseInt(sFile_custom_wake_words_1.dataset.maxsize || '262144', 10);
+          if (tfliteFile.size > maxBytes) {
+            alert('Model exceeds maximum allowed size of ' + Math.round(maxBytes / 1024) + ' KB');
+            sFile_custom_wake_words_1.value = '';
+            return;
+          }
+          slotFileNames_custom_wake_words[1] = tfliteFile.name;
+          const rawBuf = await tfliteFile.arrayBuffer();
+          slotBuffers_custom_wake_words[1] = rawBuf;
           registerWakeSlot_custom_wake_words(1);
-        };
-        reader.readAsArrayBuffer(file);
+        } else if (jsonFile && !slotBuffers_custom_wake_words[1]) {
+          const statusEl = document.getElementById('slotStatus_custom_wake_words_1');
+          if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = '<span style="color: #60a5fa;">Loaded configuration for &ldquo;' + (sPhrase_custom_wake_words_1 ? sPhrase_custom_wake_words_1.value : 'Custom Wake Word') + '&rdquo;. Please also select the companion .tflite model file.</span>';
+          }
+          checkInstallReadiness();
+        }
       });
     }
     if (sPhrase_custom_wake_words_1) sPhrase_custom_wake_words_1.addEventListener('input', () => registerWakeSlot_custom_wake_words(1));
@@ -1122,31 +1178,49 @@
     const sPhrase_custom_wake_words_2 = document.getElementById('slotPhrase_custom_wake_words_2');
     const sCutoff_custom_wake_words_2 = document.getElementById('slotCutoff_custom_wake_words_2');
     if (sFile_custom_wake_words_2) {
-      sFile_custom_wake_words_2.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) {
+      sFile_custom_wake_words_2.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) {
           slotBuffers_custom_wake_words[2] = null;
           slotFileNames_custom_wake_words[2] = '';
           registerWakeSlot_custom_wake_words(2);
           return;
         }
-        const maxBytes = parseInt(sFile_custom_wake_words_2.dataset.maxsize || '262144', 10);
-        if (file.size > maxBytes) {
-          alert('Model exceeds maximum allowed size of ' + Math.round(maxBytes / 1024) + ' KB');
-          sFile_custom_wake_words_2.value = '';
-          return;
+        const jsonFile = files.find(f => f.name.toLowerCase().endsWith('.json'));
+        const tfliteFile = files.find(f => f.name.toLowerCase().endsWith('.tflite') || f.name.toLowerCase().endsWith('.bin'));
+        if (jsonFile) {
+          try {
+            const jsonText = await jsonFile.text();
+            const meta = JSON.parse(jsonText);
+            if (meta.wake_word && sPhrase_custom_wake_words_2) {
+              sPhrase_custom_wake_words_2.value = meta.wake_word;
+            }
+            if (meta.micro && meta.micro.probability_cutoff && sCutoff_custom_wake_words_2) {
+              sCutoff_custom_wake_words_2.value = meta.micro.probability_cutoff;
+            }
+          } catch (err) {
+            console.warn('Error parsing wake word json:', err);
+          }
         }
-        slotFileNames_custom_wake_words[2] = file.name;
-        if (sPhrase_custom_wake_words_2 && (!sPhrase_custom_wake_words_2.value || sPhrase_custom_wake_words_2.value.trim() === '')) {
-          const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-          sPhrase_custom_wake_words_2.value = rawName.replace(/\b\w/g, l => l.toUpperCase());
-        }
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          slotBuffers_custom_wake_words[2] = evt.target.result;
+        if (tfliteFile) {
+          const maxBytes = parseInt(sFile_custom_wake_words_2.dataset.maxsize || '262144', 10);
+          if (tfliteFile.size > maxBytes) {
+            alert('Model exceeds maximum allowed size of ' + Math.round(maxBytes / 1024) + ' KB');
+            sFile_custom_wake_words_2.value = '';
+            return;
+          }
+          slotFileNames_custom_wake_words[2] = tfliteFile.name;
+          const rawBuf = await tfliteFile.arrayBuffer();
+          slotBuffers_custom_wake_words[2] = rawBuf;
           registerWakeSlot_custom_wake_words(2);
-        };
-        reader.readAsArrayBuffer(file);
+        } else if (jsonFile && !slotBuffers_custom_wake_words[2]) {
+          const statusEl = document.getElementById('slotStatus_custom_wake_words_2');
+          if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = '<span style="color: #60a5fa;">Loaded configuration for &ldquo;' + (sPhrase_custom_wake_words_2 ? sPhrase_custom_wake_words_2.value : 'Custom Wake Word') + '&rdquo;. Please also select the companion .tflite model file.</span>';
+          }
+          checkInstallReadiness();
+        }
       });
     }
     if (sPhrase_custom_wake_words_2) sPhrase_custom_wake_words_2.addEventListener('input', () => registerWakeSlot_custom_wake_words(2));
