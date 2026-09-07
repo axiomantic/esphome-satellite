@@ -21,3 +21,5 @@ nim:
 esphome:
   includes:
     - ../src/nim_satellite_bridge.h
+  build_flags:
+    - -Wno-write-strings

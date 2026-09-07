@@ -17,6 +17,8 @@ esphome:
     version: "0.3.1"
   includes:
     - ../src/nim_satellite_bridge.h
+  build_flags:
+    - -Wno-write-strings
 
 esp32:
   board: esp32-s3-devkitc-1
