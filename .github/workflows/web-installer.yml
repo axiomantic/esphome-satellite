@@ -29,11 +29,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check out nim-esphome
+        uses: actions/checkout@v4
+        with:
+          repository: axiomantic/nim-esphome
+          path: nim-esphome
+
       - name: Install Nim (latest)
         uses: asdf-vm/actions/install@v4
         with:
           tool_versions: |
             nim 2.2.10
+
+      - name: Regenerate Web Installer HTML
+        run: nim r --path:nim-esphome/src scripts/generate_web.nim
 
       - name: Set up Python
         uses: actions/setup-python@v5
