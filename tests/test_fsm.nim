@@ -6,11 +6,25 @@ suite "Satellite Typestate FSM - Happy Path & Invariants":
   test "Full happy path lifecycle":
     var idle = Idle(SatelliteContext())
     var woken = idle.onWakeWord("hey assistant", 180)
+    check woken is Woken
+    check SatelliteContext(woken).wakeWord == "hey assistant"
+    check SatelliteContext(woken).beamAngle == 180
+
     var listening = woken.onChimeFinished()
+    check listening is Listening
+    check SatelliteContext(listening).wakeWord == "hey assistant"
+
     var thinking = listening.onSpeechEnded()
+    check thinking is Thinking
+    check SatelliteContext(thinking).wakeWord == "hey assistant"
+
     var replying = thinking.onTtsStarted()
+    check replying is Replying
+    check SatelliteContext(replying).wakeWord == "hey assistant"
+
     var backToIdle = replying.onTtsFinished()
     check backToIdle is Idle
+    check SatelliteContext(backToIdle).wakeWord == ""
 
   test "Stop word interrupts during listening, thinking, replying":
     var idle = Idle(SatelliteContext())

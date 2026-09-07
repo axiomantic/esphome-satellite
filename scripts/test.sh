@@ -8,4 +8,8 @@ rm -f tests/test_fsm
 echo "=== Testing embedded C++ transpilation (ESP32 target) ==="
 nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on src/nim_esphome_satellite.nim
 
+echo "=== Running wake word trainer TypeScript tests ==="
+(cd trainer && npm test)
+
 echo "=== All satellite state machine checks passed! ==="
+

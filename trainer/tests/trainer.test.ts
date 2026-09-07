@@ -61,10 +61,28 @@ describe("Audio Pipeline & Feature Extraction", () => {
     expect(metadata.durationSec).toBe(0.5);
   });
 
-  it("resamples audio correctly", () => {
+  it("resamples audio correctly across different sample rates", () => {
     const input = new Float32Array([0.0, 0.5, 1.0, 0.5, 0.0]);
-    const resampled = resampleTo16kHz(input, 16000);
-    expect(resampled).toBe(input); // unchanged if already 16k
+    const unchanged = resampleTo16kHz(input, 16000);
+    expect(unchanged).toBe(input); // unchanged if already 16k
+
+    // Downsampling: 32kHz -> 16kHz (ratio 2.0)
+    // 6 samples at 32kHz produce 3 samples at 16kHz
+    const input32k = new Float32Array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0]);
+    const downsampled = resampleTo16kHz(input32k, 32000);
+    expect(downsampled.length).toBe(3);
+    expect(downsampled[0]).toBeCloseTo(0.0, 4);
+    expect(downsampled[1]).toBeCloseTo(0.4, 4);
+    expect(downsampled[2]).toBeCloseTo(0.8, 4);
+
+    // Upsampling: 8kHz -> 16kHz (ratio 0.5)
+    // 3 samples at 8kHz produce 6 samples at 16kHz
+    const input8k = new Float32Array([0.0, 0.5, 1.0]);
+    const upsampled = resampleTo16kHz(input8k, 8000);
+    expect(upsampled.length).toBe(6);
+    expect(upsampled[0]).toBeCloseTo(0.0, 4);
+    expect(upsampled[1]).toBeCloseTo(0.25, 4);
+    expect(upsampled[2]).toBeCloseTo(0.5, 4);
   });
 
   it("extracts 40-bin spectral features matching MicroWakeWord format", () => {
@@ -193,5 +211,19 @@ describe("TFLite Micro Model Packager", () => {
     expect(validation.isValid).toBe(true);
     expect(validation.version).toBe(3);
     expect(validation.sizeBytes).toBe(tfliteBytes.byteLength);
+
+    // Negative controls: corrupted magic, short buffer, empty buffer
+    const badMagicBuffer = new Uint8Array(tfliteBytes).buffer.slice(0);
+    new Uint8Array(badMagicBuffer)[4] = 0x58; // 'X' instead of 'T'
+    const badMagicValidation = validateTfliteBuffer(badMagicBuffer);
+    expect(badMagicValidation.isValid).toBe(false);
+    expect(badMagicValidation.version).toBe(0);
+
+    const tooShort = new ArrayBuffer(16);
+    const shortValidation = validateTfliteBuffer(tooShort);
+    expect(shortValidation.isValid).toBe(false);
+
+    const emptyValidation = validateTfliteBuffer(new ArrayBuffer(0));
+    expect(emptyValidation.isValid).toBe(false);
   });
 });
