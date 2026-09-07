@@ -278,7 +278,13 @@ class PcmSoundPlayer {
       return;
     }
     for (const auto &item : this->custom_cancel_sounds_) {
-      if (item.name == name || (name == "Custom" && &item == &this->custom_cancel_sounds_[0])) {
+      if (item.name == name || (name == "Custom" && !this->custom_cancel_sounds_.empty() && &item == &this->custom_cancel_sounds_[0])) {
+        this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
+        return;
+      }
+    }
+    for (const auto &item : this->custom_chimes_) {
+      if (item.name == name || (name == "Custom" && !this->custom_chimes_.empty() && &item == &this->custom_chimes_[0])) {
         this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
         return;
       }

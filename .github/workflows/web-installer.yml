@@ -141,9 +141,11 @@ jobs:
           restore-keys: |
             pio-esphome-${{ runner.os }}-
 
-      - name: Install ESPHome
+      - name: Install ESPHome & FFmpeg
         if: steps.plan.outputs.build_firmware == 'true'
-        run: pip install esphome
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install esphome
 
       - name: Build Factory Binary
         if: steps.plan.outputs.build_firmware == 'true'
