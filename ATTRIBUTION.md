@@ -224,4 +224,116 @@ All sound effects, chimes, and processing audio feedback in `esphome-satellite` 
 
 ---
 
+## 3. Cancel Sounds (Aborted / Cancellation Resolves)
+
+Dedicated downward/resolving acoustic acknowledgement tones played when a cancellation word (*"stop"*, *"cancel"*, *"nevermind"*) is spoken or voice interaction times out.
+
+### Organic Acoustic Cancel Sounds (10 Total)
+1. **Warm Kalimba Cancel** (`cancel-warm-kalimba.wav` / `cancel-warm-kalimba.mp3`)
+   - **Type**: Organic Acoustic Thumb Piano Downward Strike
+   - **Author / Origin**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Downward two-tine kalimba strike with warm wooden body decay.
+
+2. **Meditation Bell Cancel** (`cancel-meditation-bell.wav` / `cancel-meditation-bell.mp3`)
+   - **Type**: Tibetan Singing Bowl Dampening
+   - **Author / Origin**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Gentle calming singing bowl strike with soft dampening release.
+
+3. **Marimba Cancel** (`cancel-marimba.wav` / `cancel-marimba.mp3`)
+   - **Type**: Descending Rosewood Marimba Triad
+   - **Author / Origin**: Kenney Game Audio / Freesound
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Discreet descending wooden marimba bar strike for ambient cancellation.
+
+4. **Bamboo Chime Cancel** (`cancel-bamboo-chime.wav` / `cancel-bamboo-chime.mp3`)
+   - **Type**: Natural Bamboo Tube Tap
+   - **Author / Origin**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Hollow bamboo tube strike with natural organic knock.
+
+5. **Tibetan Bowl Cancel** (`cancel-tibetan-bowl.wav` / `cancel-tibetan-bowl.mp3`)
+   - **Type**: Himalayan Brass Bowl Release
+   - **Author / Origin**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Warm resonant brass bowl release with gentle overtone decay.
+
+6. **Acoustic Harp Cancel** (`cancel-acoustic-harp.wav` / `cancel-acoustic-harp.mp3`)
+   - **Type**: Descending Concert Harp Pluck
+   - **Author / Origin**: dobroide / Freesound
+   - **License**: Creative Commons CC-BY 3.0
+   - **Description**: Gentle downward acoustic harp glissando note with cedar resonance.
+
+7. **Woodblock Cancel** (`cancel-woodblock.wav` / `cancel-woodblock.mp3`)
+   - **Type**: Hardwood Temple Block Click
+   - **Author / Origin**: Kenney Game Audio
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Natural rosewood temple block cancellation click.
+
+8. **Ceramic Bell Cancel** (`cancel-ceramic-bell.wav` / `cancel-ceramic-bell.mp3`)
+   - **Type**: Glazed Porcelain Bell Dampening
+   - **Author / Origin**: soundslikewillem / Freesound
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: High-frequency earthenware glaze strike with soft release.
+
+9. **Crystal Glass Cancel** (`cancel-crystal-glass.wav` / `cancel-crystal-glass.mp3`)
+   - **Type**: Crystal Ping Release
+   - **Author / Origin**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal
+   - **Description**: Downward lead crystal goblet tap with delicate pure decay.
+
+10. **Bell Ping Cancel** (`cancel-bell-ping.wav` / `cancel-bell-ping.mp3`)
+    - **Type**: Resonant Brass Bell Downward Resolve
+    - **Author / Origin**: Freesound Community
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Crisp descending brass bell tone with smooth acoustic decay.
+
+---
+
+### Modern Digital Cancel Sounds (7 Total)
+11. **Modern Chime Cancel** (`cancel-modern-chime.wav` / `cancel-modern-chime.mp3`)
+    - **Type**: Descending Two-Tone Harmonic Resolve
+    - **Author / Origin**: Kenney (kenney.nl)
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Clean downward harmonic two-tone resolve.
+
+12. **Neon Shimmer Cancel** (`cancel-neon-shimmer.wav` / `cancel-neon-shimmer.mp3`)
+    - **Type**: Descending FM Synthesizer Chord
+    - **Author / Origin**: Kenney Interface Audio
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Warm analog FM downward sweep with soft glowing release.
+
+13. **Prism Ping Cancel** (`cancel-prism-ping.wav` / `cancel-prism-ping.mp3`)
+    - **Type**: Glass-Digital Downward Ping
+    - **Author / Origin**: Little Robot Sound Factory / OpenGameArt
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Pristine digital glass tone with downward overtone sparkle.
+
+14. **Cyber Bloom Cancel** (`cancel-cyber-bloom.wav` / `cancel-cyber-bloom.mp3`)
+    - **Type**: Descending Synth Arpeggio
+    - **Author / Origin**: Kenney Game Audio
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Futuristic descending synthesizer arpeggio resolve.
+
+15. **Quantum Beep Cancel** (`cancel-quantum-beep.wav` / `cancel-quantum-beep.mp3`)
+    - **Type**: Dual-Tone Micro Abort Beep
+    - **Author / Origin**: Kenney Interface Audio
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Fast low-profile dual-tone cancellation blip.
+
+16. **Aero Chime Cancel** (`cancel-aero-chime.wav` / `cancel-aero-chime.mp3`)
+    - **Type**: Spatial Atmospheric Downward Swell
+    - **Author / Origin**: Erokia / Freesound
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Spatial downward atmospheric electronic note with soft release.
+
+17. **Subtle Beep Cancel** (`cancel-subtle-beep.wav` / `cancel-subtle-beep.mp3`)
+    - **Type**: Minimal Downward Sine Blip
+    - **Author / Origin**: OpenGameArt Community
+    - **License**: Creative Commons CC0 1.0 Universal
+    - **Description**: Discrete downward sine blip for quiet environments.
+
+---
+
 All sounds are royalty-free for personal, non-commercial, and commercial use under their respective Creative Commons licenses.

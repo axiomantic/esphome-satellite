@@ -522,6 +522,79 @@
       return combined;
     }
 
+    async function processCustomAudio(arrayBuffer, targetSampleRate) {
+      targetSampleRate = targetSampleRate || 16000;
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtxClass) {
+        throw new Error('Web Audio API is not supported in this browser');
+      }
+      const tempCtx = new AudioCtxClass();
+      let decodedBuffer;
+      try {
+        decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer.slice(0));
+      } finally {
+        if (tempCtx.state !== 'closed' && typeof tempCtx.close === 'function') {
+          try { await tempCtx.close(); } catch (_) {}
+        }
+      }
+      const numTargetSamples = Math.max(1, Math.round(decodedBuffer.duration * targetSampleRate));
+      const OfflineCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OfflineCtxClass) {
+        throw new Error('OfflineAudioContext is not supported in this browser');
+      }
+      const offlineCtx = new OfflineCtxClass(1, numTargetSamples, targetSampleRate);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = decodedBuffer;
+      const compressor = offlineCtx.createDynamicsCompressor();
+      compressor.threshold.setValueAtTime(-12, 0);
+      compressor.ratio.setValueAtTime(2.5, 0);
+      compressor.attack.setValueAtTime(0.005, 0);
+      compressor.release.setValueAtTime(0.080, 0);
+      compressor.knee.setValueAtTime(3.0, 0);
+      const makeupGain = offlineCtx.createGain();
+      makeupGain.gain.setValueAtTime(Math.pow(10, 1.5 / 20), 0);
+      source.connect(compressor);
+      compressor.connect(makeupGain);
+      makeupGain.connect(offlineCtx.destination);
+      source.start(0);
+      const renderedBuffer = await offlineCtx.startRendering();
+      const channelData = renderedBuffer.getChannelData(0);
+      const targetPeak = Math.pow(10, -1.0 / 20);
+      let currentPeak = 0;
+      for (let i = 0; i < channelData.length; i++) {
+        const absVal = Math.abs(channelData[i]);
+        if (absVal > currentPeak) currentPeak = absVal;
+      }
+      const normFactor = currentPeak > 0.00001 ? (targetPeak / currentPeak) : 1.0;
+      const numSamples = channelData.length;
+      const pcmBytes = numSamples * 2;
+      const wavBuffer = new ArrayBuffer(44 + pcmBytes);
+      const view = new DataView(wavBuffer);
+      view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+      view.setUint32(4, 36 + pcmBytes, true);
+      view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
+      view.setUint8(12, 0x66); view.setUint8(13, 0x6D); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, targetSampleRate, true);
+      view.setUint32(28, targetSampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+      view.setUint32(40, pcmBytes, true);
+      let byteOffset = 44;
+      for (let i = 0; i < numSamples; i++) {
+        let s = channelData[i] * normFactor;
+        if (s > 1.0) s = 1.0;
+        else if (s < -1.0) s = -1.0;
+        const val16 = s < 0 ? Math.round(s * 32768) : Math.round(s * 32767);
+        view.setInt16(byteOffset, Math.max(-32768, Math.min(32767, val16)), true);
+        byteOffset += 2;
+      }
+      return wavBuffer;
+    }
+
     function getSavedInstallerState() {
       try {
         return JSON.parse(localStorage.getItem(FORM_STORAGE_KEY) || '{}');
@@ -586,8 +659,25 @@
           uploadedParts.set(key, { url: blobUrl, offset: f.offset, name: f.name, size: f.size });
           const fileStatus = document.getElementById('status_' + key);
           if (fileStatus) {
+            const isWav = (f.name && f.name.toLowerCase().endsWith('.wav')) || f.type === 'audio/wav';
+            let playBtnHtml = '';
+            if (isWav) playBtnHtml = ' <button type="button" class="preview-btn btn-play-uploaded" style="margin-left: 8px; padding: 2px 8px; font-size: 0.72rem;">' + ICONS.play + ' <span>Preview</span></button>';
+            const audioBadge = isWav ? ' <span style="display: inline-block; background: #0c4a6e; color: #38bdf8; border: 1px solid #0284c7; padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 500; margin-left: 6px;">16kHz PCM &bull; Compressed &bull; Normalized</span>' : '';
             fileStatus.style.display = 'block';
-            fileStatus.innerHTML = ICONS.check + ' <span>Saved file restored: ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB at 0x' + f.offset.toString(16).toUpperCase() + ')</span> <button type="button" class="btn-clear-restored-file" data-file-key="' + key + '" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+            fileStatus.innerHTML = ICONS.check + ' <span>Saved file restored: ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB at 0x' + f.offset.toString(16).toUpperCase() + ')' + audioBadge + '</span>' + playBtnHtml + ' <button type="button" class="btn-clear-restored-file" data-file-key="' + key + '" style="margin-left: 8px; background: transparent; border: 1px solid #64748b; color: #94a3b8; border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer;">Remove</button>';
+            const playBtn = fileStatus.querySelector('.btn-play-uploaded');
+            if (playBtn) {
+              playBtn.addEventListener('click', () => {
+                if (playBtn.classList.contains('playing')) { stopAudioPreview(); return; }
+                stopAudioPreview();
+                playBtn.classList.add('playing');
+                playBtn.innerHTML = ICONS.stop + ' <span>Stop</span>';
+                const audio = new Audio(blobUrl);
+                activeAudioElement = audio;
+                audio.onended = () => stopAudioPreview();
+                audio.play().catch(() => stopAudioPreview());
+              });
+            }
             const rmBtn = fileStatus.querySelector('.btn-clear-restored-file');
             if (rmBtn) {
               rmBtn.addEventListener('click', () => {

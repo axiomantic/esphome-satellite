@@ -483,6 +483,10 @@ esphome-satellite/
 
 All notable changes are documented in [CHANGELOG.md](CHANGELOG.md) in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## Audio Licensing & Attribution
+
+All 51 acoustic assets (17 Wake Chimes, 17 Processing Loops, and 17 Cancel Sounds) are royalty-free under permissive licenses (**Creative Commons CC0 1.0 Universal Public Domain Dedication** and **Creative Commons Attribution CC-BY 3.0**). Complete per-sound author credits, origins, and license terms are documented in [ATTRIBUTION.md](ATTRIBUTION.md).
+
 ---
 
 ## License
