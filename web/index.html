@@ -85,6 +85,10 @@
     .modal-wifi-btn:hover { background: #0369a1; }
     .btn-guide-wifi { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
     .btn-guide-wifi:hover { background: #0369a1; }
+    .ha-btn { flex: 1.5; min-width: 170px; background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 14px 18px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; cursor: pointer; text-decoration: none; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .ha-btn:hover { background: rgba(2, 132, 199, 0.2); border-color: #38bdf8; color: #ffffff; }
+    .btn-guide-ha { background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
+    .btn-guide-ha:hover { background: rgba(2, 132, 199, 0.2); border-color: #38bdf8; color: #ffffff; }
     .erase-btn { flex: 1; min-width: 180px; background: #1e293b; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 14px 18px; font-size: 0.92rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
     .erase-btn:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
     .erase-status { width: 100%; box-sizing: border-box; border-radius: 6px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5; margin-top: 4px; text-align: left; }
@@ -255,6 +259,10 @@
           </button>
           <span slot="unsupported"></span>
         </improv-wifi-serial-launch-button>
+        <a href="https://my.home-assistant.io/redirect/config_flow_start?domain=esphome" target="_blank" class="ha-btn" title="Open Home Assistant to configure or manage this device">
+          <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span>Add to Home Assistant</span>
+        </a>
         <button type="button" id="btnEraseDevice" class="erase-btn" title="Completely wipe all flash partitions, cached Wi-Fi credentials, and NVS settings">
           <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           <span>Erase Device</span>
@@ -293,6 +301,12 @@
             <h4>Add in Home Assistant</h4>
             <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new <strong>esphome-satellite Web Installer</strong> will appear highlighted at the top under <strong>Discovered</strong>.</p>
             <p>Click <strong>Configure</strong>, then click <strong>Submit</strong> (no encryption key required).</p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0;">
+              <a href="https://my.home-assistant.io/redirect/config_flow_start?domain=esphome" target="_blank" class="btn-guide-ha">
+                <svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <span>Add to Home Assistant</span>
+              </a>
+            </div>
           </div>
         </div>
         <div class="guide-step">
