@@ -50,31 +50,26 @@
     .btn-add-slot:hover { background: rgba(59, 130, 246, 0.1); border-color: #60a5fa; color: #93c5fd; }
     .btn-add-slot:disabled { opacity: 0.5; cursor: not-allowed; border-color: #334155; color: #64748b; }
     .custom-wake-box { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #1e293b; }
-    .method-pill-group { display: flex; gap: 8px; margin-bottom: 12px; }
-    .method-pill { flex: 1; background: #0f172a; border: 1px solid #334155; color: #94a3b8; padding: 7px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s ease; }
-    .method-pill:hover { border-color: #64748b; color: #e2e8f0; }
-    .method-pill.active { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; color: #60a5fa; box-shadow: 0 0 0 1px #3b82f6; }
-    .btn-train-action { background: #2563eb; color: white; border: none; border-radius: 6px; padding: 9px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .btn-train-action:hover:not(:disabled) { background: #1d4ed8; }
-    .btn-train-action:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
-    .trainer-progress-box { margin-top: 10px; background: #040812; border: 1px solid #1e293b; border-radius: 6px; padding: 10px 12px; }
-    .progress-bar-track { background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 6px; }
-    .progress-bar-fill { background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; width: 0%; transition: width 0.15s ease; }
-    .progress-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
-    .progress-log { font-size: 0.72rem; color: #64748b; margin-top: 4px; font-family: monospace; }
-    .trained-success-badge { margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 10px 12px; font-size: 0.8rem; color: #34d399; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-    .success-info { display: flex; flex-direction: column; gap: 2px; }
-    .cache-notice { font-size: 0.72rem; color: #10b981; opacity: 0.9; }
-    .download-model-btn { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; padding: 5px 12px; border-radius: 5px; font-size: 0.75rem; text-decoration: none; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-    .download-model-btn:hover { background: #047857; color: #ffffff; border-color: #34d399; }
+    .custom-wake-guide { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.8rem; color: #cbd5e1; }
+    .guide-title { font-weight: 600; color: #e2e8f0; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .guide-text { font-size: 0.76rem; color: #94a3b8; line-height: 1.45; margin-bottom: 8px; }
+    .guide-links { display: flex; flex-wrap: wrap; gap: 8px; }
+    .guide-link { display: inline-flex; align-items: center; gap: 5px; background: #0f172a; border: 1px solid #3b82f6; color: #60a5fa; padding: 5px 10px; border-radius: 4px; font-size: 0.75rem; text-decoration: none; font-weight: 500; transition: all 0.15s ease; }
+    .guide-link:hover { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border-color: #60a5fa; }
+    .upload-box { background: #040812; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; }
     .cached-models-bar { margin-bottom: 10px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
-    .cached-models-label { color: #94a3b8; font-weight: 600; white-space: nowrap; font-size: 0.75rem; }
+    .cached-models-label { color: #94a3b8; font-weight: 600; white-space: nowrap; font-size: 0.75rem; display: flex; align-items: center; gap: 5px; }
     .select-cached-model { flex: 1; min-width: 0; background: #0f172a; border: 1px solid #475569; color: #e2e8f0; padding: 5px 8px; border-radius: 4px; font-size: 0.75rem; }
     .btn-cache-action { background: #1e293b; border: 1px solid #475569; color: #cbd5e1; padding: 5px 9px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s ease; font-weight: 600; white-space: nowrap; }
     .btn-cache-action:hover { background: #334155; color: white; border-color: #64748b; }
-    .btn-cache-delete { color: #f87171; border-color: rgba(239, 68, 68, 0.4); padding: 5px 8px; }
+    .btn-cache-delete { color: #f87171; border-color: rgba(239, 68, 68, 0.4); padding: 5px 8px; display: inline-flex; align-items: center; justify-content: center; }
     .btn-cache-delete:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #fca5a5; }
-    .upload-actions-bar { margin-top: 8px; display: flex; align-items: center; justify-content: flex-end; }
+    .upload-actions-bar { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .download-model-btn { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; padding: 5px 12px; border-radius: 5px; font-size: 0.75rem; text-decoration: none; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s ease; }
+    .download-model-btn:hover { background: #047857; color: #ffffff; border-color: #34d399; }
+    .icon { display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+    .icon-alert { color: #f87171; vertical-align: -0.18em; margin-right: 6px; }
+    .icon-check { color: #34d399; vertical-align: -0.15em; margin-right: 5px; }
     .install-warning-notice { width: 100%; box-sizing: border-box; margin-bottom: 8px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 4px; font-size: 0.82rem; color: #fca5a5; display: none; text-align: left; }
     button.install-btn:disabled, button.install-btn.disabled-btn { background: #334155 !important; color: #64748b !important; cursor: not-allowed !important; box-shadow: none !important; opacity: 0.6; }
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -101,7 +96,7 @@
         <label for="field_wake_words">Active Wake Word Models (Up to 3 Concurrent)</label>
         <div class="wake-slots-container" id="wakeSlotsContainer_wake_words" data-field="wake_words" data-max-slots="3">
           <div id="slotsList_wake_words" class="slots-list"></div>
-          <button type="button" class="btn-add-slot" id="btnAddSlot_wake_words">+ Add Wake Word Model Slot</button>
+          <button type="button" class="btn-add-slot" id="btnAddSlot_wake_words"><svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> <span>Add Wake Word Model Slot</span></button>
         </div>
         <div class="hint">ESP32-S3 hardware neural accelerator runs up to 3 wake word models concurrently in parallel. Add slots to configure multiple active wake words.</div>
       </div>
@@ -128,7 +123,7 @@
             <div class="file-status" id="status_custom_chime_audio"></div>
           </div>
           <div class="preview-actions">
-            <button type="button" class="preview-btn" id="previewBtn_wake_chime_sound">▶ Preview Sound</button>
+            <button type="button" class="preview-btn" id="previewBtn_wake_chime_sound"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
           </div>
         </div>
         <div class="hint">Acoustic acknowledgement chime played immediately upon wake word detection before opening the microphone</div>
@@ -156,7 +151,7 @@
             <div class="file-status" id="status_custom_audio"></div>
           </div>
           <div class="preview-actions">
-            <button type="button" class="preview-btn" id="previewBtn_default_sound_style">▶ Preview Sound</button>
+            <button type="button" class="preview-btn" id="previewBtn_default_sound_style"><svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg> <span>Preview Sound</span></button>
           </div>
         </div>
         <div class="hint">Acoustic feedback rhythm played while the assistant is processing speech</div>
@@ -172,6 +167,19 @@
     <div class="footer">Powered by <a href="https://github.com/axiomantic/nim-esphome" target="_blank" style="color: #60a5fa;">nim-esphome</a> &amp; ESP-Web-Tools</div>
   </div>
   <script>
+    const ICONS = {
+      play: '<svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>',
+      stop: '<svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>',
+      alert: '<svg class="icon icon-alert" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+      check: '<svg class="icon icon-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+      download: '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>',
+      upload: '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>',
+      database: '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>',
+      x: '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+      plus: '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+      book: '<svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
+      external: '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>'
+    };
     const BASE_MANIFEST = {
       name: "esphome-satellite",
       version: "0.4.0",
@@ -197,6 +205,8 @@
     let activeAudioCtx = null;
     let activeAudioTimer = null;
     let activeAudioElement = null;
+    const PRESET_MODELS = {};
+    let WAKE_OFFSETS = [];
 
     function stopAudioPreview() {
       if (activeAudioTimer) { clearInterval(activeAudioTimer); activeAudioTimer = null; }
@@ -204,7 +214,7 @@
       if (activeAudioElement) { activeAudioElement.pause(); activeAudioElement = null; }
       document.querySelectorAll('.preview-btn').forEach(btn => {
         btn.classList.remove('playing');
-        btn.textContent = '▶ Preview Sound';
+        btn.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
       });
     }
 
@@ -222,7 +232,7 @@
     function playPresetAudio(styleName, btn) {
       if (btn && btn.classList.contains('playing')) { stopAudioPreview(); return; }
       stopAudioPreview();
-      if (btn) { btn.classList.add('playing'); btn.textContent = '⏹ Stop Preview'; }
+      if (btn) { btn.classList.add('playing'); btn.innerHTML = ICONS.stop + ' <span>Stop Preview</span>'; }
       if (styleName.startsWith('Silent')) {
         alert('Silent mode: no acoustic cues will be emitted.');
         stopAudioPreview();
@@ -307,6 +317,16 @@
         }
         manifest.builds[0].parts.push({ path: part.url, offset: part.offset });
       }
+      const slotCards = document.querySelectorAll('.wake-slot-card');
+      for (let i = 0; i < slotCards.length; i++) {
+        const card = slotCards[i];
+        const slotIdx = card.dataset.slot || (i + 1);
+        const slotOffset = (WAKE_OFFSETS && WAKE_OFFSETS[slotIdx - 1]) || (0x3B0000 + (slotIdx - 1) * 0x40000);
+        const modelSelect = card.querySelector('.slot-model-select');
+        if (modelSelect && PRESET_MODELS && PRESET_MODELS[modelSelect.value]) {
+          manifest.builds[0].parts.push({ path: PRESET_MODELS[modelSelect.value], offset: slotOffset });
+        }
+      }
       const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
       if (activeManifestUrl) URL.revokeObjectURL(activeManifestUrl);
       activeManifestUrl = URL.createObjectURL(blob);
@@ -325,25 +345,10 @@
         const slotIdx = card.dataset.slot || (i + 1);
         const modelSelect = card.querySelector('.slot-model-select');
         if (modelSelect && modelSelect.value === 'Custom Wake Word') {
-          const activeMethod = card.dataset.activeMethod || 'train';
-          if (activeMethod === 'train') {
-            if (card.dataset.trainingInProgress === 'true') {
-              canInstall = false;
-              reason = 'Wake word training is currently in progress for Slot ' + slotIdx + '. Please wait for completion before installing.';
-              break;
-            }
-            if (card.dataset.trained !== 'true') {
-              canInstall = false;
-              reason = 'Please train a custom wake word model for Slot ' + slotIdx + ' before installing firmware.';
-              break;
-            }
-          } else if (activeMethod === 'upload') {
-            const fileInput = card.querySelector('.input-model-file');
-            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-              canInstall = false;
-              reason = 'Please select and upload a .tflite model file for Slot ' + slotIdx + ' before installing firmware.';
-              break;
-            }
+          if (!uploadedParts.has('wake_slot_' + slotIdx)) {
+            canInstall = false;
+            reason = 'Please select or load a .tflite microWakeWord model for Slot ' + slotIdx + ' before installing firmware.';
+            break;
           }
         }
       }
@@ -352,7 +357,7 @@
           installBtnEl.disabled = true;
           installBtnEl.classList.add('disabled-btn');
           if (notice) {
-            notice.textContent = '⚠️ ' + reason;
+            notice.innerHTML = ICONS.alert + ' <span>' + reason + '</span>';
             notice.style.display = 'block';
           }
         } else {
@@ -386,111 +391,11 @@
       updateDynamicManifest();
     }
 
-    // In-Browser MicroWakeWord Neural Network Trainer & TFLite Model Packager
-    function synthesizeAcousticFeatures(phrase) {
-      const numFrames = 16, numBins = 40, samples = [];
-      const clean = (phrase || 'wake word').toLowerCase().replace(/[^a-z0-9]/g, '');
-      let hash = 0;
-      for (let i = 0; i < clean.length; i++) hash = (((hash << 5) - hash) + clean.charCodeAt(i)) | 0;
-      for (let s = 0; s < 8; s++) {
-        const data = new Float32Array(numFrames * numBins);
-        const centerBin = 8 + (Math.abs(hash + s * 7) % 24);
-        for (let f = 0; f < numFrames; f++) {
-          for (let b = 0; b < numBins; b++) {
-            const dist = Math.abs(b - centerBin);
-            const formant = Math.exp(-0.5 * (dist * dist) / 9.0) * 0.8;
-            data[f * numBins + b] = Math.max(0, formant + (Math.random() - 0.5) * 0.1);
-          }
-        }
-        samples.push({ data, numFrames, featuresPerFrame: numBins, label: 1 });
-      }
-      for (let s = 0; s < 8; s++) {
-        const data = new Float32Array(numFrames * numBins);
-        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 0.08;
-        samples.push({ data, numFrames, featuresPerFrame: numBins, label: 0 });
-      }
-      return samples;
-    }
-
-    class BrowserWakeTrainer {
-      constructor() {
-        this.hiddenDim = 16;
-        this.featureBins = 40;
-        this.convKernel = new Float32Array(this.featureBins * this.hiddenDim);
-        const stdDev = Math.sqrt(2.0 / this.featureBins);
-        for (let i = 0; i < this.convKernel.length; i++) this.convKernel[i] = (Math.random() * 2 - 1) * stdDev;
-        this.convBias = new Float32Array(this.hiddenDim).fill(0.01);
-        this.denseKernel = new Float32Array(this.hiddenDim);
-        for (let i = 0; i < this.denseKernel.length; i++) this.denseKernel[i] = (Math.random() * 2 - 1) * Math.sqrt(2.0 / this.hiddenDim);
-        this.denseBias = new Float32Array(1).fill(0.0);
-      }
-      trainStep(samples, lr = 0.02) {
-        let totalLoss = 0, correct = 0;
-        const gradConvKernel = new Float32Array(this.convKernel.length);
-        const gradConvBias = new Float32Array(this.convBias.length);
-        const gradDenseKernel = new Float32Array(this.denseKernel.length);
-        let gradDenseBias = 0;
-        for (const sample of samples) {
-          const pooled = new Float32Array(this.featureBins);
-          for (let f = 0; f < sample.numFrames; f++) {
-            for (let b = 0; b < this.featureBins; b++) pooled[b] += sample.data[f * this.featureBins + b] / sample.numFrames;
-          }
-          const hidden = new Float32Array(this.hiddenDim);
-          for (let h = 0; h < this.hiddenDim; h++) {
-            let sum = this.convBias[h];
-            for (let b = 0; b < this.featureBins; b++) sum += pooled[b] * this.convKernel[b * this.hiddenDim + h];
-            hidden[h] = Math.max(0, sum);
-          }
-          let logit = this.denseBias[0];
-          for (let h = 0; h < this.hiddenDim; h++) logit += hidden[h] * this.denseKernel[h];
-          const pred = 1.0 / (1.0 + Math.exp(-Math.max(-10, Math.min(10, logit))));
-          totalLoss += -(sample.label * Math.log(Math.max(1e-7, pred)) + (1 - sample.label) * Math.log(Math.max(1e-7, 1 - pred)));
-          if ((pred >= 0.5 ? 1 : 0) === sample.label) correct++;
-          const dLogit = pred - sample.label;
-          gradDenseBias += dLogit;
-          for (let h = 0; h < this.hiddenDim; h++) {
-            gradDenseKernel[h] += dLogit * hidden[h];
-            const dHidden = dLogit * this.denseKernel[h];
-            if (hidden[h] > 0) {
-              gradConvBias[h] += dHidden;
-              for (let b = 0; b < this.featureBins; b++) gradConvKernel[b * this.hiddenDim + h] += dHidden * pooled[b];
-            }
-          }
-        }
-        const N = samples.length;
-        for (let i = 0; i < this.convKernel.length; i++) this.convKernel[i] -= lr * (gradConvKernel[i] / N);
-        for (let i = 0; i < this.convBias.length; i++) this.convBias[i] -= lr * (gradConvBias[i] / N);
-        for (let i = 0; i < this.denseKernel.length; i++) this.denseKernel[i] -= lr * (gradDenseKernel[i] / N);
-        this.denseBias[0] -= lr * (gradDenseBias / N);
-        return { loss: totalLoss / N, accuracy: correct / N };
-      }
-      packageToTflite(phrase) {
-        const convBytes = this.convKernel.byteLength + this.convBias.byteLength;
-        const denseBytes = this.denseKernel.byteLength + this.denseBias.byteLength;
-        const payloadSize = 64 + convBytes + denseBytes;
-        const buffer = new ArrayBuffer(payloadSize);
-        const view = new DataView(buffer);
-        const u8 = new Uint8Array(buffer);
-        view.setUint32(0, 24, true);
-        view.setUint8(4, 0x54); view.setUint8(5, 0x46); view.setUint8(6, 0x4c); view.setUint8(7, 0x33);
-        view.setUint32(8, 3, true);
-        view.setUint32(12, 1, true);
-        view.setUint32(16, payloadSize, true);
-        let offset = 32;
-        u8.set(new Uint8Array(this.convKernel.buffer, this.convKernel.byteOffset, this.convKernel.byteLength), offset);
-        offset += this.convKernel.byteLength;
-        u8.set(new Uint8Array(this.convBias.buffer, this.convBias.byteOffset, this.convBias.byteLength), offset);
-        offset += this.convBias.byteLength;
-        u8.set(new Uint8Array(this.denseKernel.buffer, this.denseKernel.byteOffset, this.denseKernel.byteLength), offset);
-        offset += this.denseKernel.byteLength;
-        u8.set(new Uint8Array(this.denseBias.buffer, this.denseBias.byteOffset, this.denseBias.byteLength), offset);
-        return u8;
-      }
-    }
-
     (function initWakeWordSlots() {
-      const PRESETS = ["Okay Nabu (Default)","Hey Jarvis","Alexa","Custom Wake Word"];
+      const PRESETS = ["Okay Nabu (Default)","Hey Jarvis","Alexa","Mr. Clemens","Custom Wake Word"];
       const OFFSETS = [3866624,4128768,4390912];
+      Object.assign(PRESET_MODELS, {"Mr. Clemens":"models/clemens.tflite"});
+      WAKE_OFFSETS = OFFSETS;
       const MAX_SLOTS = 3;
       const container = document.getElementById('slotsList_wake_words');
       const addBtn = document.getElementById('btnAddSlot_wake_words');
@@ -531,8 +436,7 @@
             phrase: phrase,
             b64: uint8ToBase64(u8Array),
             size: u8Array.length,
-            loss: meta.loss || 0,
-            accuracy: meta.accuracy || 1.0,
+            filename: meta.filename || (cleanId + '.tflite'),
             timestamp: Date.now()
           };
           localStorage.setItem(MWW_CACHE_KEY, JSON.stringify(cache));
@@ -571,8 +475,7 @@
             entries.forEach(entry => {
               const opt = document.createElement('option');
               opt.value = entry.id;
-              const acc = (typeof entry.accuracy === 'number') ? ' (' + Math.round(entry.accuracy * 100) + '% acc)' : '';
-              opt.textContent = entry.phrase + acc + ' - ' + Math.round(entry.size / 1024) + ' KB';
+              opt.textContent = entry.phrase + ' (' + Math.round(entry.size / 1024) + ' KB)';
               sel.appendChild(opt);
             });
             if (currentVal && cache[currentVal]) sel.value = currentVal;
@@ -586,8 +489,6 @@
         card.className = 'wake-slot-card';
         card.id = 'wake_slot_card_' + slotIdx;
         card.dataset.slot = slotIdx;
-        card.dataset.activeMethod = 'train';
-        card.dataset.trained = 'false';
         const slotOffset = OFFSETS[slotIdx - 1] || (0x3B0000 + (slotIdx - 1) * 0x40000);
         const hexOffset = '0x' + slotOffset.toString(16).toUpperCase();
 
@@ -598,48 +499,35 @@
         card.innerHTML = `
           <div class="slot-header">
             <span class="slot-title"><span class="slot-badge-num">Slot ${slotIdx}</span> Active Wake Model</span>
-            <button type="button" class="btn-remove-slot" style="display: none;">✕ Remove</button>
+            <button type="button" class="btn-remove-slot" style="display: none;">${ICONS.x} <span>Remove</span></button>
           </div>
           ${selectHtml}
           <div class="custom-wake-box" style="display: none;">
-            <div class="method-pill-group">
-              <button type="button" class="method-pill active" data-method="train">⚡ Train in Browser Now</button>
-              <button type="button" class="method-pill" data-method="upload">📁 Upload Model (.tflite)</button>
+            <div class="custom-wake-guide">
+              <div class="guide-title">${ICONS.book} <span>Train Your Custom Wake Word</span></div>
+              <div class="guide-text">microWakeWord models require neural network training with speech and background noise datasets. Train your custom model using the official Google Colab notebook, then upload the resulting <code>.tflite</code> file below:</div>
+              <div class="guide-links">
+                <a class="guide-link" href="https://colab.research.google.com/github/kahrendt/microWakeWord/blob/main/notebooks/microWakeWord_model_training.ipynb" target="_blank" rel="noopener">${ICONS.external} <span>Open 1-Click Colab Trainer</span></a>
+                <a class="guide-link" href="https://github.com/kahrendt/microWakeWord" target="_blank" rel="noopener">${ICONS.external} <span>microWakeWord GitHub Docs</span></a>
+              </div>
             </div>
-            <div class="panel-train">
+            <div class="upload-box">
               <div class="cached-models-bar" style="display: none;">
-                <span class="cached-models-label">💾 Saved:</span>
+                <span class="cached-models-label">${ICONS.database} <span>Saved:</span></span>
                 <select class="select-cached-model">
                   <option value="">-- Load from Browser Cache --</option>
                 </select>
                 <button type="button" class="btn-cache-action btn-cache-load">Load</button>
-                <button type="button" class="btn-cache-action btn-cache-delete" title="Delete from cache">✕</button>
+                <button type="button" class="btn-cache-action btn-cache-delete" title="Delete from cache">${ICONS.x}</button>
               </div>
-              <label>Phonetic Wake Word Phrase</label>
-              <input type="text" class="input-train-phrase" placeholder="okay see three pee oh" value="">
-              <div class="phonetic-callout"><strong>Phonetic recommendation:</strong> Spell words phonetically for optimal acoustic feature matching &mdash; e.g. <code>ok c3p0</code> &rarr; <code>okay see three pee oh</code> or <code>dj pj</code> &rarr; <code>dee jay pee jay</code>.</div>
-              <button type="button" class="btn-train-action">⚡ Train Wake Word Model</button>
-              <div class="trainer-progress-box" style="display: none;">
-                <div class="progress-bar-track"><div class="progress-bar-fill"></div></div>
-                <div class="progress-meta"><span class="progress-status">Ready</span><span class="progress-pct">0%</span></div>
-                <div class="progress-log"></div>
-              </div>
-              <div class="trained-success-badge" style="display: none;">
-                <div class="success-info">
-                  <span class="success-text"></span>
-                  <span class="cache-notice">💾 Saved in browser storage &bull; Ready on reload</span>
-                </div>
-                <a class="download-model-btn" download="custom_wake_word.tflite" title="Download .tflite model file">⬇ Download .tflite</a>
-              </div>
-            </div>
-            <div class="panel-upload" style="display: none;">
-              <label>Custom Wake Word Model (.tflite)</label>
+              <label>Upload microWakeWord Model (.tflite)</label>
               <input type="file" class="input-model-file" accept=".tflite" data-maxsize="262144" data-offset="${slotOffset}">
-              <div class="file-status"></div>
+              <div class="file-status" style="display: none;"></div>
               <div class="upload-actions-bar" style="display: none;">
-                <a class="download-model-btn upload-download-btn" download="model.tflite" title="Download loaded .tflite model">⬇ Download .tflite</a>
+                <div class="hint" style="margin: 0;">Flashed to safe partition <code>${hexOffset}</code></div>
+                <a class="download-model-btn upload-download-btn" download="model.tflite" title="Download loaded .tflite model">${ICONS.download} <span>Download .tflite</span></a>
               </div>
-              <div class="hint">Upload a pre-trained micro_wake_word .tflite model (max 256 KB at partition ${hexOffset})</div>
+              <div class="hint upload-default-hint">Target partition: <code>${hexOffset}</code> (max 256 KB)</div>
             </div>
           </div>
         `;
@@ -647,26 +535,14 @@
         const modelSelect = card.querySelector('.slot-model-select');
         const customBox = card.querySelector('.custom-wake-box');
         const removeBtn = card.querySelector('.btn-remove-slot');
-        const methodPills = card.querySelectorAll('.method-pill');
-        const trainPanel = card.querySelector('.panel-train');
-        const uploadPanel = card.querySelector('.panel-upload');
-        const phraseInput = card.querySelector('.input-train-phrase');
-        const trainBtn = card.querySelector('.btn-train-action');
-        const progressBox = card.querySelector('.trainer-progress-box');
-        const progressFill = card.querySelector('.progress-bar-fill');
-        const progressStatus = card.querySelector('.progress-status');
-        const progressPct = card.querySelector('.progress-pct');
-        const progressLog = card.querySelector('.progress-log');
-        const successBadge = card.querySelector('.trained-success-badge');
-        const successText = card.querySelector('.success-text');
-        const downloadBtn = card.querySelector('.download-model-btn');
         const fileInput = card.querySelector('.input-model-file');
-        const fileStatus = card.querySelector('.panel-upload .file-status');
+        const fileStatus = card.querySelector('.file-status');
         const selectCached = card.querySelector('.select-cached-model');
         const btnCacheLoad = card.querySelector('.btn-cache-load');
         const btnCacheDelete = card.querySelector('.btn-cache-delete');
         const uploadActionsBar = card.querySelector('.upload-actions-bar');
         const uploadDownloadBtn = card.querySelector('.upload-download-btn');
+        const uploadDefaultHint = card.querySelector('.upload-default-hint');
 
         modelSelect.addEventListener('change', () => {
           if (modelSelect.value === 'Custom Wake Word') {
@@ -681,24 +557,6 @@
           updateDynamicManifest();
         });
 
-        methodPills.forEach(pill => {
-          pill.addEventListener('click', () => {
-            methodPills.forEach(p => p.classList.remove('active'));
-            pill.classList.add('active');
-            const method = pill.dataset.method;
-            card.dataset.activeMethod = method;
-            if (method === 'train') {
-              trainPanel.style.display = 'block';
-              uploadPanel.style.display = 'none';
-            } else {
-              trainPanel.style.display = 'none';
-              uploadPanel.style.display = 'block';
-            }
-            checkInstallReadiness();
-            updateDynamicManifest();
-          });
-        });
-
         btnCacheLoad.addEventListener('click', () => {
           const chosenId = selectCached.value;
           if (!chosenId) return;
@@ -706,16 +564,16 @@
           const item = cache[chosenId];
           if (item && item.b64) {
             const bytes = base64ToUint8(item.b64);
-            phraseInput.value = item.phrase;
             const blob = new Blob([bytes], { type: 'application/octet-stream' });
             const blobUrl = URL.createObjectURL(blob);
             uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
-            card.dataset.trained = 'true';
-            card.dataset.trainingInProgress = 'false';
-            successText.textContent = '✓ Loaded from cache: "' + item.phrase + '" (' + Math.round(bytes.length / 1024) + ' KB at ' + hexOffset + ')';
-            downloadBtn.href = blobUrl;
-            downloadBtn.download = (item.phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
-            successBadge.style.display = 'flex';
+            fileStatus.style.display = 'block';
+            fileStatus.innerHTML = ICONS.check + ' <span>Loaded from cache: "' + item.phrase + '" (' + Math.round(bytes.length / 1024) + ' KB at ' + hexOffset + ')</span>';
+            const fileName = (item.phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
+            uploadDownloadBtn.href = blobUrl;
+            uploadDownloadBtn.download = fileName;
+            uploadActionsBar.style.display = 'flex';
+            if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
             checkInstallReadiness();
             updateDynamicManifest();
           }
@@ -736,56 +594,13 @@
           }
         });
 
-        trainBtn.addEventListener('click', async () => {
-          const phrase = phraseInput.value.trim() || 'okay satellite';
-          trainBtn.disabled = true;
-          trainBtn.textContent = '⏳ Training in progress...';
-          card.dataset.trainingInProgress = 'true';
-          card.dataset.trained = 'false';
-          progressBox.style.display = 'block';
-          successBadge.style.display = 'none';
-          checkInstallReadiness();
-
-          const hasGPU = !!(navigator.gpu);
-          const engineName = hasGPU ? 'WebGPU Acceleration' : 'WASM / CPU Fallback';
-          progressLog.textContent = 'Engine: ' + engineName;
-
-          const trainer = new BrowserWakeTrainer();
-          const samples = synthesizeAcousticFeatures(phrase);
-          const totalEpochs = 10;
-
-          for (let ep = 1; ep <= totalEpochs; ep++) {
-            await new Promise(r => setTimeout(r, 45));
-            const step = trainer.trainStep(samples);
-            const pct = Math.round((ep / totalEpochs) * 100);
-            progressFill.style.width = pct + '%';
-            progressPct.textContent = pct + '%';
-            progressStatus.textContent = 'Epoch ' + ep + '/' + totalEpochs + ' (Loss: ' + step.loss.toFixed(4) + ', Acc: ' + Math.round(step.accuracy * 100) + '%)';
-          }
-
-          const tfliteBytes = trainer.packageToTflite(phrase);
-          const blob = new Blob([tfliteBytes], { type: 'application/octet-stream' });
-          const blobUrl = URL.createObjectURL(blob);
-          uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
-          card.dataset.trained = 'true';
-          card.dataset.trainingInProgress = 'false';
-          trainBtn.disabled = false;
-          trainBtn.textContent = '⚡ Retrain Wake Word Model';
-          successText.textContent = '✓ Model trained (' + Math.round(tfliteBytes.length / 1024) + ' KB at ' + hexOffset + ')';
-          downloadBtn.href = blobUrl;
-          downloadBtn.download = (phrase.replace(/[^a-z0-9]/gi, '_') || 'wake_word') + '.tflite';
-          successBadge.style.display = 'flex';
-          saveMwwCache(phrase, tfliteBytes, { loss: 0.05, accuracy: 0.98 });
-          checkInstallReadiness();
-          updateDynamicManifest();
-        });
-
         fileInput.addEventListener('change', (e) => {
           const file = e.target.files[0];
           if (!file) {
             uploadedParts.delete('wake_slot_' + slotIdx);
             fileStatus.style.display = 'none';
             uploadActionsBar.style.display = 'none';
+            if (uploadDefaultHint) uploadDefaultHint.style.display = 'block';
             checkInstallReadiness();
             updateDynamicManifest();
             return;
@@ -798,10 +613,11 @@
           const blobUrl = URL.createObjectURL(file);
           uploadedParts.set('wake_slot_' + slotIdx, { url: blobUrl, offset: slotOffset });
           fileStatus.style.display = 'block';
-          fileStatus.textContent = '✓ Model loaded: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at ' + hexOffset + ')';
+          fileStatus.innerHTML = ICONS.check + ' <span>Model loaded: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at ' + hexOffset + ')</span>';
           uploadDownloadBtn.href = blobUrl;
           uploadDownloadBtn.download = file.name;
           uploadActionsBar.style.display = 'flex';
+          if (uploadDefaultHint) uploadDefaultHint.style.display = 'none';
 
           const reader = new FileReader();
           reader.onload = function(evt) {
@@ -809,7 +625,7 @@
               const arrBuf = evt.target.result;
               const u8 = new Uint8Array(arrBuf);
               const modelName = file.name.replace(/\.tflite$/i, '').replace(/[-_]/g, ' ');
-              saveMwwCache(modelName, u8, { source: 'upload' });
+              saveMwwCache(modelName, u8, { source: 'upload', filename: file.name });
             } catch (err) {
               console.warn('Could not cache uploaded model:', err);
             }
@@ -841,7 +657,7 @@
           const badge = card.querySelector('.slot-badge-num');
           if (badge) badge.textContent = 'Slot ' + num;
           const rm = card.querySelector('.btn-remove-slot');
-          if (rm) rm.style.display = (cards.length > 1) ? 'inline-block' : 'none';
+          if (rm) rm.style.display = (cards.length > 1) ? 'inline-flex' : 'none';
         });
         if (addBtn) addBtn.disabled = (cards.length >= MAX_SLOTS);
       }
@@ -876,7 +692,7 @@
         }
         if (btn_wake_chime_sound) {
           btn_wake_chime_sound.style.display = 'inline-flex';
-          btn_wake_chime_sound.textContent = '▶ Preview Custom Audio';
+          btn_wake_chime_sound.innerHTML = ICONS.play + ' <span>Preview Custom Audio</span>';
         }
       } else {
         if (customSlot_wake_chime_sound) {
@@ -894,7 +710,7 @@
           if (desc_wake_chime_sound) desc_wake_chime_sound.textContent = info.desc;
           if (btn_wake_chime_sound) {
             btn_wake_chime_sound.style.display = 'inline-flex';
-            btn_wake_chime_sound.textContent = '▶ Preview Sound';
+            btn_wake_chime_sound.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
           }
         }
       }
@@ -928,7 +744,7 @@
         uploadedParts.set('custom_chime_audio', { url: blobUrl, offset: offset });
         if (status_custom_chime_audio) {
           status_custom_chime_audio.style.display = 'block';
-          status_custom_chime_audio.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')';
+          status_custom_chime_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span>';
         }
         const depSelect = document.getElementById('field_wake_chime_sound');
         if (depSelect) {
@@ -959,7 +775,7 @@
         }
         if (btn_default_sound_style) {
           btn_default_sound_style.style.display = 'inline-flex';
-          btn_default_sound_style.textContent = '▶ Preview Custom Audio';
+          btn_default_sound_style.innerHTML = ICONS.play + ' <span>Preview Custom Audio</span>';
         }
       } else {
         if (customSlot_default_sound_style) {
@@ -977,7 +793,7 @@
           if (desc_default_sound_style) desc_default_sound_style.textContent = info.desc;
           if (btn_default_sound_style) {
             btn_default_sound_style.style.display = 'inline-flex';
-            btn_default_sound_style.textContent = '▶ Preview Sound';
+            btn_default_sound_style.innerHTML = ICONS.play + ' <span>Preview Sound</span>';
           }
         }
       }
@@ -1011,7 +827,7 @@
         uploadedParts.set('custom_audio', { url: blobUrl, offset: offset });
         if (status_custom_audio) {
           status_custom_audio.style.display = 'block';
-          status_custom_audio.textContent = '✓ Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')';
+          status_custom_audio.innerHTML = ICONS.check + ' <span>Ready to flash: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB at safe partition 0x' + offset.toString(16).toUpperCase() + ')</span>';
         }
         const depSelect = document.getElementById('field_default_sound_style');
         if (depSelect) {

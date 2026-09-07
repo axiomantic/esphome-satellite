@@ -32,11 +32,13 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   # Wake Word Selector (Up to 3 Concurrent Models)
   installer.addWakeWordSlotsField(
     name = "wake_words",
-    label = "Active Wake Word Models (Up to 3 Concurrent)",
-    options = @["Okay Nabu (Default)", "Hey Jarvis", "Alexa"],
+    options = @["Okay Nabu (Default)", "Hey Jarvis", "Alexa", "Mr. Clemens"],
     maxSlots = 3,
     slotOffsets = @[0x3B0000'u32, 0x3F0000'u32, 0x430000'u32],
-    description = "ESP32-S3 hardware neural accelerator runs up to 3 wake word models concurrently in parallel. Add slots to configure multiple active wake words."
+    description = "ESP32-S3 hardware neural accelerator runs up to 3 wake word models concurrently in parallel. Add slots to configure multiple active wake words.",
+    presetModels = @[
+      ("Mr. Clemens", "models/clemens.tflite")
+    ]
   )
 
   # Wake Chime Selector

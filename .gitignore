@@ -10,4 +10,4 @@ Thumbs.db
 .esphome/
 build/
 node_modules/
-dist/
+scripts/generate_web
