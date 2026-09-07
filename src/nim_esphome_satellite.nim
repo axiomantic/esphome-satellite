@@ -404,6 +404,15 @@ proc parseWakeChimeSound*(s: string): WakeChimeSound =
   of "custom", "custom chime audio": wcCustom
   else: wcSilent
 
+proc previewAudioFeedback*(styleStr: string, vol: float) =
+  info("SatelliteAction", "Previewing audio feedback: " & styleStr & " at " & $vol & "%")
+  let st = parseSoundStyle(styleStr)
+  configuredProcessingStyle = st
+  if satellitePipeline != nil and satellitePipeline.processingLoop != nil:
+    satellitePipeline.processingLoop.style = st
+    satellitePipeline.processingLoop.volume = float32(vol / 100.0)
+    satellitePipeline.startProcessingLoop(st)
+
 haAction("test_audio_feedback"):
   def.description = "Preview voice satellite sound style or chime from Home Assistant"
   param "style", pkString, defaultVal = "Spinner", description = "Sound style: Spinner, Pulse, Sonar, Tick, Typewriter, Clockwork, Water Droplets, Custom, Silent"
@@ -411,47 +420,32 @@ haAction("test_audio_feedback"):
   onExecute(ctx):
     let styleStr = ctx.getString("style", "Spinner")
     let vol = ctx.getFloat("volume", 75.0)
-    info("SatelliteAction", "Previewing audio feedback: " & styleStr & " at " & $vol & "%")
-    let st = parseSoundStyle(styleStr)
-    configuredProcessingStyle = st
-    satellitePipeline.processingLoop.style = st
-    satellitePipeline.processingLoop.volume = float32(vol / 100.0)
-    satellitePipeline.startProcessingLoop(st)
-
-haService("set_privacy_mute"):
-  def.description = "Set microphone privacy mute state"
-  param "muted", pkBool, defaultVal = "true", description = "Mute microphone"
-  onExecute(ctx):
-    let mute = ctx.getBool("muted", true)
-    info("SatelliteAction", "Privacy mute requested: " & $mute)
-    if mute:
-      if currentState != rsMuted:
-        micWasMuted = true
-        currentState = rsMuted
-    else:
-      if currentState == rsMuted:
-        micWasMuted = false
-        currentState = rsIdle
+    previewAudioFeedback(styleStr, vol)
 
 proc nim_action_test_audio*(style: cstring, volume: cfloat) {.exportc, cdecl.} =
-  discard triggerServiceCall("test_audio_feedback", [
-    ("style", newParamValue($style)),
-    ("volume", newParamValue(float(volume)))
-  ])
+  previewAudioFeedback($style, float(volume))
 
-proc nim_action_set_mute*(muted: bool) {.exportc, cdecl.} =
-  discard triggerServiceCall("set_privacy_mute", [
-    ("muted", newParamValue(muted))
-  ])
+proc nim_action_set_processing_sound*(sound: cstring) {.exportc, cdecl.} =
+  let st = parseSoundStyle($sound)
+  configuredProcessingStyle = st
+  if satellitePipeline != nil and satellitePipeline.processingLoop != nil:
+    satellitePipeline.processingLoop.style = st
+
+proc nim_action_set_processing_volume*(volume: cfloat) {.exportc, cdecl.} =
+  configuredProcessingVolume = float32(volume)
+  if satellitePipeline != nil and satellitePipeline.processingLoop != nil:
+    satellitePipeline.processingLoop.volume = float32(volume / 100.0)
 
 proc nim_action_set_chime_sound*(sound: cstring) {.exportc, cdecl.} =
   let chime = parseWakeChimeSound($sound)
   configuredWakeChimeSound = chime
-  satellitePipeline.wakeChimeSound = chime
+  if satellitePipeline != nil:
+    satellitePipeline.wakeChimeSound = chime
 
 proc nim_action_set_chime_volume*(volume: cfloat) {.exportc, cdecl.} =
   wakeChimeVolume = float32(volume)
-  satellitePipeline.wakeChimeVolume = float32(volume / 100.0)
+  if satellitePipeline != nil:
+    satellitePipeline.wakeChimeVolume = float32(volume / 100.0)
 
 
 
@@ -533,6 +527,10 @@ proc nim_satellite_follow_up*() {.exportc, cdecl.} =
 proc nim_satellite_stop_word*() {.exportc, cdecl.} =
   satellitePipeline.stopProcessingLoop()
   case currentState
+  of rsWoken:
+    ctxDismiss = onChimeFailed(ctxWoken)
+    ctxIdle = onDismiss(ctxDismiss)
+    returnFromVoiceFlow()
   of rsListening:
     ctxIdle = onStopDuringListening(ctxListening)
     returnFromVoiceFlow()
@@ -587,6 +585,20 @@ proc nim_satellite_set_muted*(muted: bool) {.exportc, cdecl.} =
   elif not muted and currentState == rsMuted:
     ctxIdle = onUnmute(ctxMuted)
     currentState = rsIdle
+
+proc setPrivacyMute*(muted: bool) =
+  info("SatelliteAction", "Privacy mute requested: " & $muted)
+  nim_satellite_set_muted(muted)
+
+haService("set_privacy_mute"):
+  def.description = "Set microphone privacy mute state"
+  param "muted", pkBool, defaultVal = "true", description = "Mute microphone"
+  onExecute(ctx):
+    let mute = ctx.getBool("muted", true)
+    setPrivacyMute(mute)
+
+proc nim_action_set_mute*(muted: bool) {.exportc, cdecl.} =
+  setPrivacyMute(muted)
 
 proc nim_satellite_media_play*() {.exportc, cdecl.} =
   if currentState == rsIdle:
@@ -709,12 +721,30 @@ esphomeSetup:
         debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
 
 var lastHeartbeatMs: uint32 = 0
+var lastObservedState: RuntimeState = rsIdle
+var stateEnteredMs: uint32 = 0
 
 esphomeLoop:
   let now = millis()
+  if currentState != lastObservedState:
+    lastObservedState = currentState
+    stateEnteredMs = now
+
   if satellitePipeline != nil:
     satellitePipeline.tick(now)
+
+  if currentState == rsWoken and now - stateEnteredMs >= 3000:
+    warn("SatelliteFSM", "Watchdog: Woken state timed out after 3s. Returning to Idle.")
+    nim_satellite_stop_word()
+  elif currentState == rsListening and now - stateEnteredMs >= 10000:
+    warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s. Returning to Idle.")
+    nim_satellite_stop_word()
+  elif currentState == rsThinking and now - stateEnteredMs >= 25000:
+    warn("SatelliteFSM", "Watchdog: Thinking state timed out after 25s. Returning to Idle.")
+    nim_satellite_stop_word()
+
   if now - lastHeartbeatMs >= 10000:
     lastHeartbeatMs = now
     info("Satellite", "Heartbeat: state=" & $currentState & " uptime=" & $(now div 1000) & "s heap=" & $getFreeHeap())
+
 

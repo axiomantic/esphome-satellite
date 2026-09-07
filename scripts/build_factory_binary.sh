@@ -7,6 +7,14 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 echo "=== Building esphome-satellite factory firmware for Web Installer ==="
 cd "$ROOT_DIR"
 
+# Enable ccache for ESP-IDF toolchain
+export IDF_CCACHE_ENABLE=1
+if [ -d "$HOME/.cache/ccache-links" ]; then
+    export PATH="$HOME/.cache/ccache-links:/opt/homebrew/opt/ccache/libexec:/opt/homebrew/bin:$PATH"
+elif [ -d "/opt/homebrew/opt/ccache/libexec" ]; then
+    export PATH="/opt/homebrew/opt/ccache/libexec:/opt/homebrew/bin:$PATH"
+fi
+
 if [ -n "${ESPHOME_CMD:-}" ]; then
     CMD=($ESPHOME_CMD)
 elif command -v esphome >/dev/null 2>&1; then

@@ -95,6 +95,8 @@ inline void call_nim_ota_end(bool ok) {
 // Home Assistant Actions Bridge
 void nim_action_test_audio(const char *style, float volume) __attribute__((weak));
 void nim_action_set_mute(bool muted) __attribute__((weak));
+void nim_action_set_processing_sound(const char *sound) __attribute__((weak));
+void nim_action_set_processing_volume(float volume) __attribute__((weak));
 void nim_action_set_chime_sound(const char *sound) __attribute__((weak));
 void nim_action_set_chime_volume(float volume) __attribute__((weak));
 
@@ -104,11 +106,38 @@ inline void call_nim_action_test_audio(const char *style, float volume) {
 inline void call_nim_action_set_mute(bool muted) {
   if (nim_action_set_mute) nim_action_set_mute(muted);
 }
+inline void call_nim_action_set_processing_sound(const char *sound) {
+  if (nim_action_set_processing_sound) nim_action_set_processing_sound(sound);
+}
+inline void call_nim_action_set_processing_volume(float volume) {
+  if (nim_action_set_processing_volume) nim_action_set_processing_volume(volume);
+}
 inline void call_nim_action_set_chime_sound(const char *sound) {
   if (nim_action_set_chime_sound) nim_action_set_chime_sound(sound);
 }
 inline void call_nim_action_set_chime_volume(float volume) {
   if (nim_action_set_chime_volume) nim_action_set_chime_volume(volume);
+}
+
+inline const char* get_satellite_state_name() {
+  int s = nim_satellite_get_state ? nim_satellite_get_state() : 0;
+  switch (s) {
+    case 0: return "Idle";
+    case 1: return "Woken";
+    case 2: return "Listening";
+    case 3: return "Thinking";
+    case 4: return "Replying";
+    case 5: return "Dismissed";
+    case 6: return "Pipeline Error";
+    case 7: return "Connection Error";
+    case 8: return "Muted";
+    case 9: return "Follow Up";
+    case 10: return "Playing Media";
+    case 11: return "Alerting";
+    case 12: return "Announcing";
+    case 13: return "Updating";
+    default: return "Unknown";
+  }
 }
 
 #ifdef __cplusplus

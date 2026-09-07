@@ -9,6 +9,7 @@ substitutions:
   wake_chime_sound_default: "Bell Ping"
   processing_sound_volume_default: "75"
   wake_chime_volume_default: "75"
+  voice_volume_default: "80"
 
 esphome:
   name: ${name}
@@ -19,14 +20,45 @@ esphome:
     version: "0.3.1"
   includes:
     - ../src/nim_satellite_bridge.h
+    - ../src/xvf3800_hardware.h
   build_flags:
     - -Wno-write-strings
+  on_boot:
+    - priority: -100
+      then:
+        - lambda: |-
+            esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
+            id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
+            id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+        - micro_wake_word.start:
+        - lambda: |-
+            std::string opt = id(active_wake_word).current_option();
+            if (opt == "Mr. Clemens") {
+              id(clemens_model).enable();
+              id(nabu_model).disable();
+            } else if (opt == "Okay Nabu") {
+              id(clemens_model).disable();
+              id(nabu_model).enable();
+            }
 
 esp32:
   board: esp32-s3-devkitc-1
+  cpu_frequency: 240MHz
+  variant: esp32s3
+  flash_size: 8MB
   partitions: ../partitions.csv
   framework:
     type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB: "y"
+      CONFIG_SPIRAM_RODATA: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
 
 external_components:
   - source:
@@ -34,6 +66,39 @@ external_components:
       url: https://github.com/axiomantic/nim-esphome
       ref: main
     components: [nim]
+  - source:
+      type: git
+      url: https://github.com/formatBCE/esphome
+      ref: respeaker_microphone
+    components:
+      - i2s_audio
+    refresh: 0s
+  - source:
+      type: local
+      path: ../components
+    components: [aic3104]
+
+binary_sensor:
+  - platform: gpio
+    id: user_button
+    name: "Mute Button"
+    internal: true
+    pin:
+      number: GPIO3
+      mode: INPUT_PULLUP
+      inverted: true
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_press:
+      - switch.toggle: mic_mute_switch
+
+rtttl:
+  id: chime_player
+  speaker: board_speaker
+  on_finished_playback:
+    - lambda: |-
+        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
 
 nim:
   source: ../src/nim_esphome_satellite.nim
@@ -77,75 +142,200 @@ api:
 ota:
   - platform: esphome
 
+i2c:
+  - id: bus_a
+    sda: GPIO5
+    scl: GPIO6
+    scan: true
+    frequency: 100kHz
+
+audio_dac:
+  - platform: aic3104
+    id: aic3104_dac
+    i2c_id: bus_a
+
 i2s_audio:
   - id: i2s_in
-    i2s_lrclk_pin: GPIO7
-    i2s_bclk_pin: GPIO8
+    i2s_lrclk_pin:
+      number: GPIO7
+      allow_other_uses: true
+    i2s_bclk_pin:
+      number: GPIO8
+      allow_other_uses: true
+
+  - id: i2s_out
+    i2s_lrclk_pin:
+      number: GPIO7
+      allow_other_uses: true
+    i2s_bclk_pin:
+      number: GPIO8
+      allow_other_uses: true
 
 microphone:
   - platform: i2s_audio
     id: board_mic
     i2s_audio_id: i2s_in
     i2s_din_pin: GPIO43
+    i2s_mode: secondary
     adc_type: external
     pdm: false
-    sample_rate: 16000
+    sample_rate: 48000
     bits_per_sample: 32bit
-    channel: right
+    channel: stereo
+
+speaker:
+  - platform: i2s_audio
+    id: i2s_raw_speaker
+    sample_rate: 48000
+    i2s_mode: secondary
+    i2s_dout_pin: GPIO44
+    bits_per_sample: 32bit
+    i2s_audio_id: i2s_out
+    dac_type: external
+    channel: stereo
+    audio_dac: aic3104_dac
+    timeout: never
+
+  - platform: resampler
+    id: board_speaker
+    output_speaker: i2s_raw_speaker
+
+media_player:
+  - platform: speaker
+    id: board_media_player
+    name: "Voice Satellite Speaker"
+    announcement_pipeline:
+      speaker: board_speaker
 
 micro_wake_word:
+  id: mww
+  microphone:
+    microphone: board_mic
+    channels: 1
+  stop_after_detection: false
   models:
     - model: ../assets/models/clemens.json
+      id: clemens_model
     - model: okay_nabu
+      id: nabu_model
   on_wake_word_detected:
     - if:
         condition:
-          lambda: |-
-            std::string selected = id(active_wake_word).current_option();
-            if (selected == "All") return true;
-            if (selected == "Mr. Clemens" && (wake_word == "Mr. Clemens" || wake_word == "clemens")) return true;
-            if (selected == "Okay Nabu" && wake_word == "okay_nabu") return true;
-            return false;
+          switch.is_on: mic_mute_switch
         then:
           - lambda: |-
-              call_nim_wake_word(wake_word.c_str(), 0);
-          - voice_assistant.start:
-              wake_word: !lambda return wake_word;
+              ESP_LOGD("satellite", "Wake word '%s' ignored because mic is muted.", wake_word.c_str());
         else:
           - lambda: |-
-              ESP_LOGD("satellite", "Ignored wake word '%s' (active: '%s')", wake_word.c_str(), id(active_wake_word).current_option().c_str());
+              call_nim_wake_word(wake_word.c_str(), 0);
+          - if:
+              condition:
+                switch.is_on: wake_chime
+              then:
+                - lambda: |-
+                    id(chime_player).set_gain(id(wake_chime_volume).state / 100.0f);
+                - rtttl.play:
+                    rtttl: "bell:d=16,o=6,b=180:c,g"
+                - delay: 180ms
+          - voice_assistant.start:
+              wake_word: !lambda return wake_word;
 
 voice_assistant:
   id: va
   microphone: board_mic
-  use_wake_word: true
+  speaker: board_speaker
+  micro_wake_word: mww
+  use_wake_word: false
+  conversation_timeout: 10s
   on_start:
     - lambda: |-
         call_nim_chime_done(true);
   on_stt_vad_end:
     - lambda: |-
         call_nim_speech_ended();
+  on_stt_end:
+    - lambda: |-
+        std::string s = x;
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+        while (!s.empty() && (s.back() == '.' || s.back() == '!' || s.back() == '?' || s.back() == ' ')) {
+          s.pop_back();
+        }
+        while (!s.empty() && s.front() == ' ') {
+          s.erase(0, 1);
+        }
+
+        std::string cfg = id(stop_words_config).state;
+        bool should_cancel = false;
+        size_t start = 0;
+        while (start < cfg.size()) {
+          size_t end = cfg.find(',', start);
+          if (end == std::string::npos) end = cfg.size();
+          std::string word = cfg.substr(start, end - start);
+          while (!word.empty() && word.front() == ' ') word.erase(0, 1);
+          while (!word.empty() && word.back() == ' ') word.pop_back();
+          std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c){ return std::tolower(c); });
+          if (!word.empty() && (s == word || s.rfind(word, 0) == 0)) {
+            should_cancel = true;
+            break;
+          }
+          start = end + 1;
+        }
+
+        if (should_cancel) {
+          ESP_LOGI("voice_assistant", "Cancellation word detected in '%s'. Aborting listening.", s.c_str());
+          id(va).request_stop();
+          call_nim_stop_word();
+        }
   on_tts_start:
     - lambda: |-
         call_nim_tts_start();
   on_tts_end:
     - lambda: |-
         call_nim_tts_end();
+  on_end:
+    - lambda: |-
+        call_nim_stop_word();
   on_error:
     - lambda: |-
         call_nim_error(code.c_str());
   on_client_connected:
+    - micro_wake_word.start:
     - lambda: |-
         call_nim_connected();
   on_client_disconnected:
+    - voice_assistant.stop:
     - lambda: |-
         call_nim_disconnected();
+
+text:
+  - platform: template
+    id: stop_words_config
+    name: "Cancellation Words"
+    icon: "mdi:cancel"
+    entity_category: config
+    initial_value: "stop, nevermind, never mind, cancel, abort"
+    restore_value: true
+    optimistic: true
+    min_length: 0
+    max_length: 255
+    mode: text
+
+text_sensor:
+  - platform: template
+    id: satellite_fsm_state
+    name: "Satellite State"
+    icon: "mdi:robot"
+    entity_category: diagnostic
+    lambda: |-
+      return { get_satellite_state_name() };
+    update_interval: 250ms
 
 select:
   - platform: template
     id: active_wake_word
     name: "Active Wake Word"
     icon: "mdi:ear-hearing"
+    entity_category: config
     optimistic: true
     initial_option: "Mr. Clemens"
     restore_value: true
@@ -153,11 +343,24 @@ select:
       - "Mr. Clemens"
       - "Okay Nabu"
       - "All"
+    set_action:
+      - lambda: |-
+          if (x == "Mr. Clemens") {
+            id(clemens_model).enable();
+            id(nabu_model).disable();
+          } else if (x == "Okay Nabu") {
+            id(clemens_model).disable();
+            id(nabu_model).enable();
+          } else {
+            id(clemens_model).enable();
+            id(nabu_model).enable();
+          }
 
   - platform: template
     id: processing_sound
     name: "Processing Sound"
     icon: "mdi:progress-clock"
+    entity_category: config
     optimistic: true
     initial_option: ${processing_sound_default}
     restore_value: true
@@ -173,12 +376,13 @@ select:
       - "Custom"
     set_action:
       - lambda: |-
-          call_nim_action_test_audio(x.c_str(), id(processing_sound_volume).state);
+          call_nim_action_set_processing_sound(x.c_str());
 
   - platform: template
     id: wake_chime_sound
     name: "Wake Chime Sound"
     icon: "mdi:bell-ring"
+    entity_category: config
     optimistic: true
     initial_option: ${wake_chime_sound_default}
     restore_value: true
@@ -196,11 +400,41 @@ select:
       - lambda: |-
           call_nim_action_set_chime_sound(x.c_str());
 
+  - platform: template
+    id: led_pattern
+    name: "LED Idle Pattern"
+    icon: "mdi:led-strip-variant"
+    entity_category: config
+    optimistic: true
+    initial_option: "Off"
+    restore_value: true
+    options:
+      - "Off"
+      - "Breathe"
+      - "Rainbow"
+      - "Spinner"
+
 number:
+  - platform: template
+    id: voice_volume
+    name: "Voice Volume"
+    icon: "mdi:volume-high"
+    entity_category: config
+    min_value: 0
+    max_value: 100
+    step: 5
+    initial_value: ${voice_volume_default}
+    restore_value: true
+    optimistic: true
+    set_action:
+      - lambda: |-
+          id(board_speaker).set_volume(x / 100.0f);
+
   - platform: template
     id: processing_sound_volume
     name: "Processing Sound Volume"
     icon: "mdi:volume-medium"
+    entity_category: config
     min_value: 0
     max_value: 100
     step: 5
@@ -209,12 +443,13 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          call_nim_action_test_audio(id(processing_sound).current_option().c_str(), x);
+          call_nim_action_set_processing_volume(x);
 
   - platform: template
     id: wake_chime_volume
     name: "Wake Chime Volume"
     icon: "mdi:volume-high"
+    entity_category: config
     min_value: 0
     max_value: 100
     step: 5
@@ -223,12 +458,51 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
+          id(chime_player).set_gain(x / 100.0f);
           call_nim_action_set_chime_volume(x);
 
+  - platform: template
+    id: led_brightness
+    name: "LED Brightness"
+    icon: "mdi:brightness-6"
+    entity_category: config
+    min_value: 0.05
+    max_value: 1.0
+    step: 0.05
+    initial_value: 0.5
+    restore_value: true
+    optimistic: true
+
 switch:
+  - platform: template
+    id: mic_mute_switch
+    name: "Privacy Mute"
+    icon: "mdi:microphone-off"
+    optimistic: true
+    on_turn_on:
+      - lambda: |-
+          call_nim_action_set_mute(true);
+          esphome::xvf3800::XVF3800Hardware::instance().write_gpo_pin(esphome::xvf3800::PIN_MIC_MUTE, 1);
+      - voice_assistant.stop:
+    on_turn_off:
+      - lambda: |-
+          call_nim_action_set_mute(false);
+          esphome::xvf3800::XVF3800Hardware::instance().write_gpo_pin(esphome::xvf3800::PIN_MIC_MUTE, 0);
+
   - platform: template
     id: wake_chime
     name: "Wake Chime"
     icon: "mdi:bell-ring"
+    entity_category: config
     optimistic: true
+
+interval:
+  - interval: 50ms
+    then:
+      - lambda: |-
+          std::string state_str = get_satellite_state_name();
+          std::string pattern_str = id(led_pattern).current_option();
+          float brightness = id(led_brightness).state;
+          esphome::xvf3800::XVF3800Hardware::instance().update_animation(state_str, pattern_str, brightness);
+
 

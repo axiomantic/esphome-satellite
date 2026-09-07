@@ -14,19 +14,7 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
     name = "Seeed ReSpeaker XVF3800",
     binPath = "firmware-factory.bin",
     chipFamily = "ESP32-S3",
-    description = "Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation"
-  )
-  installer.addTarget(
-    name = "Home Assistant Voice PE",
-    binPath = "firmware-voice-pe.bin",
-    chipFamily = "ESP32-S3",
-    description = "Official Home Assistant Voice PE smart speaker satellite with hardware mute switch"
-  )
-  installer.addTarget(
-    name = "ESP32-S3-BOX / BOX-3",
-    binPath = "firmware-s3box.bin",
-    chipFamily = "ESP32-S3",
-    description = "Espressif ESP32-S3-BOX / BOX-3 with integrated display and dual microphones"
+    description = "Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation"
   )
 
   # Wake Word Selector (Up to 3 Concurrent Models)

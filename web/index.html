@@ -168,10 +168,8 @@
       <label for="field_hardware_target">Hardware Target</label>
       <select id="field_hardware_target">
         <option value="Seeed ReSpeaker XVF3800" selected>Seeed ReSpeaker XVF3800</option>
-        <option value="Home Assistant Voice PE">Home Assistant Voice PE</option>
-        <option value="ESP32-S3-BOX / BOX-3">ESP32-S3-BOX / BOX-3</option>
       </select>
-      <div class="hint" id="target_desc">Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation</div>
+      <div class="hint" id="target_desc">Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation</div>
     </div>
     <div class="fields-container">
       <div class="form-group" id="group_wake_words" data-field="wake_words">
@@ -381,7 +379,7 @@
       new_install_prompt_erase: true,
       builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
     };
-    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker Lite XVF3800 with 4-mic array and hardware acoustic echo cancellation","nativeUsb":true},"Home Assistant Voice PE":{"bin":"firmware-voice-pe.bin","chip":"ESP32-S3","desc":"Official Home Assistant Voice PE smart speaker satellite with hardware mute switch","nativeUsb":true},"ESP32-S3-BOX / BOX-3":{"bin":"firmware-s3box.bin","chip":"ESP32-S3","desc":"Espressif ESP32-S3-BOX / BOX-3 with integrated display and dual microphones","nativeUsb":true}};
+    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation","nativeUsb":true}};
     const targetSelect = document.getElementById('field_hardware_target');
     const targetDesc = document.getElementById('target_desc');
     if (targetSelect) {
