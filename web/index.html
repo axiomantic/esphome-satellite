@@ -135,6 +135,7 @@
           <option value="Pulse">Pulse</option>
           <option value="Sonar">Sonar</option>
           <option value="Tick">Tick</option>
+          <option value="Typewriter">Typewriter</option>
           <option value="Silent">Silent</option>
           <option value="Custom">Custom</option>
         </select>
@@ -146,8 +147,8 @@
             <p class="preset-desc" id="presetDesc_default_sound_style"></p>
           </div>
           <div class="custom-slot" id="group_custom_audio" data-field="custom_audio" data-depends-on="default_sound_style" data-depends-val="Custom" style="display: none;">
-            <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="131072" disabled>
-            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 128 KB.<br>Flashed to dedicated sound_data partition at 0x370000.</div>
+            <input type="file" id="field_custom_audio" accept=".wav,audio/wav" data-offset="3604480" data-maxsize="262144" disabled>
+            <div class="format-callout"><strong>Custom Audio:</strong> 16-bit Mono PCM WAV (.wav), 16kHz recommended, max 256 KB.<br>Flashed to dedicated sound_data partition at 0x370000.</div>
             <div class="file-status" id="status_custom_audio"></div>
           </div>
           <div class="preview-actions">
@@ -206,6 +207,7 @@
     let activeAudioTimer = null;
     let activeAudioElement = null;
     const PRESET_MODELS = {};
+    const PRESET_AUDIO = {};
     let WAKE_OFFSETS = [];
 
     function stopAudioPreview() {
@@ -236,6 +238,14 @@
       if (styleName.startsWith('Silent')) {
         alert('Silent mode: no acoustic cues will be emitted.');
         stopAudioPreview();
+        return;
+      }
+      if (typeof PRESET_AUDIO !== 'undefined' && PRESET_AUDIO[styleName]) {
+        const audioUrl = PRESET_AUDIO[styleName].preview || PRESET_AUDIO[styleName].flash;
+        const audio = new Audio(audioUrl);
+        activeAudioElement = audio;
+        audio.onended = () => stopAudioPreview();
+        audio.play().catch(() => stopAudioPreview());
         return;
       }
       if (styleName.startsWith('Custom')) {
@@ -292,6 +302,16 @@
           if (++ticks > 6) { stopAudioPreview(); return; }
           playToneBurst(ctx, 1200, 0.025, 'triangle', 0.3);
         }, 500);
+      } else if (styleName === 'Typewriter') {
+        const audio = new Audio('sounds/typewriter.mp3');
+        activeAudioElement = audio;
+        audio.onended = () => stopAudioPreview();
+        audio.play().catch(() => {
+          activeAudioTimer = setInterval(() => {
+            if (++ticks > 24) { stopAudioPreview(); return; }
+            playToneBurst(ctx, 1200 + Math.random() * 400, 0.02, 'triangle', 0.2);
+          }, 110);
+        });
       }
     }
 
@@ -303,6 +323,26 @@
         if (info) {
           manifest.builds[0].parts[0].path = info.bin;
           if (info.chip) manifest.builds[0].chipFamily = info.chip;
+        }
+      }
+      if (typeof PRESET_AUDIO !== 'undefined') {
+        for (const [key, info] of Object.entries(PRESET_AUDIO)) {
+          if (!info || !info.flash) continue;
+          for (const sel of document.querySelectorAll('select')) {
+            if (sel.value === key) {
+              let isOverridden = false;
+              for (const [upKey, _] of uploadedParts.entries()) {
+                if (upKey.includes('sound') || upKey.includes('audio') || upKey.includes('chime')) {
+                  isOverridden = true;
+                  break;
+                }
+              }
+              if (!isOverridden) {
+                const off = info.offset || 0x370000;
+                manifest.builds[0].parts.push({ path: info.flash, offset: off });
+              }
+            }
+          }
         }
       }
       for (const [name, part] of uploadedParts.entries()) {
@@ -755,7 +795,8 @@
         checkInstallReadiness();
       });
     }
-    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
+    Object.assign(PRESET_AUDIO, {"Typewriter":{"preview":"sounds/typewriter.mp3","flash":"sounds/typewriter.wav"}});
+    const OPTION_DETAILS_default_sound_style = {"Spinner":{"cadence":"120ms cadence","desc":"Fast rhythmic progress ticking for rapid feedback"},"Pulse":{"cadence":"250ms cadence","desc":"Subtle undulating heartbeat pattern for ambient presence"},"Sonar":{"cadence":"800ms cadence","desc":"Periodic nautical acoustic ping for deliberate tracking"},"Tick":{"cadence":"500ms cadence","desc":"Mechanical clockwork pulse for steady pacing"},"Typewriter":{"cadence":"Mechanical rhythm","desc":"Soft acoustic typewriter keystrokes and mechanical chatter during LLM processing"},"Silent":{"cadence":"No sound","desc":"Completely silent processing for zero distraction"},"Custom":{"cadence":"User audio","desc":"Loops custom audio from flash partition sound_data"}};
     const select_default_sound_style = document.getElementById('field_default_sound_style');
     const presetView_default_sound_style = document.getElementById('presetView_default_sound_style');
     const customSlot_default_sound_style = document.querySelector('.custom-slot[data-depends-on="default_sound_style"]');

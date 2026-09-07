@@ -130,6 +130,7 @@ select:
       - "Pulse"
       - "Sonar"
       - "Tick"
+      - "Typewriter"
       - "Custom"
 
   - platform: template

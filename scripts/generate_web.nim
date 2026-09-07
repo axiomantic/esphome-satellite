@@ -75,7 +75,7 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   installer.addSelectField(
     name = "default_sound_style",
     label = "Default Processing Sound Style",
-    options = @["Spinner", "Pulse", "Sonar", "Tick", "Silent", "Custom"],
+    options = @["Spinner", "Pulse", "Sonar", "Tick", "Typewriter", "Silent", "Custom"],
     defaultVal = "Spinner",
     description = "Acoustic feedback rhythm played while the assistant is processing speech",
     hasAudioPreview = true,
@@ -84,8 +84,12 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
       optionDetail("Pulse", "250ms cadence", "Subtle undulating heartbeat pattern for ambient presence"),
       optionDetail("Sonar", "800ms cadence", "Periodic nautical acoustic ping for deliberate tracking"),
       optionDetail("Tick", "500ms cadence", "Mechanical clockwork pulse for steady pacing"),
+      optionDetail("Typewriter", "Mechanical rhythm", "Soft acoustic typewriter keystrokes and mechanical chatter during LLM processing"),
       optionDetail("Silent", "No sound", "Completely silent processing for zero distraction"),
       optionDetail("Custom", "User audio", "Loops custom audio from flash partition sound_data")
+    ],
+    presetAudios = @[
+      ("Typewriter", "sounds/typewriter.mp3", "sounds/typewriter.wav")
     ]
   )
 
@@ -94,7 +98,7 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
     label = "Custom Audio Feedback Loop (.wav)",
     accept = ".wav,audio/wav",
     partition = "sound_data",
-    maxSize = 131072,
+    maxSize = 262144,
     flashOffset = 0x370000'u32,
     description = "Upload an uncompressed mono PCM WAV audio file to flash into the dedicated sound_data partition",
     dependsOnField = "default_sound_style",
