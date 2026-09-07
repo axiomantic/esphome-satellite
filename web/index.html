@@ -103,7 +103,7 @@
     .step-content p { margin: 0 0 8px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
     .step-tip { background: rgba(15, 23, 42, 0.8); border-left: 3px solid #3b82f6; border-radius: 0 4px 4px 0; padding: 8px 12px; font-size: 0.8rem; color: #cbd5e1; }
     .step-tip code { background: #1e293b; color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.82rem; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px; animation: fadeIn 0.2s ease; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 999999; padding: 20px; animation: fadeIn 0.2s ease; }
     .modal-card { background: #0b1329; border: 1px solid #3b82f6; border-radius: 12px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); text-align: left; }
     .modal-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
     .modal-icon-success { width: 40px; height: 40px; border-radius: 50%; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; color: #34d399; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: bold; flex-shrink: 0; }
@@ -1085,7 +1085,8 @@
     const btnCloseModal = document.getElementById('btnCloseSuccessModal');
     if (installBtnEl && successModal) {
       installBtnEl.addEventListener('state-changed', (ev) => {
-        if (ev && ev.detail && (ev.detail.state === 'success' || ev.detail.state === 'DONE')) {
+        const st = (ev && ev.detail && ev.detail.state ? String(ev.detail.state).toLowerCase() : '');
+        if ((st.includes('success') || st.includes('done') || st.includes('installed') || st.includes('finish')) && st !== 'installing') {
           successModal.style.display = 'flex';
         }
       });
