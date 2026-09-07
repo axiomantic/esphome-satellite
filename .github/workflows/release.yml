@@ -6,10 +6,15 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   github-release:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,3 +49,16 @@ jobs:
           gh release upload "${GITHUB_REF_NAME}" \
             web/firmware-factory.bin \
             web/firmware-ota.bin --clobber
+
+      # =========================================================================
+      # DEPLOY RELEASE FIRMWARE TO GITHUB PAGES WEB INSTALLER
+      # =========================================================================
+      - name: Upload artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
