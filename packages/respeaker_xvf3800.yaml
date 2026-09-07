@@ -17,7 +17,7 @@ esphome:
   name_add_mac_suffix: true
   project:
     name: "axiomantic.esphome-satellite"
-    version: "0.3.1"
+    version: "0.4.0"
   includes:
     - ../src/nim_satellite_bridge.h
     - ../src/xvf3800_hardware.h
@@ -234,9 +234,17 @@ micro_wake_word:
                     std::string opt = id(wake_chime_sound).current_option();
                     float vol = id(wake_chime_volume).state / 100.0f;
                     esphome::get_pcm_sound_player().play_sound(opt, false, vol);
-                - delay: 250ms
-          - voice_assistant.start:
-              wake_word: !lambda return wake_word;
+                - delay: 350ms
+          - if:
+              condition:
+                api.connected:
+              then:
+                - voice_assistant.start:
+                    wake_word: !lambda return wake_word;
+              else:
+                - lambda: |-
+                    ESP_LOGW("satellite", "Wake word detected, but Home Assistant API is not connected. Connect Wi-Fi and Home Assistant.");
+                    call_nim_error("API not connected");
 
 voice_assistant:
   id: va
