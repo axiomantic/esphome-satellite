@@ -26,6 +26,10 @@ else
     exit 1
 fi
 
+echo "Refreshing external components cache..."
+rm -rf packages/.esphome/external_components
+rm -rf packages/.esphome/build/*/src/esphome/components/nim
+
 echo "Compiling packages/respeaker_xvf3800.yaml..."
 "${CMD[@]}" compile packages/respeaker_xvf3800.yaml
 
