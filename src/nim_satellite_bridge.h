@@ -95,12 +95,20 @@ inline void call_nim_ota_end(bool ok) {
 // Home Assistant Actions Bridge
 void nim_action_test_audio(const char *style, float volume) __attribute__((weak));
 void nim_action_set_mute(bool muted) __attribute__((weak));
+void nim_action_set_chime_sound(const char *sound) __attribute__((weak));
+void nim_action_set_chime_volume(float volume) __attribute__((weak));
 
 inline void call_nim_action_test_audio(const char *style, float volume) {
   if (nim_action_test_audio) nim_action_test_audio(style, volume);
 }
 inline void call_nim_action_set_mute(bool muted) {
   if (nim_action_set_mute) nim_action_set_mute(muted);
+}
+inline void call_nim_action_set_chime_sound(const char *sound) {
+  if (nim_action_set_chime_sound) nim_action_set_chime_sound(sound);
+}
+inline void call_nim_action_set_chime_volume(float volume) {
+  if (nim_action_set_chime_volume) nim_action_set_chime_volume(volume);
 }
 
 #ifdef __cplusplus

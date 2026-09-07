@@ -7,6 +7,8 @@ substitutions:
   friendly_name: "Voice Satellite"
   processing_sound_default: "Spinner"
   wake_chime_sound_default: "Bell Ping"
+  processing_sound_volume_default: "75"
+  wake_chime_volume_default: "75"
 
 esphome:
   name: ${name}
@@ -136,6 +138,9 @@ select:
       - "Clockwork"
       - "Water Droplets"
       - "Custom"
+    set_action:
+      - lambda: |-
+          call_nim_action_test_audio(x.c_str(), id(processing_sound_volume).state);
 
   - platform: template
     id: wake_chime_sound
@@ -154,6 +159,9 @@ select:
       - "Subtle Beep"
       - "Silent"
       - "Custom"
+    set_action:
+      - lambda: |-
+          call_nim_action_set_chime_sound(x.c_str());
 
 number:
   - platform: template
@@ -163,7 +171,12 @@ number:
     min_value: 0
     max_value: 100
     step: 5
+    initial_value: ${processing_sound_volume_default}
+    restore_value: true
     optimistic: true
+    set_action:
+      - lambda: |-
+          call_nim_action_test_audio(id(processing_sound).current_option().c_str(), x);
 
   - platform: template
     id: wake_chime_volume
@@ -172,7 +185,12 @@ number:
     min_value: 0
     max_value: 100
     step: 5
+    initial_value: ${wake_chime_volume_default}
+    restore_value: true
     optimistic: true
+    set_action:
+      - lambda: |-
+          call_nim_action_set_chime_volume(x);
 
 switch:
   - platform: template

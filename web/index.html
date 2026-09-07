@@ -123,6 +123,36 @@
     .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: currentColor; animation: spin 0.8s linear infinite; vertical-align: -0.1em; margin-right: 6px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .terminal-drawer { margin-top: 32px; padding-top: 24px; border-top: 1px solid #1e293b; width: 100%; text-align: left; }
+    .term-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .term-title-row { display: flex; align-items: center; gap: 10px; }
+    .term-title { font-size: 1.05rem; font-weight: 600; color: #f1f5f9; margin: 0; display: flex; align-items: center; gap: 8px; }
+    .term-badge { font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .term-badge.disconnected { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid #475569; }
+    .term-badge.connected { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .term-badge.connecting { background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid #eab308; }
+    .term-actions { display: flex; align-items: center; gap: 8px; }
+    .term-btn { padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; }
+    .term-btn.connect { background: #0284c7; color: white; border: none; }
+    .term-btn.connect:hover { background: #0369a1; }
+    .term-btn.disconnect { background: #b91c1c; color: white; border: none; }
+    .term-btn.disconnect:hover { background: #991b1b; }
+    .term-btn.secondary { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
+    .term-btn.secondary:hover { background: #334155; color: white; }
+    .device-info-banner { display: flex; flex-wrap: wrap; gap: 8px; background: #080d1a; border: 1px solid #1e293b; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+    .info-pill { font-size: 0.76rem; background: #131d31; border: 1px solid #202e48; border-radius: 6px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; color: #cbd5e1; }
+    .info-pill .pill-label { color: #64748b; text-transform: uppercase; font-size: 0.68rem; font-weight: 700; }
+    .info-pill strong { color: #38bdf8; font-weight: 600; }
+    .info-pill code { color: #34d399; font-family: monospace; }
+    .term-console-wrap { position: relative; background: #050811; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; }
+    .terminal-body { margin: 0; padding: 14px 16px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 0.78rem; line-height: 1.45; color: #94a3b8; overflow-y: auto; white-space: pre-wrap; word-break: break-all; transition: max-height 0.25s ease; }
+    .terminal-body.collapsed { max-height: 160px; }
+    .terminal-body.expanded { max-height: 480px; }
+    .term-line-info { color: #34d399; }
+    .term-line-warn { color: #fbbf24; }
+    .term-line-err { color: #f87171; }
+    .term-line-dbg { color: #38bdf8; }
+    .term-empty-hint { color: #475569; font-style: italic; }
     .footer { margin-top: 24px; font-size: 0.8rem; color: var(--muted); text-align: center; }
   </style>
 </head>
@@ -279,6 +309,38 @@
             <p>If your device previously had another Wi-Fi network or an old encryption key saved in NVS memory, click <strong>Erase Device (Factory Reset)</strong> above or run <code>esptool.py erase_flash</code> in terminal before clicking Install Firmware.</p>
           </div>
         </div>
+      </div>
+    </div>
+    <!-- Live Device Terminal & Console Drawer -->
+    <div class="terminal-drawer">
+      <div class="term-header">
+        <div class="term-title-row">
+          <h3 class="term-title">
+            <svg class="icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            <span>Live Device Logs &amp; Terminal</span>
+          </h3>
+          <span id="termStatusBadge" class="term-badge disconnected">Disconnected</span>
+        </div>
+        <div class="term-actions">
+          <button type="button" id="btnTermConnect" class="term-btn connect">
+            <svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+            <span>Connect Logs</span>
+          </button>
+          <button type="button" id="btnTermClear" class="term-btn secondary" title="Clear console output">Clear</button>
+          <button type="button" id="btnTermToggle" class="term-btn secondary" title="Expand or collapse terminal height">Expand ▼</button>
+        </div>
+      </div>
+      <!-- Connected Device Information Inspector -->
+      <div id="deviceInfoBanner" class="device-info-banner" style="display: none;">
+        <div class="info-pill"><span class="pill-label">Target</span> <strong id="devInfoTarget">ESP32-S3</strong></div>
+        <div class="info-pill"><span class="pill-label">Firmware</span> <strong id="devInfoFirmware">esphome-satellite v0.4.0</strong></div>
+        <div class="info-pill"><span class="pill-label">ESPHome</span> <strong id="devInfoEspHome">Detecting...</strong></div>
+        <div class="info-pill"><span class="pill-label">Wi-Fi</span> <strong id="devInfoWifi">--</strong></div>
+        <div class="info-pill"><span class="pill-label">IP</span> <code id="devInfoIp">--</code></div>
+        <div class="info-pill"><span class="pill-label">MAC</span> <code id="devInfoMac">--</code></div>
+      </div>
+      <div class="term-console-wrap">
+        <pre id="termOutput" class="terminal-body collapsed"><span class="term-empty-hint">Click [Connect Logs] to stream live WebSerial boot and runtime logs at 115200 baud...</span></pre>
       </div>
     </div>
     <div class="footer">Powered by <a href="https://github.com/axiomantic/nim-esphome" target="_blank" style="color: #60a5fa;">nim-esphome</a> &amp; ESP-Web-Tools</div>
@@ -1048,11 +1110,14 @@
         eraseStatus.style.display = 'block';
         eraseStatus.className = 'erase-status in-progress';
         eraseStatus.innerHTML = '<span class="spinner"></span> Requesting serial port... Please select your ESP32 device in the browser prompt.';
+        let transport = null;
+        let port = null;
         try {
-          const port = await navigator.serial.requestPort();
+          if (typeof disconnectTerminal === 'function') await disconnectTerminal();
+          port = await navigator.serial.requestPort();
           eraseStatus.innerHTML = '<span class="spinner"></span> Loading WebSerial flasher engine...';
           const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.6.1/bundle.js');
-          const transport = new Transport(port, true);
+          transport = new Transport(port, true);
           const esploader = new ESPLoader({
             transport: transport,
             baudrate: 115200,
@@ -1062,16 +1127,179 @@
           await esploader.main();
           eraseStatus.innerHTML = '<span class="spinner"></span> Erasing entire flash memory (wiping NVS, credentials, partitions)...';
           await esploader.eraseFlash();
-          await transport.disconnect();
           eraseStatus.className = 'erase-status success';
           eraseStatus.innerHTML = ICONS.check + ' <strong>Flash erased successfully!</strong> All cached Wi-Fi credentials, NVS keys, and data have been wiped clean. You can now click <strong>Install Firmware</strong> above for a pristine out-of-the-box install.';
         } catch (err) {
           console.error('Erase error:', err);
           eraseStatus.className = 'erase-status error';
           eraseStatus.innerHTML = ICONS.alert + ' <strong>Erase failed:</strong> ' + (err.message || err) + '. If the port was busy, unplug and replug the USB cable and try again.';
+        } finally {
+          if (transport) {
+            try { await transport.disconnect(); } catch (_) {}
+          } else if (port) {
+            try { await port.close(); } catch (_) {}
+          }
         }
       });
     }
+    // Terminal & Connected Device Inspector Logic
+    let termPort = null;
+    let termReader = null;
+    let termKeepReading = false;
+
+    async function disconnectTerminal() {
+      termKeepReading = false;
+      if (termReader) {
+        try { await termReader.cancel(); } catch (_) {}
+        termReader = null;
+      }
+      if (termPort) {
+        try { await termPort.close(); } catch (_) {}
+        termPort = null;
+      }
+      const badge = document.getElementById('termStatusBadge');
+      if (badge) { badge.className = 'term-badge disconnected'; badge.textContent = 'Disconnected'; }
+      const connectBtn = document.getElementById('btnTermConnect');
+      if (connectBtn) {
+        connectBtn.className = 'term-btn connect';
+        connectBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg> <span>Connect Logs</span>';
+      }
+    }
+
+    function appendTermLine(text, type) {
+      const output = document.getElementById('termOutput');
+      if (!output) return;
+      const lineSpan = document.createElement('div');
+      let cls = '';
+      if (type === 'err' || /\[E\]|ERROR|ERR|Failed|panic|abort/i.test(text)) cls = 'term-line-err';
+      else if (type === 'warn' || /\[W\]|WARN|warning/i.test(text)) cls = 'term-line-warn';
+      else if (type === 'dbg' || /\[D\]|DEBUG/i.test(text)) cls = 'term-line-dbg';
+      else if (type === 'info' || /\[I\]|INFO|Connected|Ready/i.test(text)) cls = 'term-line-info';
+      if (cls) lineSpan.className = cls;
+      lineSpan.textContent = text;
+      output.appendChild(lineSpan);
+      while (output.childNodes.length > 1000) output.removeChild(output.firstChild);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function parseDeviceLogLine(line) {
+      const espMatch = line.match(/ESPHome version ([\w\.-]+)/i);
+      if (espMatch) {
+        const el = document.getElementById('devInfoEspHome');
+        if (el) el.textContent = 'v' + espMatch[1];
+      }
+      const wifiMatch = line.match(/Connected to '([^']+)'/i) || line.match(/WiFi connected! SSID: ([\w\.-]+)/i);
+      if (wifiMatch) {
+        const el = document.getElementById('devInfoWifi');
+        if (el) el.textContent = wifiMatch[1];
+      }
+      const ipMatch = line.match(/IP Address: ([\d\.]+)/i) || line.match(/Local IP: ([\d\.]+)/i) || line.match(/IP: ([\d\.]+)/i);
+      if (ipMatch) {
+        const el = document.getElementById('devInfoIp');
+        if (el) el.textContent = ipMatch[1];
+      }
+      const macMatch = line.match(/MAC: ([0-9A-Fa-f:]{17})/i) || line.match(/MAC address: ([0-9A-Fa-f:]{17})/i);
+      if (macMatch) {
+        const el = document.getElementById('devInfoMac');
+        if (el) el.textContent = macMatch[1];
+      }
+    }
+
+    async function readSerialLoop() {
+      const textDecoder = new TextDecoderStream();
+      const readableStreamClosed = termPort.readable.pipeTo(textDecoder.writable);
+      termReader = textDecoder.readable.getReader();
+      let buffer = '';
+      try {
+        while (termKeepReading) {
+          const { value, done } = await termReader.read();
+          if (done) break;
+          if (value) {
+            buffer += value;
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop();
+            for (const line of lines) {
+              appendTermLine(line);
+              parseDeviceLogLine(line);
+            }
+          }
+        }
+      } catch (err) {
+        if (termKeepReading) appendTermLine('[Stream closed: ' + (err.message || err) + ']', 'warn');
+      } finally {
+        try { await termReader.cancel(); } catch (_) {}
+        try { await readableStreamClosed.catch(() => {}); } catch (_) {}
+        await disconnectTerminal();
+      }
+    }
+
+    async function connectTerminal() {
+      if (!navigator.serial) {
+        alert('WebSerial is not supported in this browser. Please use Google Chrome or Microsoft Edge on desktop.');
+        return;
+      }
+      await disconnectTerminal();
+      const badge = document.getElementById('termStatusBadge');
+      const connectBtn = document.getElementById('btnTermConnect');
+      const banner = document.getElementById('deviceInfoBanner');
+      try {
+        if (badge) { badge.className = 'term-badge connecting'; badge.textContent = 'Connecting...'; }
+        termPort = await navigator.serial.requestPort();
+        await termPort.open({ baudRate: 115200 });
+        termKeepReading = true;
+        if (badge) { badge.className = 'term-badge connected'; badge.textContent = 'Connected (115200)'; }
+        if (banner) banner.style.display = 'flex';
+        if (connectBtn) {
+          connectBtn.className = 'term-btn disconnect';
+          connectBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15"></line></svg> <span>Disconnect</span>';
+        }
+        appendTermLine('--- Connected to Serial Console (115200 baud) ---', 'dbg');
+        readSerialLoop();
+      } catch (err) {
+        console.error('Terminal connection failed:', err);
+        await disconnectTerminal();
+        appendTermLine('Connection cancelled or failed: ' + (err.message || err), 'err');
+      }
+    }
+
+    const btnTermConnect = document.getElementById('btnTermConnect');
+    if (btnTermConnect) {
+      btnTermConnect.addEventListener('click', async () => {
+        if (termPort) await disconnectTerminal();
+        else await connectTerminal();
+      });
+    }
+
+    const btnTermClear = document.getElementById('btnTermClear');
+    if (btnTermClear) {
+      btnTermClear.addEventListener('click', () => {
+        const output = document.getElementById('termOutput');
+        if (output) output.innerHTML = '';
+      });
+    }
+
+    const btnTermToggle = document.getElementById('btnTermToggle');
+    if (btnTermToggle) {
+      btnTermToggle.addEventListener('click', () => {
+        const output = document.getElementById('termOutput');
+        if (!output) return;
+        if (output.classList.contains('collapsed')) {
+          output.classList.remove('collapsed');
+          output.classList.add('expanded');
+          btnTermToggle.textContent = 'Collapse ▲';
+        } else {
+          output.classList.remove('expanded');
+          output.classList.add('collapsed');
+          btnTermToggle.textContent = 'Expand ▼';
+        }
+      });
+    }
+
+    // Disconnect terminal before any flashing or Improv operations
+    const improvBtn = document.querySelector('improv-wifi-serial-launch-button');
+    if (improvBtn) improvBtn.addEventListener('click', () => { disconnectTerminal(); }, true);
+    const instBtnWrap = document.getElementById('installBtn');
+    if (instBtnWrap) instBtnWrap.addEventListener('click', () => { disconnectTerminal(); }, true);
   </script>
 
   <!-- Post-Install Success Modal with Next Steps -->

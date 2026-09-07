@@ -330,7 +330,7 @@ var
   configuredProcessingVolume* = 75.0'f32
   configuredWakeChimeSound* = wcBell
   wakeChimeEnabled* = true
-  wakeChimeVolume* = 80.0'f32
+  wakeChimeVolume* = 75.0'f32
   satellitePipeline* = newSatellitePipeline()
 
 esphomeControls:
@@ -366,7 +366,7 @@ esphomeControls:
     min = 0.0
     max = 100.0
     step = 5.0
-    default = 80.0
+    default = 75.0
     persist = true
     onChange(vol):
       wakeChimeVolume = vol
@@ -443,6 +443,15 @@ proc nim_action_set_mute*(muted: bool) {.exportc, cdecl.} =
   discard triggerServiceCall("set_privacy_mute", [
     ("muted", newParamValue(muted))
   ])
+
+proc nim_action_set_chime_sound*(sound: cstring) {.exportc, cdecl.} =
+  let chime = parseWakeChimeSound($sound)
+  configuredWakeChimeSound = chime
+  satellitePipeline.wakeChimeSound = chime
+
+proc nim_action_set_chime_volume*(volume: cfloat) {.exportc, cdecl.} =
+  wakeChimeVolume = float32(volume)
+  satellitePipeline.wakeChimeVolume = float32(volume / 100.0)
 
 
 
