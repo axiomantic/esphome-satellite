@@ -75,6 +75,46 @@
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
     button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
     button.install-btn:hover { background: var(--primary-hover); }
+    .action-buttons-row { width: 100%; display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
+    .action-buttons-row esp-web-install-button { flex: 2; min-width: 220px; }
+    .erase-btn { flex: 1; min-width: 180px; background: #1e293b; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 14px 18px; font-size: 0.92rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .erase-btn:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
+    .erase-status { width: 100%; box-sizing: border-box; border-radius: 6px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5; margin-top: 4px; text-align: left; }
+    .erase-status.in-progress { background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; color: #93c5fd; }
+    .erase-status.success { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #a7f3d0; }
+    .erase-status.error { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #fca5a5; }
+    .setup-guide-card { margin-top: 36px; padding-top: 28px; border-top: 1px solid #1e293b; width: 100%; text-align: left; }
+    .guide-header { margin-bottom: 18px; }
+    .guide-badge { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
+    .guide-header h3 { margin: 8px 0 4px; font-size: 1.25rem; color: #f1f5f9; }
+    .guide-steps { display: flex; flex-direction: column; gap: 14px; }
+    .guide-step { display: flex; gap: 14px; background: #080d1a; border: 1px solid #1e293b; border-radius: 8px; padding: 16px 18px; }
+    .step-number { width: 30px; height: 30px; border-radius: 50%; background: #1e293b; color: #60a5fa; border: 1px solid #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+    .step-content { flex: 1; }
+    .step-content h4 { margin: 0 0 6px; font-size: 0.95rem; color: #e2e8f0; }
+    .step-content p { margin: 0 0 8px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
+    .step-tip { background: rgba(15, 23, 42, 0.8); border-left: 3px solid #3b82f6; border-radius: 0 4px 4px 0; padding: 8px 12px; font-size: 0.8rem; color: #cbd5e1; }
+    .step-tip code { background: #1e293b; color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.82rem; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px; animation: fadeIn 0.2s ease; }
+    .modal-card { background: #0b1329; border: 1px solid #3b82f6; border-radius: 12px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); text-align: left; }
+    .modal-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .modal-icon-success { width: 40px; height: 40px; border-radius: 50%; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; color: #34d399; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: bold; flex-shrink: 0; }
+    .modal-header h2 { margin: 0; font-size: 1.3rem; color: #f8fafc; }
+    .modal-subtitle { color: #94a3b8; font-size: 0.82rem; margin-top: 2px; }
+    .modal-intro { color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; }
+    .next-steps-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+    .next-step-item { display: flex; gap: 12px; font-size: 0.86rem; color: #cbd5e1; line-height: 1.45; }
+    .next-step-item .num { width: 22px; height: 22px; border-radius: 50%; background: #1e293b; color: #60a5fa; border: 1px solid #3b82f6; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .next-step-item .subtext { color: #64748b; font-size: 0.78rem; margin-top: 4px; }
+    .next-step-item code { background: #1e293b; color: #38bdf8; padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; }
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+    .btn-ha-link { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 6px; font-size: 0.88rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-ha-link:hover { background: var(--primary-hover); }
+    .btn-modal-close { background: #1e293b; color: #94a3b8; border: 1px solid #334155; padding: 10px 16px; border-radius: 6px; font-size: 0.88rem; cursor: pointer; }
+    .btn-modal-close:hover { background: #334155; color: white; }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: currentColor; animation: spin 0.8s linear infinite; vertical-align: -0.1em; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .footer { margin-top: 24px; font-size: 0.8rem; color: var(--muted); text-align: center; }
   </style>
 </head>
@@ -165,10 +205,58 @@
     </div>
     <div class="actions">
       <div id="installWarningNotice" class="install-warning-notice"></div>
-      <esp-web-install-button id="installBtn" manifest="manifest.json">
-        <button slot="activate" class="install-btn">Install Firmware</button>
-        <span slot="unsupported">WebSerial is not supported in this browser. Please use Chrome or Edge on desktop.</span>
-      </esp-web-install-button>
+      <div class="action-buttons-row">
+        <esp-web-install-button id="installBtn" manifest="manifest.json">
+          <button slot="activate" class="install-btn">Install Firmware</button>
+          <span slot="unsupported">WebSerial is not supported in this browser. Please use Chrome or Edge on desktop.</span>
+        </esp-web-install-button>
+        <button type="button" id="btnEraseDevice" class="erase-btn" title="Completely wipe all flash partitions, cached Wi-Fi credentials, and NVS settings">
+          <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          <span>Erase Device (Factory Reset)</span>
+        </button>
+      </div>
+      <div id="eraseStatus" class="erase-status" style="display: none;"></div>
+    </div>
+
+    <!-- Next Steps: Connecting to Home Assistant Guide -->
+    <div class="setup-guide-card">
+      <div class="guide-header">
+        <span class="guide-badge">WHAT TO DO NEXT</span>
+        <h3>Next Steps: Connecting to Home Assistant</h3>
+      </div>
+      <div class="guide-steps">
+        <div class="guide-step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Connect to Wi-Fi</h4>
+            <p>Keep the USB cable plugged in. The installer modal will automatically prompt <strong>"CONNECT TO WI-FI"</strong> over WebSerial immediately after flashing finishes. Select your 2.4 GHz network and enter your password.</p>
+            <div class="step-tip"><strong>Fallback Hotspot:</strong> If the prompt is missed or USB is disconnected, connect your phone or laptop to the open Wi-Fi network <code>Satellite Fallback Hotspot</code> and navigate to <code>http://192.168.4.1</code> to enter Wi-Fi credentials.</div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Add in Home Assistant</h4>
+            <p>Open Home Assistant and navigate to <strong>Settings &rarr; Devices &amp; Services</strong>. Your new <strong>Voice Satellite</strong> will appear highlighted at the top under <strong>Discovered</strong>.</p>
+            <p>Click <strong>Configure</strong>, then click <strong>Submit</strong> (no encryption key required).</p>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Configure Voice Assistant &amp; Audio Presets</h4>
+            <p>Go to <strong>Settings &rarr; Voice Assistants</strong> to link the satellite to your Assist pipeline (Cloud, Whisper/Piper, or Ollama).</p>
+            <p>On the device card, you can customize your <strong>Wake Chime</strong> (<em>Modern Chime</em>, <em>Crystal Glass</em>, <em>Warm Kalimba</em>, <em>Meditation Bell</em>) and <strong>Processing Sound</strong> (<em>Typewriter</em>, <em>Clockwork</em>, <em>Water Droplets</em>) anytime!</p>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="step-number">&#8635;</div>
+          <div class="step-content">
+            <h4>Testing Clean Flow / Factory Reset</h4>
+            <p>If your device previously had another Wi-Fi network or an old encryption key saved in NVS memory, click <strong>Erase Device (Factory Reset)</strong> above or run <code>esptool.py erase_flash</code> in terminal before clicking Install Firmware.</p>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="footer">Powered by <a href="https://github.com/axiomantic/nim-esphome" target="_blank" style="color: #60a5fa;">nim-esphome</a> &amp; ESP-Web-Tools</div>
   </div>
@@ -902,6 +990,106 @@
     });
     updateFieldDependencies();
     checkInstallReadiness();
+
+    // Success Modal Logic
+    const installBtnEl = document.getElementById('installBtn');
+    const successModal = document.getElementById('installSuccessModal');
+    const btnCloseModal = document.getElementById('btnCloseSuccessModal');
+    if (installBtnEl && successModal) {
+      installBtnEl.addEventListener('state-changed', (ev) => {
+        if (ev && ev.detail && (ev.detail.state === 'success' || ev.detail.state === 'DONE')) {
+          successModal.style.display = 'flex';
+        }
+      });
+    }
+    if (btnCloseModal && successModal) {
+      btnCloseModal.addEventListener('click', () => { successModal.style.display = 'none'; });
+      successModal.addEventListener('click', (e) => { if (e.target === successModal) successModal.style.display = 'none'; });
+    }
+
+    // Factory Reset / Erase Device Button
+    const btnErase = document.getElementById('btnEraseDevice');
+    const eraseStatus = document.getElementById('eraseStatus');
+    if (btnErase && eraseStatus) {
+      btnErase.addEventListener('click', async () => {
+        if (!navigator.serial) {
+          alert('WebSerial is not supported in this browser. Please use Google Chrome or Microsoft Edge on desktop.');
+          return;
+        }
+        if (!confirm('This will completely wipe all flash partitions, cached Wi-Fi credentials, and NVS settings on your ESP32 device.\n\nAre you sure you want to proceed with a factory reset?')) {
+          return;
+        }
+        eraseStatus.style.display = 'block';
+        eraseStatus.className = 'erase-status in-progress';
+        eraseStatus.innerHTML = '<span class="spinner"></span> Requesting serial port... Please select your ESP32 device in the browser prompt.';
+        try {
+          const port = await navigator.serial.requestPort();
+          eraseStatus.innerHTML = '<span class="spinner"></span> Loading WebSerial flasher engine...';
+          const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.6.1/bundle.js');
+          const transport = new Transport(port, true);
+          const esploader = new ESPLoader({
+            transport: transport,
+            baudrate: 115200,
+            terminal: { clean() {}, writeLine(d) { console.log('[esptool]', d); }, write(d) { console.log('[esptool]', d); } }
+          });
+          eraseStatus.innerHTML = '<span class="spinner"></span> Connecting to ESP32 bootloader...';
+          await esploader.main();
+          eraseStatus.innerHTML = '<span class="spinner"></span> Erasing entire flash memory (wiping NVS, credentials, partitions)...';
+          await esploader.eraseFlash();
+          await transport.disconnect();
+          eraseStatus.className = 'erase-status success';
+          eraseStatus.innerHTML = ICONS.check + ' <strong>Flash erased successfully!</strong> All cached Wi-Fi credentials, NVS keys, and data have been wiped clean. You can now click <strong>Install Firmware</strong> above for a pristine out-of-the-box install.';
+        } catch (err) {
+          console.error('Erase error:', err);
+          eraseStatus.className = 'erase-status error';
+          eraseStatus.innerHTML = ICONS.alert + ' <strong>Erase failed:</strong> ' + (err.message || err) + '. If the port was busy, unplug and replug the USB cable and try again.';
+        }
+      });
+    }
   </script>
+
+  <!-- Post-Install Success Modal with Next Steps -->
+  <div id="installSuccessModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-success">&#10003;</div>
+        <div>
+          <h2>Firmware Installed Successfully!</h2>
+          <div class="modal-subtitle">Follow these next steps to connect to Home Assistant</div>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Your ESP32-S3 voice satellite firmware has been flashed.</p>
+        <div class="next-steps-list">
+          <div class="next-step-item">
+            <span class="num">1</span>
+            <div>
+              <strong>Connect Wi-Fi:</strong> The browser installer dialog will prompt <strong>"CONNECT TO WI-FI"</strong>. Select your 2.4 GHz network and enter your password.
+              <div class="subtext">If closed or skipped, connect your phone to <code>Satellite Fallback Hotspot</code> and navigate to <code>http://192.168.4.1</code>.</div>
+            </div>
+          </div>
+          <div class="next-step-item">
+            <span class="num">2</span>
+            <div>
+              <strong>Add in Home Assistant:</strong> Open Home Assistant &rarr; <strong>Settings &rarr; Devices &amp; Services</strong>. Look under <strong>Discovered</strong> for <strong>Voice Satellite</strong>. Click <strong>Configure &rarr; Submit</strong> (no encryption key needed).
+            </div>
+          </div>
+          <div class="next-step-item">
+            <span class="num">3</span>
+            <div>
+              <strong>Voice &amp; Audio Presets:</strong> Link your Assist pipeline in <strong>Settings &rarr; Voice Assistants</strong>, and choose your favorite wake chime and processing loop right on the device card!
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <a href="https://my.home-assistant.io/redirect/config_flow_start?domain=esphome" target="_blank" class="btn-ha-link">
+          <span>Open Home Assistant</span>
+          <svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </a>
+        <button type="button" class="btn-modal-close" id="btnCloseSuccessModal">Close</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

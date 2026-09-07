@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rich sound preset library featuring Modern Minimalist (`Modern Chime`, `Crystal Glass`, `Clockwork`) and Organic Acoustic (`Warm Kalimba`, `Meditation Bell`, `Water Droplets`, and vintage `Typewriter`) options for wake chimes and processing sound feedback loops.
 - Dedicated partition flashing support for preset wake chimes (`chime_data` at `0x390000`) and processing sounds (`sound_data` at `0x370000`) in ESP-Web-Tools web installer.
 - Runtime template entity support in ESPHome YAML for `select.wake_chime_sound` and `select.processing_sound` with new audio presets.
+- In-browser **Erase Device (Factory Reset)** button powered by WebSerial and `esptool-js` to wipe flash memory, cached Wi-Fi credentials, and NVS partitions before flashing.
+- Persistent **Next Steps: Connecting to Home Assistant** guide on the installer page and interactive post-installation success modal with direct Home Assistant linking.
 
 ## [0.4.0] - 2026-09-06
 
