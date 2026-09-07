@@ -54,6 +54,9 @@ logger:
 
 improv_serial:
 
+safe_mode:
+  disabled: true
+
 api:
   services:
     - service: test_audio_feedback
@@ -94,18 +97,22 @@ micro_wake_word:
     - model: ../assets/models/clemens.json
     - model: okay_nabu
   on_wake_word_detected:
-    - lambda: |-
-        std::string selected = id(active_wake_word).current_option();
-        if (selected != "All" &&
-            selected != wake_word &&
-            !(selected == "Mr. Clemens" && (wake_word == "Mr. Clemens" || wake_word == "clemens")) &&
-            !(selected == "Okay Nabu" && wake_word == "okay_nabu")) {
-          ESP_LOGD("satellite", "Ignored wake word '%s' (active: '%s')", wake_word.c_str(), selected.c_str());
-          return;
-        }
-        call_nim_wake_word(wake_word.c_str(), 0);
-    - voice_assistant.start:
-        wake_word: !lambda return wake_word;
+    - if:
+        condition:
+          lambda: |-
+            std::string selected = id(active_wake_word).current_option();
+            if (selected == "All") return true;
+            if (selected == "Mr. Clemens" && (wake_word == "Mr. Clemens" || wake_word == "clemens")) return true;
+            if (selected == "Okay Nabu" && wake_word == "okay_nabu") return true;
+            return false;
+        then:
+          - lambda: |-
+              call_nim_wake_word(wake_word.c_str(), 0);
+          - voice_assistant.start:
+              wake_word: !lambda return wake_word;
+        else:
+          - lambda: |-
+              ESP_LOGD("satellite", "Ignored wake word '%s' (active: '%s')", wake_word.c_str(), id(active_wake_word).current_option().c_str());
 
 voice_assistant:
   id: va
