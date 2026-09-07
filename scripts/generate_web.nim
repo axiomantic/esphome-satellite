@@ -1,10 +1,22 @@
-import std/os
+import std/[os, strutils]
 import nim_esphome/dsl/installer
+
+proc getPackageVersion(): string =
+  let nimbleContent = readFile("esphome_satellite.nimble")
+  for line in nimbleContent.splitLines():
+    let trimmed = line.strip()
+    if trimmed.startsWith("version"):
+      let parts = trimmed.split('=')
+      if parts.len == 2:
+        return parts[1].strip().strip(chars = {'"', ' '})
+  raise newException(ValueError, "Could not find version in esphome_satellite.nimble")
+
+let currentVersion = getPackageVersion()
 
 let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   installer.title = "esphome-satellite Web Installer"
   installer.description = "On-device state supervisor for ESPHome and Home Assistant voice satellites with hardware target switching, multi-wake-word selection, and customizable audio feedback."
-  installer.version = "0.4.0"
+  installer.version = currentVersion
   installer.homeAssistantDomain = "esphome"
   installer.chipFamily = "ESP32-S3"
   installer.factoryBinPath = "firmware-factory.bin"
@@ -164,4 +176,5 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   )
 
 writeFile("web/index.html", satelliteInstaller.generateHtml())
-echo "Successfully generated web/index.html via nim-esphome DSL!"
+writeFile("web/manifest.json", satelliteInstaller.generateManifest())
+echo "Successfully generated web/index.html and web/manifest.json (v" & currentVersion & ") via nim-esphome DSL!"

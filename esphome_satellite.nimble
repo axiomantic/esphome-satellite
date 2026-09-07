@@ -14,6 +14,7 @@ requires "typestates >= 0.12.0"
 
 task test, "Run satellite typestate invariant tests":
   exec "nim c -r tests/test_fsm.nim"
+  exec "nim c -r tests/test_version_sync.nim"
   exec "cd trainer && npm test"
 
 task check_cpp, "Verify embedded C++ generation for ESP32 target":
