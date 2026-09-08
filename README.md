@@ -80,15 +80,20 @@ Once the board has rebooted into ESPHome, connect using either method:
 > - **Clear Stale Discovery Cache**: Alternatively, click **Ignore** on the discovered card and restart Home Assistant Core (**Developer Tools > YAML > Restart**) to flush the cached discovery session.
 > - **Clean Factory Erase**: When flashing a brand-new board from Seeed for the first time, always select **"Erase device"** in the Web Installer so all factory NVS encryption tokens and partitions are completely wiped.
 
-#### Step 4: Configure Voice Assistant & Audio Presets
+#### Step 4: Configure Multi-Assistant Pipelines & Audio Presets
 
 1. In Home Assistant, navigate to **Settings > Voice Assistants**.
-2. Assign the satellite to your desired voice pipeline (Home Assistant Cloud, Whisper/Piper, or local Ollama LLM).
-3. On the device card in Home Assistant, customize your audio feedback across 17 pre-compiled acoustic themes:
+2. Create or verify your voice assistant pipelines (for example, a general smart home pipeline, a local Ollama LLM persona like *Mark Twain*, or a specialized assistant like *Jarvis*).
+3. Navigate to **Settings > Devices & Services > ESPHome** and click on your satellite device:
+   - **Assistant (Slot 1)**: Select your primary pipeline (e.g., *Mark Twain*).
+   - **Wake word (Slot 1)**: Select which wake word triggers Slot 1 (e.g., *Mr. Clemens*).
+   - **Assistant 2 (Slot 2)**: Select your secondary pipeline (e.g., *Jarvis* or *Home Assistant*).
+   - **Wake word 2 (Slot 2)**: Select which wake word triggers Slot 2 (e.g., *Okay Nabu* or your uploaded custom model).
+4. On the device card, customize your audio feedback across 17 pre-compiled acoustic themes:
    - **Wake Chime**: *Bell Ping*, *Modern Chime*, *Crystal Glass*, *Warm Kalimba*, *Meditation Bell*, *Marimba*, *Subtle Beep*, *Bamboo Chime*, *Tibetan Bowl*, *Acoustic Harp*, *Woodblock*, *Ceramic Bell*, *Neon Shimmer*, *Prism Ping*, *Cyber Bloom*, *Quantum Beep*, *Aero Chime*, or *Silent*.
    - **Processing Sound**: *Spinner*, *Pulse*, *Sonar*, *Tick*, *Typewriter*, *Clockwork* (seamless zero-gap loop), *Water Droplets*, *Raindrops*, *Forest Stream*, *Campfire Ember*, *Shishi-Odoshi*, *Soft Footsteps*, *Radar Ping*, *Data Crunch*, *Telemetry Blip*, *Quantum Flux*, *Retro Terminal*, or *Silent*.
    - **Cancel Sound**: *Match Wake Chime*, any of the 17 themed cancel resolves, or *Silent*.
-   - **Active Wake Word**: *Mr. Clemens*, *Okay Nabu*, your flashed custom wake word model, or *All*.
+   - **Wake Word Sensitivity**: *Slightly sensitive*, *Moderately sensitive*, or *Very sensitive*.
 
 > **Manual / Source Builds**: See the full [**Integration Guide for ESPHome**](#integration-guide-for-esphome) below for custom YAML overrides, external component configuration, and C ABI bridge bindings.
 
@@ -98,11 +103,17 @@ Once the board has rebooted into ESPHome, connect using either method:
 
 - [Quick Install](#quick-install)
 - [Post-Installation Setup](#post-installation-setup)
+- [Multi-Wake-Word to Multi-Assistant Pipeline Mapping](#multi-wake-word-to-multi-assistant-pipeline-mapping)
+- [Real-Time Audio DSP & Speech Optimization](#real-time-audio-dsp--speech-optimization)
+- [Discrete Partition Flashing & NVS State Preservation](#discrete-partition-flashing--nvs-state-preservation)
 - [The Voice Satellite Race Condition Problem](#the-voice-satellite-race-condition-problem)
 - [How Compile-Time Typestates Solve It](#how-compile-time-typestates-solve-it)
 - [State Machine Architecture](#state-machine-architecture)
 - [Granular Error Handling](#granular-error-handling)
 - [Extended Lifecycle States](#extended-lifecycle-states)
+- [Audio Feedback, Processing Loops & Cancel Sounds](#audio-feedback-processing-loops--cancel-sounds)
+- [In-Browser Audio Transcoding & WebSerial Diagnostics](#in-browser-audio-transcoding--webserial-diagnostics)
+- [Home Assistant Surface Controls & Entities](#home-assistant-surface-controls--entities)
 - [Integration Guide for ESPHome](#integration-guide-for-esphome)
   - [Step 1: Include External Components](#step-1-include-external-components)
   - [Step 2: Add the C Bridge Header](#step-2-add-the-c-bridge-header)
@@ -112,7 +123,72 @@ Once the board has rebooted into ESPHome, connect using either method:
 - [Local Host Testing](#local-host-testing)
 - [Project Layout](#project-layout)
 - [Changelog](#changelog)
-- [License](#license)
+---
+
+## Multi-Wake-Word to Multi-Assistant Pipeline Mapping
+
+In modern Home Assistant voice environments, a single satellite device often needs to address multiple distinct personas, languages, or language models. For instance:
+- *"Mr. Clemens"* can invoke a specialized, literary Mark Twain Ollama LLM persona.
+- *"Okay Nabu"* can invoke the fast local Home Assistant pipeline for home automation commands.
+- *"Hey Jarvis"* or a custom trained model can invoke an uncensored cloud conversational pipeline.
+
+### How On-Device Concurrent Multi-Wake-Word Works
+`esphome-satellite` harnesses the ESP32-S3 vector instructions and hardware neural network accelerator to evaluate up to **3 wake word models concurrently in real time**.
+
+1. **Model Advertisement**: When the satellite connects to Home Assistant over the encrypted Native API, the firmware exposes all available on-device models (*Mr. Clemens*, *Okay Nabu*, plus any custom models loaded from dedicated flash partitions).
+2. **Dual-Assistant Configuration**: In the Home Assistant device panel, Home Assistant maps these models into dual-assistant slots:
+   - **Assistant (Slot 1)**: Maps your primary pipeline (e.g. *Mark Twain*) to its trigger wake word (e.g. *Mr. Clemens*).
+   - **Assistant 2 (Slot 2)**: Maps your secondary pipeline (e.g. *Jarvis* or *Home Assistant*) to its trigger wake word (e.g. *Okay Nabu*).
+3. **Zero-Latency Routing**: When speech is detected, the on-device microWakeWord engine identifies which specific wake word was matched and transmits the recognized phrase (`wake_word_phrase`) directly inside the `VoiceAssistantRequest` packet.
+4. **Deterministic Server Dispatch**: Home Assistant inspects the incoming phrase and automatically dispatches the audio stream to the exact pipeline bound to that wake word slot. No complex automations, blueprint scripts, or server-side audio rerouting required.
+
+### Dynamic Partition Loader for Custom Models
+Using [`src/wake_partition_loader.nim`](src/wake_partition_loader.nim), users can flash up to 3 custom microWakeWord `.tflite` models into dedicated flash partitions (`wake_model`, `wake_model_2`, `wake_model_3` at `0x510000`, `0x550000`, `0x590000`). At boot time, the partition loader validates 64-byte `WAKE` headers, extracts tensor arena sizes and probability cutoffs, memory-maps the weights directly from SPI flash (avoiding heap allocation), and dynamically registers them into the active detection pool.
+
+---
+
+## Real-Time Audio DSP & Speech Optimization
+
+Small voice satellites typically operate on compact 1W to 2W onboard speakers driven by miniature Class-D amplifiers. These drivers have narrow dynamic ranges and clip aggressively when driven with uncompressed text-to-speech audio.
+
+`esphome-satellite` implements a real-time, zero-allocation audio DSP pipeline written in Nim ([`src/audio_dsp.nim`](src/audio_dsp.nim)) that runs on the ESP32 CPU directly on audio buffers before I2S DMA transmission:
+
+### 1. Dynamic Range Compression
+- **Threshold**: `-14.0 dBFS`
+- **Compression Ratio**: `3:1`
+- **Envelope Follower**: Smooth ballistic tracking with a `5ms` attack time and a `100ms` release time.
+
+Signals above `-14 dBFS` undergo smooth gain reduction, preventing loud passages and transient voice bursts from overpowering the amplifier or driving the speaker cone into physical distortion.
+
+### 2. Dialogue Makeup Boost
+- **Makeup Gain**: `+5.0 dB`
+
+Speech synthesis often includes subtle whispers, breath sounds, and soft cadence drops. A static `+5.0 dB` makeup boost raises quiet vocal passages, ensuring clarity and intelligibility across the room even at lower overall volume levels.
+
+### 3. Soft-Knee Rational Limiting
+A rational transfer limiter clamps any remaining peak overshoots above `-1.0 dBFS` using a smooth non-linear knee:
+```text
+limiter(x) = x / (1.0 + |x|)
+```
+This guarantees that digital audio values never wrap or hard-clip, providing warm, distortion-free playback even when driving the speaker at maximum volume.
+
+---
+
+## Discrete Partition Flashing & NVS State Preservation
+
+Standard ESPHome web installations flash a single merged `firmware.factory.bin` starting at flash address `0x0` and extending across `~1.88 MB`. Because this contiguous binary covers the Non-Volatile Storage (NVS) address space (`0x9000` to `0xE000`) with blank `0xFF` padding bytes, flashing a firmware update traditionally wiped all saved device state—forcing users to re-enter Wi-Fi credentials, re-select wake words, and reconfigure volume levels after every release.
+
+`esphome-satellite` implements **discrete partition flashing**:
+
+| Binary Component | Flash Offset | Size | Purpose |
+|---|---|---|---|
+| **`bootloader.bin`** | `0x00000` (`0`) | ~21 KB | ESP-IDF 2nd-stage bootloader |
+| **`partitions.bin`** | `0x08000` (`32768`) | 3 KB | Partition table layout |
+| *NVS Storage* | *`0x09000` - `0x0E000`* | *20 KB* | **Untouched / Preserved** (Wi-Fi, volumes, preferences) |
+| **`ota_data_initial.bin`** | `0x0E000` (`57344`) | 8 KB | OTA boot selection metadata |
+| **`firmware-ota.bin`** | `0x10000` (`65536`) | ~1.82 MB | Core firmware application (`app0` slot) |
+
+When updating an existing satellite via the [Web Installer](https://axiomantic.github.io/esphome-satellite/), leaving **"Erase device"** unchecked preserves all stored Wi-Fi credentials, volume preferences, wake word assignments, and sound theme selections across flashes.
 
 ---
 
@@ -408,25 +484,43 @@ When a user finishes speaking, voice assistants often experience variable cloud 
 
 ---
 
+## In-Browser Audio Transcoding & WebSerial Diagnostics
+
+The [`esphome-satellite` Web Installer](https://axiomantic.github.io/esphome-satellite/) includes built-in browser-based audio tooling and serial diagnostics powered by the Web Audio API and WebSerial:
+
+- **Client-Side Audio Transcoder**: Users can drag and drop custom audio files (`.wav`, `.mp3`, `.ogg`, `.flac`, `.m4a`) directly in Chrome or Edge. The browser's native `OfflineAudioContext` decodes the audio, resamples it to 16,000 Hz mono 16-bit PCM, peak-normalizes it to `-1.0 dBFS`, and flashes it directly into dedicated flash partitions (`chime_data`, `sound_data`, or `cancel_data`).
+- **Interactive Sound Showcase**: Listen to high-fidelity MP3 previews of all 17 pre-compiled acoustic themes directly in the browser before flashing.
+- **WebSerial Terminal & Hardware Reset**: Connect to the device at 115,200 baud directly from the browser window. View live boot logs and send DTR/RTS hardware reset pulses to cycle the ESP32-S3 without physical unplugging.
+
+---
+
 ## Home Assistant Surface Controls & Entities
 
-`esphome-satellite` exposes native Home Assistant entities generated via `nim-esphome`'s declarative controls DSL, enabling runtime configuration from your dashboards without reflashing:
+`esphome-satellite` exposes native Home Assistant entities generated via `nim-esphome`'s declarative controls DSL, enabling full runtime configuration and automation from your dashboards:
 
 | Entity ID | Domain | Type / Options | Description |
 |---|---|---|---|
-| `select.active_wake_word` | `select` | `Mr. Clemens`, `Okay Nabu`, `<Custom Model>`, `All` | Active wake word detection model run on-device. |
-| `select.wake_chime_sound` | `select` | 17 Acoustic Themes, `Silent` | Acknowledgement chime played immediately upon wake word detection. |
+| `select.assistant` | `select` | Available HA pipelines | Primary voice assistant pipeline (Slot 1). |
+| `select.wake_word` | `select` | `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model mapped to primary Assistant (Slot 1). |
+| `select.assistant_2` | `select` | Available HA pipelines | Secondary voice assistant pipeline (Slot 2). |
+| `select.wake_word_2` | `select` | `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model mapped to secondary Assistant (Slot 2). |
+| `select.wake_word_sensitivity` | `select` | *Slightly*, *Moderately*, *Very sensitive* | Probability cutoff sensitivity for on-device wake detection. |
+| `text.cancellation_words` | `text` | Comma-separated strings | Phrases that immediately abort active listening (*stop, nevermind, cancel*). |
+| `select.wake_chime_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played immediately upon wake word detection. |
 | `switch.wake_chime` | `switch` | `on` / `off` | Master toggle for wake acknowledgement chime playback. |
 | `number.wake_chime_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for wake chimes. |
-| `select.processing_sound` | `select` | 17 Acoustic Themes, `Silent` | Continuous audio loop played while speech is processing. |
-| `switch.processing_sound_switch` | `switch` | `on` / `off` | Master toggle for intermediate processing audio loop. |
+| `select.processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played while speech is processing. |
 | `number.processing_sound_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for intermediate processing loop. |
-| `select.cancel_sound` | `select` | `Match Wake Chime`, 17 Acoustic Themes, `Silent` | Audible resolve played when speech recognition is cancelled or times out. |
+| `select.cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Audible resolve played when speech recognition is cancelled or times out. |
 | `switch.cancel_sound_switch` | `switch` | `on` / `off` | Master toggle for cancel sound playback. |
 | `number.cancel_sound_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for cancel sounds. |
-| `switch.mic_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |
+| `select.led_idle_pattern` | `select` | `Off`, `Breathe`, `Rainbow`, `Spinner` | Ambient idle animation mode for the 12-LED addressable ring. |
+| `number.led_brightness` | `number` | `5%` – `100%` (step `5%`) | Brightness scaling for all LED animations. |
+| `switch.privacy_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |
+| `sensor.satellite_state` | `sensor` | 14 Typestates | Real-time state machine telemetry (*Idle*, *Woken*, *Listening*, *Thinking*, *Replying*). |
+| `button.reset_audio_hardware` | `button` | Action | Hardware codec re-initialization and XMOS SoC reboot pulse. |
 
-All control settings are saved to on-device NVS flash memory and persist across power cycles.
+All control settings are saved to on-device NVS flash memory and persist across power cycles and firmware updates.
 
 ---
 
