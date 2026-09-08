@@ -38,6 +38,7 @@ type
   Listening* = distinct SatelliteContext
   Thinking* = distinct SatelliteContext
   Replying* = distinct SatelliteContext
+  Cancelling* = distinct SatelliteContext
 
   # Error & Offline States
   SilentDismiss* = distinct SatelliteContext
@@ -54,13 +55,14 @@ type
 
 typestate SatelliteFSM:
   consumeOnTransition = false
-  states Idle, Woken, Listening, Thinking, Replying, SilentDismiss, PipelineError, ConnectionError, Muted, FollowUp, PlayingMedia, Alerting, Announcing, Updating
+  states Idle, Woken, Listening, Thinking, Replying, Cancelling, SilentDismiss, PipelineError, ConnectionError, Muted, FollowUp, PlayingMedia, Alerting, Announcing, Updating
   transitions:
     Idle -> (Woken | ConnectionError | Muted | PlayingMedia | Alerting | Announcing | Updating) as IdleResult
-    Woken -> (Listening | SilentDismiss | ConnectionError) as WokenResult
-    Listening -> (Thinking | SilentDismiss | PipelineError | ConnectionError | Idle) as ListenResult
-    Thinking -> (Replying | PipelineError | ConnectionError | Idle) as ThinkResult
-    Replying -> (Idle | FollowUp | PipelineError | ConnectionError) as ReplyResult
+    Woken -> (Listening | Cancelling | SilentDismiss | PipelineError | ConnectionError) as WokenResult
+    Listening -> (Thinking | Cancelling | SilentDismiss | PipelineError | ConnectionError | Idle) as ListenResult
+    Thinking -> (Replying | Cancelling | PipelineError | ConnectionError | Idle) as ThinkResult
+    Replying -> (Idle | Cancelling | FollowUp | PipelineError | ConnectionError) as ReplyResult
+    Cancelling -> (Idle | PlayingMedia | ConnectionError) as CancelResult
     FollowUp -> (Listening | Idle | ConnectionError) as FollowUpResult
     SilentDismiss -> (Idle | PlayingMedia) as DismissResult
     PipelineError -> (Idle | PlayingMedia) as PipeErrResult
@@ -96,6 +98,12 @@ proc onChimeFailed*(s: Woken): SilentDismiss {.transition.} =
   warn("SatelliteFSM", "State: WOKEN -> SILENT_DISMISS (chime failed)")
   result = SilentDismiss(SatelliteContext(s))
 
+proc onChimeTimeout*(s: Woken): PipelineError {.transition.} =
+  var ctx = SatelliteContext(s)
+  ctx.errorCode = "chime-timeout"
+  error("SatelliteFSM", "State: WOKEN -> PIPELINE_ERROR (wake chime playback timeout)")
+  result = PipelineError(ctx)
+
 proc onSpeechEnded*(s: Listening): Thinking {.transition.} =
   info("SatelliteFSM", "State: LISTENING -> THINKING (VAD speech ended)")
   result = Thinking(SatelliteContext(s))
@@ -104,9 +112,13 @@ proc onSilenceTimeout*(s: Listening): SilentDismiss {.transition.} =
   info("SatelliteFSM", "State: LISTENING -> SILENT_DISMISS (no speech recognized)")
   result = SilentDismiss(SatelliteContext(s))
 
-proc onStopDuringListening*(s: Listening): Idle {.transition.} =
-  info("SatelliteFSM", "State: LISTENING -> IDLE (Stop command received)")
-  result = Idle(SatelliteContext())
+proc onStopDuringWoken*(s: Woken): Cancelling {.transition.} =
+  info("SatelliteFSM", "State: WOKEN -> CANCELLING (Stop command received during chime)")
+  result = Cancelling(SatelliteContext(s))
+
+proc onStopDuringListening*(s: Listening): Cancelling {.transition.} =
+  info("SatelliteFSM", "State: LISTENING -> CANCELLING (Stop command received during listening)")
+  result = Cancelling(SatelliteContext(s))
 
 proc onPipelineErrorFromListening*(s: Listening, err: string): PipelineError {.transition.} =
   var ctx = SatelliteContext(s)
@@ -118,9 +130,15 @@ proc onTtsStarted*(s: Thinking): Replying {.transition.} =
   info("SatelliteFSM", "State: THINKING -> REPLYING (TTS playback started)")
   result = Replying(SatelliteContext(s))
 
-proc onStopDuringThinking*(s: Thinking): Idle {.transition.} =
-  info("SatelliteFSM", "State: THINKING -> IDLE (Stop command received)")
-  result = Idle(SatelliteContext())
+proc onStopDuringThinking*(s: Thinking): Cancelling {.transition.} =
+  info("SatelliteFSM", "State: THINKING -> CANCELLING (Stop command received during thinking)")
+  result = Cancelling(SatelliteContext(s))
+
+proc onProcessingTimeout*(s: Thinking): PipelineError {.transition.} =
+  var ctx = SatelliteContext(s)
+  ctx.errorCode = "server-timeout"
+  error("SatelliteFSM", "State: THINKING -> PIPELINE_ERROR (server response timeout)")
+  result = PipelineError(ctx)
 
 proc onPipelineErrorFromThinking*(s: Thinking, err: string): PipelineError {.transition.} =
   var ctx = SatelliteContext(s)
@@ -130,6 +148,26 @@ proc onPipelineErrorFromThinking*(s: Thinking, err: string): PipelineError {.tra
 
 proc onTtsFinished*(s: Replying): Idle {.transition.} =
   info("SatelliteFSM", "State: REPLYING -> IDLE (TTS playback finished)")
+  result = Idle(SatelliteContext())
+
+proc onTtsTimeout*(s: Replying): Idle {.transition.} =
+  warn("SatelliteFSM", "State: REPLYING -> IDLE (TTS stream timeout)")
+  result = Idle(SatelliteContext())
+
+proc onStopDuringReplying*(s: Replying): Cancelling {.transition.} =
+  info("SatelliteFSM", "State: REPLYING -> CANCELLING (Stop command received during TTS)")
+  result = Cancelling(SatelliteContext(s))
+
+proc onCancelFinished*(s: Cancelling): Idle {.transition.} =
+  info("SatelliteFSM", "State: CANCELLING -> IDLE (cancel chime finished)")
+  result = Idle(SatelliteContext())
+
+proc onCancelFinishedToMedia*(s: Cancelling): PlayingMedia {.transition.} =
+  info("SatelliteFSM", "State: CANCELLING -> PLAYING_MEDIA (restoring media audio)")
+  result = PlayingMedia(SatelliteContext())
+
+proc onCancelTimeout*(s: Cancelling): Idle {.transition.} =
+  warn("SatelliteFSM", "State: CANCELLING -> IDLE (cancel chime timeout)")
   result = Idle(SatelliteContext())
 
 proc onFollowUpRequested*(s: Replying): FollowUp {.transition.} =
@@ -142,10 +180,6 @@ proc onFollowUpReadyToListen*(s: FollowUp): Listening {.transition.} =
 
 proc onFollowUpTimeout*(s: FollowUp): Idle {.transition.} =
   info("SatelliteFSM", "State: FOLLOW_UP -> IDLE (dialogue timed out)")
-  result = Idle(SatelliteContext())
-
-proc onStopDuringReplying*(s: Replying): Idle {.transition.} =
-  info("SatelliteFSM", "State: REPLYING -> IDLE (Stop command received during TTS)")
   result = Idle(SatelliteContext())
 
 proc onPipelineErrorFromReplying*(s: Replying, err: string): PipelineError {.transition.} =
@@ -186,7 +220,11 @@ proc onAlertFromMedia*(s: PlayingMedia): Alerting {.transition.} =
 
 proc onAlertDismiss*(s: Alerting): Idle {.transition.} =
   info("SatelliteFSM", "State: ALERTING -> IDLE (alert dismissed)")
-  result = Idle(SatelliteContext(s))
+  result = Idle(SatelliteContext())
+
+proc onAlertTimeout*(s: Alerting): Idle {.transition.} =
+  warn("SatelliteFSM", "State: ALERTING -> IDLE (unattended timer timeout)")
+  result = Idle(SatelliteContext())
 
 # --- Announcement / Intercom Transitions ---
 
@@ -200,7 +238,11 @@ proc onAnnouncementFromMedia*(s: PlayingMedia): Announcing {.transition.} =
 
 proc onAnnouncementEnd*(s: Announcing): Idle {.transition.} =
   info("SatelliteFSM", "State: ANNOUNCING -> IDLE (broadcast finished)")
-  result = Idle(SatelliteContext(s))
+  result = Idle(SatelliteContext())
+
+proc onAnnouncementTimeout*(s: Announcing): Idle {.transition.} =
+  warn("SatelliteFSM", "State: ANNOUNCING -> IDLE (announcement timeout)")
+  result = Idle(SatelliteContext())
 
 # --- OTA Update Transitions ---
 
@@ -224,6 +266,10 @@ proc onOtaComplete*(s: Updating): Idle {.transition.} =
   info("SatelliteFSM", "State: UPDATING -> IDLE (OTA flash complete)")
   result = Idle(SatelliteContext(s))
 
+proc onOtaTimeout*(s: Updating): Idle {.transition.} =
+  warn("SatelliteFSM", "State: UPDATING -> IDLE (OTA update timeout)")
+  result = Idle(SatelliteContext(s))
+
 # --- Offline / Disconnect Transitions ---
 
 proc onDisconnectFromIdle*(s: Idle): ConnectionError {.transition.} =
@@ -232,6 +278,10 @@ proc onDisconnectFromIdle*(s: Idle): ConnectionError {.transition.} =
 
 proc onDisconnectFromWoken*(s: Woken): ConnectionError {.transition.} =
   warn("SatelliteFSM", "State: WOKEN -> CONNECTION_ERROR (HA disconnected)")
+  result = ConnectionError(SatelliteContext(s))
+
+proc onDisconnectFromCancelling*(s: Cancelling): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: CANCELLING -> CONNECTION_ERROR (HA disconnected)")
   result = ConnectionError(SatelliteContext(s))
 
 proc onDisconnectFromListening*(s: Listening): ConnectionError {.transition.} =
@@ -312,6 +362,7 @@ type
     rsAlerting = 11
     rsAnnouncing = 12
     rsUpdating = 13
+    rsCancelling = 14
 
 var
   currentState: RuntimeState = rsIdle
@@ -320,6 +371,7 @@ var
   ctxListening: Listening
   ctxThinking: Thinking
   ctxReplying: Replying
+  ctxCancelling: Cancelling
   ctxDismiss: SilentDismiss
   ctxPipelineErr: PipelineError
   ctxConnErr: ConnectionError
@@ -470,6 +522,22 @@ proc returnFromPipelineError() =
   else:
     currentState = rsIdle
 
+proc returnFromCancelFlow() =
+  if mediaWasPlaying:
+    mediaWasPlaying = false
+    ctxMedia = onCancelFinishedToMedia(ctxCancelling)
+    currentState = rsPlayingMedia
+  else:
+    ctxIdle = onCancelFinished(ctxCancelling)
+    currentState = rsIdle
+
+proc nim_satellite_cancel_done*(ok: bool) {.exportc, cdecl.} =
+  if currentState == rsCancelling:
+    returnFromCancelFlow()
+
+proc nim_satellite_is_cancelling*(): bool {.exportc, cdecl.} =
+  result = (currentState == rsCancelling)
+
 proc nim_satellite_wake_word*(word: cstring, angle: cint) {.exportc, cdecl.} =
   case currentState
   of rsIdle:
@@ -533,24 +601,25 @@ proc nim_satellite_stop_word*() {.exportc, cdecl.} =
   satellitePipeline.stopProcessingLoop()
   case currentState
   of rsWoken:
-    ctxDismiss = onChimeFailed(ctxWoken)
-    ctxIdle = onDismiss(ctxDismiss)
-    returnFromVoiceFlow()
+    ctxCancelling = onStopDuringWoken(ctxWoken)
+    currentState = rsCancelling
   of rsListening:
-    ctxIdle = onStopDuringListening(ctxListening)
-    returnFromVoiceFlow()
+    ctxCancelling = onStopDuringListening(ctxListening)
+    currentState = rsCancelling
   of rsThinking:
-    ctxIdle = onStopDuringThinking(ctxThinking)
-    returnFromVoiceFlow()
+    ctxCancelling = onStopDuringThinking(ctxThinking)
+    currentState = rsCancelling
   of rsReplying:
-    ctxIdle = onStopDuringReplying(ctxReplying)
-    returnFromVoiceFlow()
+    ctxCancelling = onStopDuringReplying(ctxReplying)
+    currentState = rsCancelling
   of rsAlerting:
     ctxIdle = onAlertDismiss(ctxAlerting)
     currentState = rsIdle
   of rsFollowUp:
     ctxIdle = onFollowUpTimeout(ctxFollowUp)
     returnFromVoiceFlow()
+  of rsCancelling:
+    discard
   else:
     debug("SatelliteFSM", "Stop word ignored in state " & $currentState)
 
@@ -738,15 +807,61 @@ esphomeLoop:
   if satellitePipeline != nil:
     satellitePipeline.tick(now)
 
-  if currentState == rsWoken and now - stateEnteredMs >= 3000:
-    warn("SatelliteFSM", "Watchdog: Woken state timed out after 3s. Returning to Idle.")
-    nim_satellite_stop_word()
-  elif currentState == rsListening and now - stateEnteredMs >= 10000:
-    warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s. Returning to Idle.")
-    nim_satellite_stop_word()
-  elif currentState == rsThinking and now - stateEnteredMs >= 25000:
-    warn("SatelliteFSM", "Watchdog: Thinking state timed out after 25s. Returning to Idle.")
-    nim_satellite_stop_word()
+  let elapsed = now - stateEnteredMs
+
+  case currentState
+  of rsWoken:
+    if elapsed >= 2000:
+      warn("SatelliteFSM", "Watchdog: Woken state timed out after 2s. Triggering PipelineError.")
+      ctxPipelineErr = onChimeTimeout(ctxWoken)
+      ctxIdle = onResetPipelineError(ctxPipelineErr)
+      returnFromPipelineError()
+  of rsListening:
+    if elapsed >= 10000:
+      warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s. Returning to Idle.")
+      nim_satellite_silence_timeout()
+  of rsThinking:
+    if elapsed >= 20000:
+      warn("SatelliteFSM", "Watchdog: Thinking state timed out after 20s. Triggering PipelineError.")
+      satellitePipeline.stopProcessingLoop()
+      ctxPipelineErr = onProcessingTimeout(ctxThinking)
+      ctxIdle = onResetPipelineError(ctxPipelineErr)
+      returnFromPipelineError()
+  of rsReplying:
+    if elapsed >= 60000:
+      warn("SatelliteFSM", "Watchdog: Replying state timed out after 60s. Returning to Idle.")
+      ctxIdle = onTtsTimeout(ctxReplying)
+      returnFromVoiceFlow()
+  of rsCancelling:
+    if elapsed >= 1500:
+      warn("SatelliteFSM", "Watchdog: Cancelling state timed out after 1.5s. Returning to Idle.")
+      ctxIdle = onCancelTimeout(ctxCancelling)
+      returnFromCancelFlow()
+  of rsFollowUp:
+    if elapsed >= 5000:
+      warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 5s. Returning to Idle.")
+      ctxIdle = onFollowUpTimeout(ctxFollowUp)
+      returnFromVoiceFlow()
+  of rsAlerting:
+    if elapsed >= 300000:
+      warn("SatelliteFSM", "Watchdog: Alerting state timed out after 5m. Returning to Idle.")
+      ctxIdle = onAlertTimeout(ctxAlerting)
+      currentState = rsIdle
+  of rsAnnouncing:
+    if elapsed >= 30000:
+      warn("SatelliteFSM", "Watchdog: Announcing state timed out after 30s. Returning to Idle.")
+      ctxIdle = onAnnouncementTimeout(ctxAnnouncing)
+      currentState = rsIdle
+  of rsUpdating:
+    if elapsed >= 300000:
+      warn("SatelliteFSM", "Watchdog: Updating state timed out after 5m. Returning to Idle.")
+      ctxIdle = onOtaTimeout(ctxUpdating)
+      currentState = rsIdle
+  of rsPipelineError:
+    if elapsed >= 2000:
+      returnFromPipelineError()
+  else:
+    discard
 
   if now - lastHeartbeatMs >= 10000:
     lastHeartbeatMs = now

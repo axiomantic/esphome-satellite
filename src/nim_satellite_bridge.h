@@ -8,6 +8,7 @@ extern "C" {
 // Core Voice Assistant Functions
 void nim_satellite_wake_word(const char *word, int angle) __attribute__((weak));
 void nim_satellite_chime_done(bool ok) __attribute__((weak));
+void nim_satellite_cancel_done(bool ok) __attribute__((weak));
 void nim_satellite_speech_ended(void) __attribute__((weak));
 void nim_satellite_silence_timeout(void) __attribute__((weak));
 void nim_satellite_tts_start(void) __attribute__((weak));
@@ -18,6 +19,7 @@ void nim_satellite_disconnected(void) __attribute__((weak));
 void nim_satellite_connected(void) __attribute__((weak));
 bool nim_satellite_is_cancellation(const char *text, const char *config) __attribute__((weak));
 int nim_satellite_get_state(void) __attribute__((weak));
+bool nim_satellite_is_cancelling(void) __attribute__((weak));
 
 // Extended State Functions
 void nim_satellite_set_muted(bool muted) __attribute__((weak));
@@ -62,6 +64,13 @@ inline void call_nim_wake_word(const char *word, int angle) {
 }
 inline void call_nim_chime_done(bool ok) {
   if (nim_satellite_chime_done) nim_satellite_chime_done(ok);
+}
+inline void call_nim_cancel_done(bool ok) {
+  if (nim_satellite_cancel_done) nim_satellite_cancel_done(ok);
+}
+inline bool call_nim_is_cancelling(void) {
+  if (nim_satellite_is_cancelling) return nim_satellite_is_cancelling();
+  return false;
 }
 inline void call_nim_speech_ended(void) {
   if (nim_satellite_speech_ended) nim_satellite_speech_ended();
@@ -163,6 +172,7 @@ inline const char* get_satellite_state_name() {
     case 11: return "Alerting";
     case 12: return "Announcing";
     case 13: return "Updating";
+    case 14: return "Cancelling";
     default: return "Unknown";
   }
 }
