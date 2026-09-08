@@ -30,15 +30,19 @@ echo "Refreshing external components cache..."
 rm -rf packages/.esphome/external_components
 rm -rf packages/.esphome/build/*/src/esphome/components/nim
 
-echo "Processing, compressing, and normalizing audio assets..."
-if command -v ffmpeg >/dev/null 2>&1; then
-    if command -v python3 >/dev/null 2>&1; then
-        python3 "$ROOT_DIR/scripts/process_audio.py"
-    elif command -v nim >/dev/null 2>&1; then
-        nim c -r "$ROOT_DIR/scripts/transcode_sounds.nim"
+if [ "${PROCESS_AUDIO:-0}" = "1" ] || [ ! -f "$ROOT_DIR/src/sound_data.h" ]; then
+    echo "Processing, compressing, and normalizing audio assets..."
+    if command -v ffmpeg >/dev/null 2>&1; then
+        if command -v python3 >/dev/null 2>&1; then
+            python3 "$ROOT_DIR/scripts/process_audio.py"
+        elif command -v nim >/dev/null 2>&1; then
+            nim c -r "$ROOT_DIR/scripts/transcode_sounds.nim"
+        fi
+    else
+        echo "ffmpeg not found; using existing audio assets."
     fi
 else
-    echo "ffmpeg not found; skipping audio transcoding and using existing sound_data.h assets."
+    echo "Using existing pre-compiled sound_data.h assets (set PROCESS_AUDIO=1 to re-transcode)."
 fi
 
 VERSION=$(grep -E '^\s*version\s*=' esphome_satellite.nimble | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')

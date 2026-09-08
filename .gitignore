@@ -9,6 +9,8 @@ tests/test_version_sync
 .DS_Store
 Thumbs.db
 .esphome/
+packages/.esphome/
+nim-esphome/
 build/
 node_modules/
 scripts/generate_web
