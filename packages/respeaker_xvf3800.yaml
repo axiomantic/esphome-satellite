@@ -82,7 +82,7 @@ external_components:
   - source:
       type: local
       path: ../components
-    components: [aic3104, voice_enhancer]
+    components: [aic3104]
 
 binary_sensor:
   - platform: gpio
@@ -199,16 +199,12 @@ speaker:
     id: board_speaker
     output_speaker: i2s_raw_speaker
 
-  - platform: voice_enhancer
-    id: enhanced_speaker
-    output_speaker: board_speaker
-
 media_player:
   - platform: speaker
     id: board_media_player
     name: "Voice Satellite Speaker"
     announcement_pipeline:
-      speaker: enhanced_speaker
+      speaker: board_speaker
 
 micro_wake_word:
   id: mww
@@ -256,7 +252,7 @@ micro_wake_word:
 voice_assistant:
   id: va
   microphone: board_mic
-  speaker: enhanced_speaker
+  speaker: board_speaker
   conversation_timeout: 10s
   on_start:
     - lambda: |-
@@ -401,7 +397,13 @@ text_sensor:
     icon: "mdi:robot"
     entity_category: diagnostic
     lambda: |-
-      return { get_satellite_state_name() };
+      static std::string last_state = "";
+      std::string current = get_satellite_state_name();
+      if (current != last_state) {
+        last_state = current;
+        return { current };
+      }
+      return {};
     update_interval: 250ms
 
 select:
@@ -670,20 +672,6 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
 
-  - platform: template
-    id: voice_enhancement_switch
-    name: "Voice Enhancement"
-    icon: "mdi:equalizer"
-    entity_category: config
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    turn_on_action:
-      - lambda: |-
-          id(enhanced_speaker)->set_enabled(true);
-    turn_off_action:
-      - lambda: |-
-          id(enhanced_speaker)->set_enabled(false);
-
 script:
   - id: wake_word_safety_timer
     mode: restart
@@ -710,22 +698,31 @@ interval:
           float brightness = id(led_brightness).state;
           esphome::xvf3800::XVF3800Hardware::instance().update_animation(state_str, pattern_str, brightness);
 
-  # Self-healing watchdog: guarantees wake word detection is always running when idle and unmuted
-  - interval: 3s
+  # Self-healing watchdog: monitors active state duration and guarantees wake word listening
+  - interval: 2s
     then:
-      - if:
-          condition:
-            and:
-              - switch.is_off: mic_mute_switch
-              - api.connected:
-              - not:
-                  micro_wake_word.is_running:
-              - lambda: |-
-                  std::string s = get_satellite_state_name();
-                  return s == "Idle" || s == "PlayingMedia";
-          then:
-            - lambda: |-
-                ESP_LOGW("satellite", "Watchdog: Satellite in %s state without active wake word listening. Resuming microWakeWord.", get_satellite_state_name());
-            - micro_wake_word.start:
+      - lambda: |-
+          static uint32_t active_start_ms = 0;
+          std::string s = get_satellite_state_name();
+          if (s == "Idle" || s == "Muted" || s == "PlayingMedia") {
+            active_start_ms = 0;
+            if (id(mic_mute_switch).state == false && id(mww).is_running() == false) {
+              ESP_LOGW("satellite", "Watchdog: Satellite in %s state without active wake word listening. Resuming microWakeWord.", s.c_str());
+              id(mww).start();
+            }
+          } else {
+            if (active_start_ms == 0) {
+              active_start_ms = millis();
+            } else if (millis() - active_start_ms > 10000) {
+              ESP_LOGW("satellite", "Watchdog: Satellite stuck in '%s' for >10s! Forcing reset to Idle.", s.c_str());
+              active_start_ms = 0;
+              id(va).request_stop();
+              esphome::get_pcm_sound_player().stop();
+              call_nim_stop_word();
+              if (id(mic_mute_switch).state == false) {
+                id(mww).start();
+              }
+            }
+          }
 
 
