@@ -504,6 +504,8 @@ class PcmSoundPlayer {
           this->valprev_ = vp;
           this->index_ = idx;
           this->read_offset_ += bytes_to_decode;
+        } else {
+          break;
         }
 
         size_t total_bytes = samples * sizeof(int16_t);
