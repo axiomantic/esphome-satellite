@@ -40,11 +40,11 @@ All new features, hardware drivers, audio DSP pipelines, state machines, and bus
 
 Every audio file included in `esphome-satellite` must pass through the standardized audio processing pipeline before inclusion.
 
-### Why Transcoding, Normalization & Compression Are Required
+### Why Format Transcoding & Normalization Are Required
 Voice satellites operate on small onboard speakers (1W to 2W) with limited dynamic range and low amplifier headroom:
-- **Uncompressed audio** causes physical speaker rattle and distortion during loud transients (e.g. sharp bell strikes).
-- **Inconsistent volume** means one theme sounds inaudible while another is deafening.
-- **Sample rate mismatches** cause pitch distortion or buffer overflows.
+- **Real-Time Audio DSP**: Compression curve (threshold -14 dBFS, ratio 3:1), dialogue makeup gain (+5 dB), and rational soft-knee limiting run dynamically on the ESP32 CPU right before DMA buffer transfer (`src/audio_dsp.nim`).
+- **Standardized Formats**: Satellite DMA requires strictly 16,000 Hz mono 16-bit PCM.
+- **Quantization Optimization**: Normalizing to `-1.0 dBFS` true peak maximizes dynamic range utilization for the 4:1 IMA-ADPCM encoder without digital clipping.
 
 ### The Audio Pipeline Script
 Run the pipeline whenever you add, replace, or tune `.wav` audio files:
@@ -59,17 +59,14 @@ nim c -r scripts/transcode_sounds.nim
 
 ### What the Pipeline Does
 1. **Format Enforcement**: Resamples all audio to 16,000 Hz mono 16-bit PCM.
-2. **Light Dynamic Range Compression**:
-   - Filter: `acompressor=threshold=-12dB:ratio=2.5:attack=5:release=80:makeup=1.5dB`
-   - Clamps harsh transient spikes while lifting soft harmonic tails.
-3. **Peak Normalization**:
-   - Normalizes audio to `-1.0 dBFS` true peak to guarantee uniform volume across all 17 acoustic themes without DAC clipping.
-4. **Seamless Loop Preservation**:
+2. **Peak Normalization**:
+   - Normalizes audio to `-1.0 dBFS` true peak to guarantee uniform quantization across all 17 acoustic themes.
+3. **Seamless Loop Preservation**:
    - Looping processing sounds (such as `clockwork.wav` at 32,915 samples) retain their exact mathematical sample counts for zero-gap looping.
-5. **Asset Sync & Web Preview**:
+4. **Asset Sync & Web Preview**:
    - Writes 16-bit PCM `.wav` files to both `assets/sounds/` and `web/sounds/`.
    - Transcodes 128kbps `.mp3` previews using `libmp3lame` for the in-browser Audio Showcase.
-6. **Sound Bank Compilation**:
+5. **Sound Bank Compilation**:
    - Encodes all audio to IMA-ADPCM (4:1 compression ratio, ~333 KB total).
    - Re-generates `src/sound_data.h` including `STEP_SIZE_TABLE`, `INDEX_TABLE`, and `find_sound()`.
 
@@ -83,8 +80,8 @@ When users provide **custom audio**, transcoding should occur depending on the c
 - **Where**: In the Web Installer (`web/index.html` via `nim-esphome/dsl/installer.nim`).
 - **Why TypeScript / Web Audio**:
   - End users flashing via WebSerial cannot run local CLI tools (no Python, Nim, or FFmpeg installed).
-  - The browser's native **Web Audio API (`OfflineAudioContext` + `DynamicsCompressorNode`)** runs entirely client-side on any desktop browser.
-  - It decodes any input container (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`), resamples to 16kHz mono, applies compression and normalization, and packs the bytes into the binary format before flashing to the ESP32 partition.
+  - The browser's native **Web Audio API (`OfflineAudioContext`)** runs entirely client-side on any desktop browser.
+  - It decodes any input container (`.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`), resamples to 16kHz mono 16-bit PCM, applies peak normalization, and packs the bytes into the binary format before flashing to the ESP32 partition. (Real-time DSP handles compression on playback).
 
 ### B. Repository & CI Builds: Nim / Python CLI Script
 - **Where**: `scripts/process_audio.py` / `scripts/transcode_sounds.nim`.

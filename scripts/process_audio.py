@@ -2,12 +2,11 @@
 """
 Audio Processing & Transcoding Pipeline for esphome-satellite.
 Standardizes audio files for small-speaker voice satellites:
-  1. Downmixes to mono and resamples to 16,000 Hz.
-  2. Applies light dynamic range compression (threshold -12dB, ratio 2.5:1, attack 5ms, release 80ms)
-     to prevent speaker distortion on transient peaks while keeping soft decays audible.
-  3. Peak-normalizes to -1.0 dBFS for consistent perceived loudness across all 17 acoustic themes.
-  4. Generates both 16-bit mono PCM WAV and 128kbps MP3 (for web preview).
-  5. Encodes into compact IMA-ADPCM arrays and regenerates src/sound_data.h.
+  1. Downmixes to mono and resamples to 16,000 Hz 16-bit PCM.
+  2. Peak-normalizes to -1.0 dBFS for optimal IMA-ADPCM quantization without clipping.
+     (Real-time speech compression, makeup boost, and limiting run on-device in Nim DSP).
+  3. Generates both 16-bit mono PCM WAV and 128kbps MP3 (for web preview).
+  4. Encodes into compact IMA-ADPCM arrays and regenerates src/sound_data.h.
 """
 
 import os
@@ -97,35 +96,34 @@ def process_single_audio(input_path, base_name):
     os.makedirs(ASSETS_DIR, exist_ok=True)
     os.makedirs(WEB_DIR, exist_ok=True)
 
-    temp_compressed = f"/tmp/{base_name}_comp.wav"
+    temp_resampled = f"/tmp/{base_name}_resampled.wav"
     out_wav = os.path.join(ASSETS_DIR, f"{base_name}.wav")
     out_mp3 = os.path.join(ASSETS_DIR, f"{base_name}.mp3")
     web_wav = os.path.join(WEB_DIR, f"{base_name}.wav")
     web_mp3 = os.path.join(WEB_DIR, f"{base_name}.mp3")
 
-    # Step 1: Resample to 16kHz mono + apply light compression
-    # threshold=-12dB, ratio=2.5:1, attack=5ms, release=80ms, makeup=1.5dB
-    compress_filter = (
+    # Step 1: Resample to 16kHz mono 16-bit PCM
+    # (Dynamic range compression, makeup gain, and soft limiting are handled in real-time DSP on-device)
+    resample_filter = (
         "aresample=16000,"
-        "aformat=channel_layouts=mono,"
-        "acompressor=threshold=-12dB:ratio=2.5:attack=5:release=80:makeup=1.5dB"
+        "aformat=channel_layouts=mono"
     )
     subprocess.run([
         "ffmpeg", "-y", "-i", input_path,
-        "-af", compress_filter,
+        "-af", resample_filter,
         "-ar", "16000", "-ac", "1",
-        "-c:a", "pcm_s16le", temp_compressed
+        "-c:a", "pcm_s16le", temp_resampled
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
-    # Step 2: Peak normalize to -1.0 dBFS
-    max_db = get_max_volume_db(temp_compressed)
+    # Step 2: Peak normalize to -1.0 dBFS for clean IMA-ADPCM quantization
+    max_db = get_max_volume_db(temp_resampled)
     # Target peak is -1.0 dBFS
     gain_db = -1.0 - max_db
     # Limit gain boost to max +6dB to avoid over-amplifying background noise
     gain_db = min(6.0, gain_db)
 
     subprocess.run([
-        "ffmpeg", "-y", "-i", temp_compressed,
+        "ffmpeg", "-y", "-i", temp_resampled,
         "-af", f"volume={gain_db:.2f}dB",
         "-ar", "16000", "-ac", "1",
         "-c:a", "pcm_s16le", out_wav
@@ -147,8 +145,8 @@ def process_single_audio(input_path, base_name):
     pcm_samples = read_wav_pcm16(out_wav)
     adpcm = encode_ima_adpcm(pcm_samples)
 
-    if os.path.exists(temp_compressed):
-        os.remove(temp_compressed)
+    if os.path.exists(temp_resampled):
+        os.remove(temp_resampled)
 
     duration = len(pcm_samples) / SAMPLE_RATE
     print(f"Processed '{base_name}': {duration:.3f}s ({len(pcm_samples)} samples, {len(adpcm)} bytes ADPCM, peak=-1.0dBFS)")
