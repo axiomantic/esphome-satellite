@@ -106,7 +106,7 @@ class WakePartitionLoader {
           window,
           slot.name,
           arena_size,
-          true,   // default_enabled
+          false,  // default_enabled (enabled dynamically via active_wake_word)
           false   // internal_only
       );
 

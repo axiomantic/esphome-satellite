@@ -672,6 +672,20 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
 
+button:
+  - platform: template
+    id: reset_audio_hardware_btn
+    name: "Reset Audio Hardware"
+    icon: "mdi:restart"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          ESP_LOGI("satellite", "Resetting AIC3104 codec and rebooting XMOS SoC...");
+          uint8_t rst[2] = {0x01, 0x80};
+          id(bus_a).write(0x18, rst, 2);
+          delay(10);
+          esphome::xvf3800::XVF3800Hardware::instance().reboot_xmos();
+
 script:
   - id: wake_word_safety_timer
     mode: restart
