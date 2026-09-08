@@ -85,7 +85,18 @@ class XVF3800Hardware {
     // Right DAC volume = 0x00 (0dB attenuation)
     uint8_t r_vol[2] = {0x2C, 0x00};
     this->bus_->write(AIC3104_I2C_ADDR, r_vol, 2);
-    ESP_LOGD(TAG, "AIC3104 DAC volume set to 0dB");
+
+    // Analog output stages = +9dB boost, unmuted (0x98)
+    uint8_t hpl[2] = {0x33, 0x98};
+    this->bus_->write(AIC3104_I2C_ADDR, hpl, 2);
+    uint8_t hpr[2] = {0x41, 0x98};
+    this->bus_->write(AIC3104_I2C_ADDR, hpr, 2);
+    uint8_t llop[2] = {0x56, 0x98};
+    this->bus_->write(AIC3104_I2C_ADDR, llop, 2);
+    uint8_t rlop[2] = {0x5D, 0x98};
+    this->bus_->write(AIC3104_I2C_ADDR, rlop, 2);
+
+    ESP_LOGD(TAG, "AIC3104 DAC volume set to 0dB, analog boost +9dB");
   }
 
   void set_leds(const uint32_t colors[12]) {

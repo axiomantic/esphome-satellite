@@ -82,7 +82,7 @@ external_components:
   - source:
       type: local
       path: ../components
-    components: [aic3104]
+    components: [aic3104, voice_enhancer]
 
 binary_sensor:
   - platform: gpio
@@ -199,12 +199,16 @@ speaker:
     id: board_speaker
     output_speaker: i2s_raw_speaker
 
+  - platform: voice_enhancer
+    id: enhanced_speaker
+    output_speaker: board_speaker
+
 media_player:
   - platform: speaker
     id: board_media_player
     name: "Voice Satellite Speaker"
     announcement_pipeline:
-      speaker: board_speaker
+      speaker: enhanced_speaker
 
 micro_wake_word:
   id: mww
@@ -252,7 +256,7 @@ micro_wake_word:
 voice_assistant:
   id: va
   microphone: board_mic
-  speaker: board_speaker
+  speaker: enhanced_speaker
   conversation_timeout: 10s
   on_start:
     - lambda: |-
@@ -665,6 +669,20 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    id: voice_enhancement_switch
+    name: "Voice Enhancement"
+    icon: "mdi:equalizer"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - lambda: |-
+          id(enhanced_speaker)->set_enabled(true);
+    turn_off_action:
+      - lambda: |-
+          id(enhanced_speaker)->set_enabled(false);
 
 script:
   - id: wake_word_safety_timer

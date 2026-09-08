@@ -17,7 +17,17 @@ static const char *const TAG = "aic3104";
   }
 
 void AIC3104::setup() {
-  // do nothing
+  if (!this->write_byte(AIC3104_PAGE_CTRL, 0x00)) {
+    ESP_LOGE(TAG, "Failed to set page 0 during setup");
+    this->mark_failed();
+    return;
+  }
+  // Configure analog output stages to +9dB boost, unmuted (0x98)
+  this->write_byte(AIC3104_HPLOUT_LEVEL, 0x98);
+  this->write_byte(AIC3104_HPROUT_LEVEL, 0x98);
+  this->write_byte(AIC3104_LEFT_LOP_LEVEL, 0x98);
+  this->write_byte(AIC3104_RIGHT_LOP_LEVEL, 0x98);
+  ESP_LOGI(TAG, "AIC3104 analog output stages configured with +9dB boost");
 }
 
 void AIC3104::dump_config() {
@@ -62,6 +72,12 @@ bool AIC3104::write_mute_() {
     return false;
   }
   
+  uint8_t analog_level = this->is_muted_ ? 0x90 : 0x98;
+  this->write_byte(AIC3104_HPLOUT_LEVEL, analog_level);
+  this->write_byte(AIC3104_HPROUT_LEVEL, analog_level);
+  this->write_byte(AIC3104_LEFT_LOP_LEVEL, analog_level);
+  this->write_byte(AIC3104_RIGHT_LOP_LEVEL, analog_level);
+
   ESP_LOGVV(TAG, "Mute %s (volume=0x%.2x)", this->is_muted_ ? "ON" : "OFF", mute_value);
   return true;
 }
@@ -72,6 +88,13 @@ bool AIC3104::write_volume_() {
   if (!this->write_byte(AIC3104_PAGE_CTRL, 0x00)) {
     ESP_LOGE(TAG, "Failed to set page 0");
     return false;
+  }
+
+  if (!this->is_muted_) {
+    this->write_byte(AIC3104_HPLOUT_LEVEL, 0x98);
+    this->write_byte(AIC3104_HPROUT_LEVEL, 0x98);
+    this->write_byte(AIC3104_LEFT_LOP_LEVEL, 0x98);
+    this->write_byte(AIC3104_RIGHT_LOP_LEVEL, 0x98);
   }
   
   // Map volume 0.0-1.0 to DAC range 0x80-0x00 (inverted)
@@ -88,7 +111,7 @@ bool AIC3104::write_volume_() {
     return false;
   }
   
-  ESP_LOGD(TAG, "Volume %.1f%% → DAC: 0x%.2x (%.1fdB attenuation) - SUCCESS", 
+  ESP_LOGD(TAG, "Volume %.1f%% -> DAC: 0x%.2x (%.1fdB attenuation) - SUCCESS", 
            this->volume_ * 100.0f, dac_val, -(float)dac_val);
   
   return true;
