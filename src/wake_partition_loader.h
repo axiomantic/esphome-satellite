@@ -59,7 +59,7 @@ class WakePartitionLoader {
     return inst;
   }
 
-  void init(micro_wake_word::MicroWakeWord *mww, select::Select *active_select) {
+  void init(micro_wake_word::MicroWakeWord *mww, select::Select *active_select = nullptr) {
     if (mww == nullptr) {
       ESP_LOGE(TAG, "MicroWakeWord pointer is null!");
       return;
