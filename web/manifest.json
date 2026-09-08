@@ -1,6 +1,6 @@
 {
   "name": "esphome-satellite",
-  "version": "0.5.0+68efff0",
+  "version": "0.5.0+6fcdade",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": false,
   "builds": [
@@ -26,6 +26,6 @@
       ]
     }
   ],
-  "commit": "68efff0",
-  "built_at": "2026-09-08T10:06:22Z"
+  "commit": "6fcdade",
+  "built_at": "2026-09-08T15:08:12Z"
 }
