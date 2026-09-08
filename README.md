@@ -566,10 +566,20 @@ esphome-satellite/
 │   ├── respeaker_xvf3800.yaml    # Seeed ReSpeaker XVF3800 hardware configuration
 │   └── satellite_nim_fsm.yaml    # ESPHome reusable package for drop-in integration
 ├── tests/
-│   └── test_fsm.nim              # 21 unit tests across 5 test suites
+│   ├── test_audio_dsp.nim        # Speech compression, makeup gain & limiter tests
+│   ├── test_cancellation.nim     # Mid-utterance cancellation matcher tests
+│   ├── test_fsm.nim              # 14-state verified FSM typestate tests
+│   ├── test_pcm_player.nim       # IMA-ADPCM zero-heap decoder tests
+│   ├── test_version_sync.nim     # Version consistency invariant test suite
+│   ├── test_wake_loader.nim      # Dynamic microWakeWord partition loader tests
+│   └── test_xvf3800.nim          # XVF3800 GPO & LED ring animation tests
 ├── scripts/
-│   ├── build.sh                  # Build validation script
-│   └── test.sh                   # Unit test execution script
+│   ├── build_factory_binary.sh   # Automated factory flashing binary builder
+│   ├── bump_version.sh           # Synchronized semver bumper
+│   ├── generate_web.nim          # Web installer HTML generator
+│   ├── process_audio.py          # Audio normalization & ADPCM sound bank pipeline
+│   ├── test.sh                   # Invariant test execution runner
+│   └── transcode_sounds.nim      # Nim sound bank transcoder
 └── esphome_satellite.nimble      # Package specification & dependencies
 ```
 

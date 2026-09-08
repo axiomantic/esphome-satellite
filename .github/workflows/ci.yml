@@ -51,6 +51,11 @@ jobs:
           asdf set nim 2.2.10
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_version_sync.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_audio_dsp.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_xvf3800.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_wake_loader.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_pcm_player.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_cancellation.nim
           nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
 
       - name: Test on Nim 2.2 (minimum supported 2.2.8)
@@ -60,45 +65,11 @@ jobs:
           asdf set nim 2.2.8
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_fsm.nim
           nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_version_sync.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_audio_dsp.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_xvf3800.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_wake_loader.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_pcm_player.nim
+          nim c -r --path:../nim-esphome/src --path:../nim-typestates/src tests/test_cancellation.nim
           nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on --path:../nim-esphome/src --path:../nim-typestates/src src/nim_esphome_satellite.nim
-
-  trainer-test:
-    name: Test In-Browser Wake Word Trainer (TypeScript)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out satellite repository
-        uses: actions/checkout@v4
-
-      - name: Detect Changed Paths
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            trainer:
-              - 'trainer/**'
-
-      - name: Set up Node.js
-        if: steps.filter.outputs.trainer == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: trainer/package-lock.json
-
-      - name: Install trainer dependencies
-        if: steps.filter.outputs.trainer == 'true'
-        working-directory: trainer
-        run: npm ci || npm install
-
-      - name: Typecheck trainer
-        if: steps.filter.outputs.trainer == 'true'
-        working-directory: trainer
-        run: npm run typecheck
-
-      - name: Run trainer tests
-        if: steps.filter.outputs.trainer == 'true'
-        working-directory: trainer
-        run: npm test
 
 
