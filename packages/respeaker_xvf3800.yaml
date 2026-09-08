@@ -73,16 +73,9 @@ external_components:
       ref: main
     components: [nim]
   - source:
-      type: git
-      url: https://github.com/formatBCE/esphome
-      ref: respeaker_microphone
-    components:
-      - i2s_audio
-    refresh: 0s
-  - source:
       type: local
       path: ../components
-    components: [aic3104]
+    components: [aic3104, i2s_audio]
 
 binary_sensor:
   - platform: gpio
@@ -241,7 +234,6 @@ micro_wake_word:
                 api.connected:
               then:
                 - micro_wake_word.stop:
-                - script.execute: wake_word_safety_timer
                 - voice_assistant.start:
                     wake_word: !lambda return wake_word;
               else:
@@ -253,7 +245,7 @@ voice_assistant:
   id: va
   microphone: board_mic
   speaker: board_speaker
-  conversation_timeout: 10s
+  conversation_timeout: 45s
   on_start:
     - lambda: |-
         call_nim_chime_done(true);
@@ -328,7 +320,6 @@ voice_assistant:
     - lambda: |-
         call_nim_tts_end();
   on_end:
-    - script.stop: wake_word_safety_timer
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
         id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
@@ -339,7 +330,6 @@ voice_assistant:
         then:
           - micro_wake_word.start:
   on_error:
-    - script.stop: wake_word_safety_timer
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
         bool played_cancel = false;
@@ -686,23 +676,6 @@ button:
           delay(10);
           esphome::xvf3800::XVF3800Hardware::instance().reboot_xmos();
 
-script:
-  - id: wake_word_safety_timer
-    mode: restart
-    then:
-      - delay: 15s
-      - if:
-          condition:
-            and:
-              - switch.is_off: mic_mute_switch
-              - api.connected:
-              - not:
-                  micro_wake_word.is_running:
-          then:
-            - lambda: |-
-                ESP_LOGW("satellite", "Safety timer: Conversation exceeded 15s without clean return to idle. Enforcing microWakeWord restart.");
-            - micro_wake_word.start:
-
 interval:
   - interval: 50ms
     then:
@@ -724,17 +697,38 @@ interval:
               ESP_LOGW("satellite", "Watchdog: Satellite in %s state without active wake word listening. Resuming microWakeWord.", s.c_str());
               id(mww).start();
             }
-          } else {
-            if (active_start_ms == 0) {
+          } else if (s == "Replying") {
+            // Keep resetting timeout while speaker is actively streaming audio
+            if (id(board_speaker).is_running()) {
               active_start_ms = millis();
-            } else if (millis() - active_start_ms > 10000) {
-              ESP_LOGW("satellite", "Watchdog: Satellite stuck in '%s' for >10s! Forcing reset to Idle.", s.c_str());
+            } else if (active_start_ms == 0) {
+              active_start_ms = millis();
+            } else if (millis() - active_start_ms > 20000) {
+              ESP_LOGW("satellite", "Watchdog: Satellite in Replying without audio playback for >20s. Forcing reset to Idle.");
               active_start_ms = 0;
               id(va).request_stop();
               esphome::get_pcm_sound_player().stop();
               call_nim_stop_word();
               if (id(mic_mute_switch).state == false) {
                 id(mww).start();
+              }
+            }
+          } else {
+            // Listening, Thinking, Woken
+            if (active_start_ms == 0) {
+              active_start_ms = millis();
+            } else {
+              uint32_t elapsed = millis() - active_start_ms;
+              uint32_t max_allowed = (s == "Thinking") ? 45000 : 25000;
+              if (elapsed > max_allowed) {
+                ESP_LOGW("satellite", "Watchdog: Satellite stuck in '%s' for %u ms! Forcing reset to Idle.", s.c_str(), elapsed);
+                active_start_ms = 0;
+                id(va).request_stop();
+                esphome::get_pcm_sound_player().stop();
+                call_nim_stop_word();
+                if (id(mic_mute_switch).state == false) {
+                  id(mww).start();
+                }
               }
             }
           }
