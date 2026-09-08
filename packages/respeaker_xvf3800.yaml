@@ -224,34 +224,24 @@ micro_wake_word:
               call_nim_wake_word(wake_word.c_str(), 0);
           - if:
               condition:
-                switch.is_on: wake_chime
-              then:
-                - lambda: |-
-                    std::string opt = id(wake_chime_sound).current_option();
-                    float vol = id(wake_chime_volume).state / 100.0f;
-                    esphome::get_pcm_sound_player().play_chime(opt, false, vol);
-                - delay: 350ms
-          - if:
-              condition:
                 api.connected:
               then:
+                - if:
+                    condition:
+                      switch.is_on: wake_chime
+                    then:
+                      - lambda: |-
+                          std::string opt = id(wake_chime_sound).current_option();
+                          float vol = id(wake_chime_volume).state / 100.0f;
+                          esphome::get_pcm_sound_player().play_chime(opt, false, vol);
+                      - delay: 350ms
                 - micro_wake_word.stop:
                 - voice_assistant.start:
                     wake_word: !lambda return wake_word;
               else:
-                - lambda: |-
-                    ESP_LOGW("satellite", "Wake word detected, but Home Assistant API is not connected. Connect Wi-Fi and Home Assistant.");
-                    call_nim_error("API not connected");
-                    if (id(cancel_sound_switch).state) {
-                      std::string opt = id(cancel_sound_sound).current_option();
-                      if (opt == "Match Wake Chime") {
-                        opt = id(wake_chime_sound).current_option();
-                      }
-                      if (opt != "Silent") {
-                        float vol = id(cancel_sound_volume).state / 100.0f;
-                        esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
-                      }
-                    }
+                - script.execute:
+                    id: connect_and_start_assistant
+                    ww: !lambda return wake_word;
 
 voice_assistant:
   id: va
@@ -673,6 +663,64 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+
+script:
+  - id: connect_and_start_assistant
+    mode: restart
+    parameters:
+      ww: string
+    then:
+      - micro_wake_word.stop:
+      - lambda: |-
+          std::string opt = id(processing_sound).current_option();
+          float vol = id(processing_sound_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
+          if (wifi::global_wifi_component != nullptr && !wifi::global_wifi_component->is_connected()) {
+            ESP_LOGI("satellite", "Wake word detected while offline. Initiating Wi-Fi connection...");
+            wifi::global_wifi_component->retry_connect();
+          } else {
+            ESP_LOGI("satellite", "Wake word detected while Home Assistant API disconnected. Waiting for API...");
+          }
+      - wait_until:
+          condition:
+            api.connected:
+          timeout: 8s
+      - lambda: |-
+          esphome::get_pcm_sound_player().stop();
+      - if:
+          condition:
+            api.connected:
+          then:
+            - if:
+                condition:
+                  switch.is_on: wake_chime
+                then:
+                  - lambda: |-
+                      std::string opt = id(wake_chime_sound).current_option();
+                      float vol = id(wake_chime_volume).state / 100.0f;
+                      esphome::get_pcm_sound_player().play_chime(opt, false, vol);
+                  - delay: 350ms
+            - voice_assistant.start:
+                wake_word: !lambda return ww;
+          else:
+            - lambda: |-
+                ESP_LOGW("satellite", "Connection attempt timed out. Could not reach Home Assistant.");
+                call_nim_error("API not connected");
+                if (id(cancel_sound_switch).state) {
+                  std::string opt = id(cancel_sound_sound).current_option();
+                  if (opt == "Match Wake Chime") {
+                    opt = id(wake_chime_sound).current_option();
+                  }
+                  if (opt != "Silent") {
+                    float vol = id(cancel_sound_volume).state / 100.0f;
+                    esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+                  }
+                }
+            - if:
+                condition:
+                  switch.is_off: mic_mute_switch
+                then:
+                  - micro_wake_word.start:
 
 button:
   - platform: template
