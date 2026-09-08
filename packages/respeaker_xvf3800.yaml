@@ -262,34 +262,10 @@ voice_assistant:
         esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
   on_stt_end:
     - lambda: |-
-        std::string s = x;
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
-        while (!s.empty() && (s.back() == '.' || s.back() == '!' || s.back() == '?' || s.back() == ' ')) {
-          s.pop_back();
-        }
-        while (!s.empty() && s.front() == ' ') {
-          s.erase(0, 1);
-        }
-
-        std::string cfg = id(stop_words_config).state;
-        bool should_cancel = false;
-        size_t start = 0;
-        while (start < cfg.size()) {
-          size_t end = cfg.find(',', start);
-          if (end == std::string::npos) end = cfg.size();
-          std::string word = cfg.substr(start, end - start);
-          while (!word.empty() && word.front() == ' ') word.erase(0, 1);
-          while (!word.empty() && word.back() == ' ') word.pop_back();
-          std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c){ return std::tolower(c); });
-          if (!word.empty() && (s == word || s.rfind(word, 0) == 0)) {
-            should_cancel = true;
-            break;
-          }
-          start = end + 1;
-        }
+        bool should_cancel = call_nim_is_cancellation(x.c_str(), id(stop_words_config).state.c_str());
 
         if (should_cancel) {
-          ESP_LOGI("voice_assistant", "Cancellation word detected in '%s'. Aborting listening.", s.c_str());
+          ESP_LOGI("voice_assistant", "Cancellation detected in '%s'. Triggering cancel sound and aborting.", x.c_str());
           esphome::get_pcm_sound_player().stop();
           bool played_cancel = false;
           if (id(cancel_sound_switch).state) {
@@ -326,8 +302,10 @@ voice_assistant:
         call_nim_tts_end();
   on_end:
     - lambda: |-
-        esphome::get_pcm_sound_player().stop();
-        id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+        if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
+          esphome::get_pcm_sound_player().stop();
+          id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
+        }
         call_nim_stop_word();
     - if:
         condition:
@@ -378,7 +356,7 @@ text:
     name: "Cancellation Words"
     icon: "mdi:cancel"
     entity_category: config
-    initial_value: "stop, nevermind, never mind, cancel, abort"
+    initial_value: "stop, nevermind, never mind, cancel, abort, dismiss, quit, silence, quiet, shut up"
     restore_value: true
     optimistic: true
     min_length: 0
@@ -675,6 +653,7 @@ switch:
     icon: "mdi:bell-ring"
     entity_category: config
     optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
 
   - platform: template
     id: cancel_sound_switch

@@ -247,6 +247,7 @@ class PcmSoundPlayer {
   }
 
   void play_sound(const std::string &name, bool loop = false, float volume = -1.0f) {
+    this->is_playing_cancel_ = false;
     if (this->speaker_ == nullptr) return;
     if (name == "Silent") {
       this->stop();
@@ -263,6 +264,7 @@ class PcmSoundPlayer {
   }
 
   void play_processing_sound(const std::string &name, bool loop = true, float volume = -1.0f) {
+    this->is_playing_cancel_ = false;
     if (name == "Silent") {
       this->stop();
       return;
@@ -277,6 +279,7 @@ class PcmSoundPlayer {
   }
 
   void play_chime(const std::string &name, bool loop = false, float volume = -1.0f) {
+    this->is_playing_cancel_ = false;
     if (name == "Silent") {
       this->stop();
       return;
@@ -295,6 +298,7 @@ class PcmSoundPlayer {
       this->stop();
       return;
     }
+    this->is_playing_cancel_ = true;
     for (const auto &item : this->custom_cancel_sounds_) {
       if (item.name == name || (name == "Custom" && !this->custom_cancel_sounds_.empty() && &item == &this->custom_cancel_sounds_[0])) {
         this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
@@ -401,6 +405,7 @@ class PcmSoundPlayer {
   void stop() {
     if (!this->is_playing_ && this->task_handle_ == nullptr) return;
     this->is_playing_ = false;
+    this->is_playing_cancel_ = false;
     this->is_loop_ = false;
     this->stop_task_();
     if (this->speaker_ != nullptr) {
@@ -413,6 +418,7 @@ class PcmSoundPlayer {
   }
 
   bool is_playing() const { return this->is_playing_; }
+  bool is_playing_cancel() const { return this->is_playing_ && this->is_playing_cancel_; }
 
  protected:
   speaker::Speaker *speaker_{nullptr};
@@ -420,6 +426,7 @@ class PcmSoundPlayer {
   size_t data_len_{0};
   size_t read_offset_{0};
   volatile bool is_playing_{false};
+  volatile bool is_playing_cancel_{false};
   bool is_loop_{false};
   bool is_raw_pcm_{false};
   std::function<void()> on_finished_{nullptr};
@@ -564,6 +571,7 @@ class PcmSoundPlayer {
     }
 
     this->is_playing_ = false;
+    this->is_playing_cancel_ = false;
   }
 
   inline int16_t decode_sample_(uint8_t nibble) {

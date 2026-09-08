@@ -16,6 +16,7 @@ void nim_satellite_stop_word(void) __attribute__((weak));
 void nim_satellite_error(const char *code) __attribute__((weak));
 void nim_satellite_disconnected(void) __attribute__((weak));
 void nim_satellite_connected(void) __attribute__((weak));
+bool nim_satellite_is_cancellation(const char *text, const char *config) __attribute__((weak));
 int nim_satellite_get_state(void) __attribute__((weak));
 
 // Extended State Functions
@@ -82,6 +83,10 @@ inline void call_nim_connected(void) {
 }
 inline void call_nim_disconnected(void) {
   if (nim_satellite_disconnected) nim_satellite_disconnected();
+}
+inline bool call_nim_is_cancellation(const char *text, const char *config = nullptr) {
+  if (nim_satellite_is_cancellation) return nim_satellite_is_cancellation(text, config);
+  return false;
 }
 inline void call_nim_set_muted(bool muted) {
   if (nim_satellite_set_muted) nim_satellite_set_muted(muted);
