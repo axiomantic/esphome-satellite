@@ -405,7 +405,7 @@
       <!-- Connected Device Information Inspector -->
       <div id="deviceInfoBanner" class="device-info-banner" style="display: none;">
         <div class="info-pill"><span class="pill-label">Target</span> <strong id="devInfoTarget">ESP32-S3</strong></div>
-        <div class="info-pill"><span class="pill-label">Firmware</span> <strong id="devInfoFirmware">esphome-satellite v0.4.0</strong></div>
+        <div class="info-pill"><span class="pill-label">Firmware</span> <strong id="devInfoFirmware">esphome-satellite v0.5.0</strong></div>
         <div class="info-pill"><span class="pill-label">ESPHome</span> <strong id="devInfoEspHome">Detecting...</strong></div>
         <div class="info-pill"><span class="pill-label">Wi-Fi</span> <strong id="devInfoWifi">--</strong></div>
         <div class="info-pill"><span class="pill-label">IP</span> <code id="devInfoIp">--</code></div>
@@ -433,7 +433,7 @@
     };
     const BASE_MANIFEST = {
       name: "esphome-satellite",
-      version: "0.4.0",
+      version: "0.5.0",
       home_assistant_domain: "esphome",
       new_install_prompt_erase: true,
       builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
@@ -1495,6 +1495,24 @@
     updateFieldDependencies();
     checkInstallReadiness();
     updateDynamicManifest();
+    // Dynamically synchronize version with manifest.json / version.json
+    async function syncDynamicManifestVersion() {
+      try {
+        const resp = await fetch('manifest.json?_=' + Date.now());
+        if (resp.ok) {
+          const remoteManifest = await resp.json();
+          if (remoteManifest && remoteManifest.version && remoteManifest.version !== BASE_MANIFEST.version) {
+            BASE_MANIFEST.version = remoteManifest.version;
+            const fwEl = document.getElementById('devInfoFirmware');
+            if (fwEl) fwEl.textContent = (BASE_MANIFEST.name || "esphome-satellite") + ' v' + remoteManifest.version;
+            updateDynamicManifest();
+          }
+        }
+      } catch (e) {
+        // Static manifest fallback when offline or running locally without server
+      }
+    }
+    syncDynamicManifestVersion();
 
     // Success Modal Logic
     const installBtnEl = document.getElementById('installBtn');
