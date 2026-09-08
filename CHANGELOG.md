@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced `Warm Kalimba` wake chime and cancel sound with authentic, resonant steel-tine Hokema Sansula acoustic recordings under CC0 1.0 Universal license.
 - Replaced arbitrary YAML delays with event-driven playback completion and typestate transitions.
 
+### Removed
+- Orphaned `@esphome-satellite/trainer` experimental in-browser trainer subproject and obsolete TypeScript CI job.
+- Redundant `scripts/build.sh` script in favor of comprehensive `scripts/test.sh` runner.
+
 ## [0.4.0] - 2026-09-06
 
 ### Added

@@ -6,6 +6,11 @@ nimcache/
 *.obj
 tests/test_fsm
 tests/test_version_sync
+tests/test_audio_dsp
+tests/test_xvf3800
+tests/test_wake_loader
+tests/test_pcm_player
+tests/test_cancellation
 .DS_Store
 Thumbs.db
 .esphome/
