@@ -103,6 +103,8 @@ nim:
     - https://github.com/elijahr/nim-typestates
 
 wifi:
+  power_save_mode: NONE
+  fast_connect: true
   ap:
     ssid: "Satellite Fallback Hotspot"
 
@@ -691,7 +693,7 @@ interval:
       - lambda: |-
           static uint32_t active_start_ms = 0;
           std::string s = get_satellite_state_name();
-          if (s == "Idle" || s == "Muted" || s == "PlayingMedia") {
+          if (s == "Idle") {
             active_start_ms = 0;
             if (id(mic_mute_switch).state == false && id(mww).is_running() == false) {
               ESP_LOGW("satellite", "Watchdog: Satellite in %s state without active wake word listening. Resuming microWakeWord.", s.c_str());
@@ -713,8 +715,7 @@ interval:
                 id(mww).start();
               }
             }
-          } else {
-            // Listening, Thinking, Woken
+          } else if (s == "Thinking" || s == "Listening" || s == "Woken") {
             if (active_start_ms == 0) {
               active_start_ms = millis();
             } else {
@@ -731,6 +732,9 @@ interval:
                 }
               }
             }
+          } else {
+            // Passive or connection error states - reset watchdog timer
+            active_start_ms = 0;
           }
 
 
