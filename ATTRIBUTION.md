@@ -1,339 +1,370 @@
 # Audio Assets Attribution & Licensing
 
-All sound effects, chimes, and processing audio feedback in `esphome-satellite` are released under permissive Creative Commons licenses (**CC0 1.0 Universal Public Domain Dedication** or **Creative Commons Attribution CC-BY 3.0 / 4.0**).
+All sound effects, chimes, and processing audio feedback in `esphome-satellite` are released under permissive Creative Commons licenses (**CC0 1.0 Universal Public Domain Dedication**, **CC-BY 3.0**, **CC-BY 4.0**, or **CC-BY-SA**). No procedural or synthetic waveforms are used.
 
 ---
 
-## 1. Wake Chimes (Acknowledgement Chimes)
+## 1. Wake Chimes (17 Positive Cues)
 
-### Organic Acoustic Chimes (10 Total)
-1. **Warm Kalimba** (`warm-kalimba.wav` / `warm-kalimba.mp3`)
-   - **Type**: Organic Acoustic Thumb Piano
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Natural resonance of two struck spring-steel kalimba tines on a mahogany soundboard.
+1. **Bell Ping** (`bell-ping.wav` / `bell-ping.mp3`)
+   - **Type**: Studio UI Acoustic Bell Ping (`pep_sound_1`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Trimmed to 0.52s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-2. **Meditation Bell** (`meditation-bell.wav` / `meditation-bell.mp3`)
-   - **Type**: Tibetan Singing Bowl
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Hand-hammered Himalayan brass singing bowl strike with long harmonic decay.
+2. **Modern Chime** (`modern-chime.wav` / `modern-chime.mp3`)
+   - **Type**: Two-Tone Melodic Chime (`two_tone_1`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Trimmed to 0.70s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-3. **Marimba** (`marimba.wav` / `marimba.mp3`)
-   - **Type**: Organic Rosewood Marimba Triad
-   - **Author / Origin**: Kenney Game Audio / Freesound
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Mellow wooden bar acoustic strike with tuned resonator tube resonance.
+3. **Crystal Glass** (`crystal-glass.wav` / `crystal-glass.mp3`)
+   - **Type**: Struck Triangle Metallic Crystal Resonance Ping
+   - **Author / Source**: Philharmonia Orchestra, London
+   - **Origin**: [Philharmonia Instrument Sound Sample Library](https://philharmonia.co.uk/resources/sound-samples/)
+   - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+   - **Adaptation**: Single note struck singly, trimmed to 1.1s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-4. **Bamboo Chime** (`bamboo-chime.wav` / `bamboo-chime.mp3`)
-   - **Type**: Natural Bamboo Wind Chime
-   - **Author / Origin**: Inspired by InspectorJ / Freesound
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Dual hollow acoustic bamboo tube strikes with natural wooden knock.
+4. **Warm Kalimba** (`warm-kalimba.wav` / `warm-kalimba.mp3`)
+   - **Type**: Organic Coconut Shell Kalimba Tine Pluck
+   - **Author / Source**: Luis Alvaz (Recorded with TASCAM DR-44WL field recorder)
+   - **Origin**: [Wikimedia Commons - File:Kalimba de coco (notas sueltas) 03.wav](https://commons.wikimedia.org/wiki/File:Kalimba_de_coco_(notas_sueltas)_03.wav)
+   - **License**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+   - **Adaptation**: Isolated single acoustic tine strike, trimmed to 1.2s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-5. **Tibetan Bowl** (`tibetan-bowl.wav` / `tibetan-bowl.mp3`)
-   - **Type**: Struck Himalayan Brass Singing Bowl
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: 432Hz fundamental with shimmering non-harmonic golden overtone bloom.
+5. **Meditation Bell** (`meditation-bell.wav` / `meditation-bell.mp3`)
+   - **Type**: Acoustic Bronze Church Bell Strike
+   - **Author / Source**: gsb1039
+   - **Origin**: [Wikimedia Commons - File:415061 gsb1039 clock-chime-tubebells-handbells-vibes.wav](https://commons.wikimedia.org/wiki/File:415061_gsb1039_clock-chime-tubebells-handbells-vibes.wav)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Single bronze bell strike isolated, trimmed to 1.4s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-6. **Acoustic Harp** (`acoustic-harp.wav` / `acoustic-harp.mp3`)
-   - **Type**: Concert Harp Pluck
-   - **Author / Origin**: dobroide / Freesound
-   - **License**: Creative Commons CC-BY 3.0
-   - **Description**: Two-string concert harp pluck with cedar soundboard acoustic projection.
+6. **Marimba** (`marimba.wav` / `marimba.mp3`)
+   - **Type**: Resonant Wooden Bar Xylophone / Marimba Chime
+   - **Author / Source**: spazzo_1493
+   - **Origin**: [Wikimedia Commons - File:Xylophone jingle.wav](https://commons.wikimedia.org/wiki/File:Xylophone_jingle.wav)
+   - **License**: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+   - **Adaptation**: Trimmed to 0.9s melodic wooden strike, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-7. **Woodblock** (`woodblock.wav` / `woodblock.mp3`)
-   - **Type**: Hardwood Temple Block
-   - **Author / Origin**: Kenney Game Audio
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Crisp, organic rosewood temple block strike with tight acoustic decay.
+7. **Subtle Beep** (`subtle-beep.wav` / `subtle-beep.mp3`)
+   - **Type**: Subtle Tactile Switch Click (`switch2`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Trimmed to 0.32s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-8. **Ceramic Bell** (`ceramic-bell.wav` / `ceramic-bell.mp3`)
-   - **Type**: Glazed Porcelain Wind Bell
-   - **Author / Origin**: soundslikewillem / Freesound
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Delicate crystalline earthenware bell with high-frequency glaze shimmer.
+8. **Bamboo Chime** (`bamboo-chime.wav` / `bamboo-chime.mp3`)
+   - **Type**: Natural Acoustic Wind Chime / Chime Sample
+   - **Author / Source**: UnKnownrNone
+   - **Origin**: [Wikimedia Commons - File:Chime (1) Sample.wav](https://commons.wikimedia.org/wiki/File:Chime_(1)_Sample.wav)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Isolated acoustic chime strike, trimmed to 1.1s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-9. **Crystal Glass** (`crystal-glass.wav` / `crystal-glass.mp3`)
-   - **Type**: Lead Crystal Resonance Ping
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Gentle rim tap on lead crystal goblet with pure sinusoidal ringing.
+9. **Tibetan Bowl** (`tibetan-bowl.wav` / `tibetan-bowl.mp3`)
+   - **Type**: Authentic Himalayan Singing Bowl Strike
+   - **Author / Source**: Valera N. Trubin
+   - **Origin**: [Wikimedia Commons - File:The sound of a singing bowl.wav](https://commons.wikimedia.org/wiki/File:The_sound_of_a_singing_bowl.wav)
+   - **License**: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   - **Adaptation**: Clean fundamental strike isolated with natural harmonic bloom, trimmed to 1.4s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-10. **Bell Ping** (`bell-ping.wav` / `bell-ping.mp3`)
-    - **Type**: Resonant Brass Bell
-    - **Author / Origin**: Freesound Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Clean single-tone 880Hz brass counter bell with exponential acoustic decay.
+10. **Acoustic Harp** (`acoustic-harp.wav` / `acoustic-harp.mp3`)
+    - **Type**: Acoustic Plucked String / Mandolin Concert Pluck
+    - **Author / Source**: Philharmonia Orchestra, London
+    - **Origin**: [Philharmonia Instrument Sound Sample Library](https://philharmonia.co.uk/resources/sound-samples/)
+    - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+    - **Adaptation**: Single acoustic pluck with resonant decay, trimmed to 1.0s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
----
+11. **Woodblock** (`woodblock.wav` / `woodblock.mp3`)
+    - **Type**: Hardwood Temple Block Single Strike
+    - **Author / Source**: Philharmonia Orchestra, London
+    - **Origin**: [Philharmonia Instrument Sound Sample Library](https://philharmonia.co.uk/resources/sound-samples/)
+    - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+    - **Adaptation**: Struck singly mezzo-forte, trimmed to 0.29s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-### Modern Digital Chimes (6 Total)
-11. **Modern Chime** (`modern-chime.wav` / `modern-chime.mp3`)
-    - **Type**: Ascending Two-Tone Harmonic Chime
-    - **Author / Origin**: Kenney (kenney.nl)
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Crisp modern minimalist ascending chord with gentle spatial release.
+12. **Ceramic Bell** (`ceramic-bell.wav` / `ceramic-bell.mp3`)
+    - **Type**: Delicate Wind Chime Cluster
+    - **Author / Source**: Philharmonia Orchestra, London
+    - **Origin**: [Philharmonia Instrument Sound Sample Library](https://philharmonia.co.uk/resources/sound-samples/)
+    - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+    - **Adaptation**: Trimmed to 1.2s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-12. **Neon Shimmer** (`neon-shimmer.wav` / `neon-shimmer.mp3`)
-    - **Type**: Analog FM Synthesizer Chord
-    - **Author / Origin**: Kenney Interface Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Warm analog FM chord with soft attack envelope and glowing reverb tail.
+13. **Neon Shimmer** (`neon-shimmer.wav` / `neon-shimmer.mp3`)
+    - **Type**: Ascending Three-Tone Electronic Flourish (`zap_three_tone_up`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.70s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-13. **Prism Ping** (`prism-ping.wav` / `prism-ping.mp3`)
-    - **Type**: Glass-Digital Harmonic Ping
-    - **Author / Origin**: Little Robot Sound Factory / OpenGameArt
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Pristine modern digital chime with octave-fifth overtone sparkle.
+14. **Prism Ping** (`prism-ping.wav` / `prism-ping.mp3`)
+    - **Type**: Upward Digital Power Chime (`power_up_1`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.70s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-14. **Cyber Bloom** (`cyber-bloom.wav` / `cyber-bloom.mp3`)
-    - **Type**: Ascending Digital Synth Arpeggio
-    - **Author / Origin**: Kenney Game Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Ascending D5-A5-D6 modern synthesizer arpeggio with smooth filter cutoff.
+15. **Cyber Bloom** (`cyber-bloom.wav` / `cyber-bloom.mp3`)
+    - **Type**: High Ascending Shimmer Tone (`high_up`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.55s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-15. **Quantum Beep** (`quantum-beep.wav` / `quantum-beep.mp3`)
-    - **Type**: Precision Digital Interface Acknowledge
-    - **Author / Origin**: Kenney Interface Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Crisp dual micro-transient acknowledgment tone for minimalist environments.
+16. **Quantum Beep** (`quantum-beep.wav` / `quantum-beep.mp3`)
+    - **Type**: Tactile Micro-Switch Click (`switch1`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.32s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-16. **Aero Chime** (`aero-chime.wav` / `aero-chime.mp3`)
-    - **Type**: Spatial Atmospheric Synth Swell
-    - **Author / Origin**: Erokia / Freesound
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Airy spatial dual-tone electronic chime with subtle breath texture.
-
-17. **Subtle Beep** (`subtle-beep.wav` / `subtle-beep.mp3`)
-    - **Type**: Unobtrusive Soft Blip
-    - **Author / Origin**: OpenGameArt Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Discrete 600Hz sine blip with cosine envelope for quiet environments.
-
----
-
-## 2. Processing Sounds (Ambient Loop Cadences)
-
-### Organic Ambient Processing Sounds (8 Total)
-1. **Water Droplets** (`water-droplets.wav` / `water-droplets.mp3`)
-   - **Type**: Organic Water Droplets
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Gentle water droplets falling into a still basin with acoustic bubble resonance.
-
-2. **Raindrops** (`raindrops.wav` / `raindrops.mp3`)
-   - **Type**: Rain on Broad Leaves
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Soft, rhythmic acoustic raindrops tapping on broad garden foliage.
-
-3. **Forest Stream** (`forest-stream.wav` / `forest-stream.mp3`)
-   - **Type**: Mountain Brook Stream
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Gentle bubbling water brook with natural organic flow and soft eddies.
-
-4. **Campfire Ember** (`campfire-ember.wav` / `campfire-ember.mp3`)
-   - **Type**: Woodfire Crackle & Ember
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Subtle, cozy organic wood crackle with gentle ember pops.
-
-5. **Shishi-Odoshi** (`shishi-odoshi.wav` / `shishi-odoshi.mp3`)
-   - **Type**: Japanese Bamboo Rocker Fountain
-   - **Author / Origin**: sonicfury / Freesound
-   - **License**: Creative Commons CC-BY 3.0
-   - **Description**: Traditional water trickles followed by resonant bamboo clack against river stone.
-
-6. **Soft Footsteps** (`soft-footsteps.wav` / `soft-footsteps.mp3`)
-   - **Type**: Paced Leather Steps on Wood
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Unobtrusive rhythmic footsteps on hardwood floor indicating active thought.
-
-7. **Typewriter** (`typewriter.wav` / `typewriter.mp3`)
-   - **Type**: Vintage Mechanical Typewriter
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Tactile acoustic keystrokes and gentle mechanical carriage movement.
-
-8. **Clockwork** (`clockwork.wav` / `clockwork.mp3`)
-   - **Type**: Watchmaker Escapement
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Precision Swiss mechanical watch escapement tick-tock.
+17. **Aero Chime** (`aero-chime.wav` / `aero-chime.mp3`)
+    - **Type**: Airy Double-Tone UI Chime (`pep_sound_2`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.55s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 ---
 
-### Modern Digital Processing Sounds (9 Total)
+## 2. Processing Loops (17 Background Textures)
+
+1. **Clockwork** (`clockwork.wav` / `clockwork.mp3`)
+   - **Type**: Antique Brass Clock Escapement & Mechanical Ticking
+   - **Author / Source**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Seamless mathematical loop at 32,915 samples (2.06s), resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+2. **Typewriter** (`typewriter.wav` / `typewriter.mp3`)
+   - **Type**: Authentic Mechanical Manual Typewriter Keystrokes & Carriage
+   - **Author / Source**: Freesound Community
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Authentic continuous 5.0s loop (80,000 samples), resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+3. **Water Droplets** (`water-droplets.wav` / `water-droplets.mp3`)
+   - **Type**: Continuous Natural Water Trickle
+   - **Author / Source**: FractalStudios
+   - **Origin**: [Wikimedia Commons - File:363120 fractalstudios water-trickle.wav](https://commons.wikimedia.org/wiki/File:363120_fractalstudios_water-trickle.wav)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Seamless 2.0s loop, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+4. **Raindrops** (`raindrops.wav` / `raindrops.mp3`)
+   - **Type**: Natural Rainfall on Leaves & Pavement Field Recording
+   - **Author / Source**: Effib
+   - **Origin**: [Wikimedia Commons - File:Sound of rain.ogg](https://commons.wikimedia.org/wiki/File:Sound_of_rain.ogg)
+   - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+   - **Adaptation**: Seamless 2.0s field recording loop, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+5. **Forest Stream** (`forest-stream.wav` / `forest-stream.mp3`)
+   - **Type**: Mountain Brook Flowing Water Field Recording
+   - **Author / Source**: TwoWings
+   - **Origin**: [Wikimedia Commons - File:Brook sound.ogg](https://commons.wikimedia.org/wiki/File:Brook_sound.ogg)
+   - **License**: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+   - **Adaptation**: Seamless 2.01s brook stream loop, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+6. **Campfire Ember** (`campfire-ember.wav` / `campfire-ember.mp3`)
+   - **Type**: Open Fireplace Burning Wood & Ember Crackle
+   - **Author / Source**: ezwa (PDSounds.org)
+   - **Origin**: [Wikimedia Commons - File:Dry grass burning in open fireplace.ogg](https://commons.wikimedia.org/wiki/File:Dry_grass_burning_in_open_fireplace.ogg)
+   - **License**: Public Domain
+   - **Adaptation**: Seamless 1.99s crackling fireplace loop, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+7. **Shishi-Odoshi** (`shishi-odoshi.wav` / `shishi-odoshi.mp3`)
+   - **Type**: Japanese Bamboo Water Rocker / Temple Knock
+   - **Author / Source**: Philharmonia Orchestra, London
+   - **Origin**: [Philharmonia Instrument Sound Sample Library](https://philharmonia.co.uk/resources/sound-samples/)
+   - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+   - **Adaptation**: Single rhythmic hardwood knock, trimmed to 0.29s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+8. **Soft Footsteps** (`soft-footsteps.wav` / `soft-footsteps.mp3`)
+   - **Type**: Recorded Footsteps on Terrain / Gravel
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney RPG Audio Pack](https://kenney.nl/assets/rpg-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Single step isolated, trimmed to 0.25s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
 9. **Radar Ping** (`radar-ping.wav` / `radar-ping.mp3`)
-   - **Type**: Sci-Fi Nautical Radar Sweep
-   - **Author / Origin**: Kenney Game Audio
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: High-tech periodic radar pulse with sweeping acoustic decay.
+   - **Type**: Acoustic Sonar Pulse / Submarine Echo
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney Jam Audio Collection](https://github.com/aucaland/Kenney-jam-Audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Clean acoustic ping with long reverberant tail, trimmed to 1.2s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 10. **Data Crunch** (`data-crunch.wav` / `data-crunch.mp3`)
-    - **Type**: Digital Telemetry Packet Chatter
-    - **Author / Origin**: Freesound Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Subtle digital micro-packet processing rhythm for AI computation.
+    - **Type**: Mechanical Relay / Precision Contact (`metal_click`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney RPG Audio Pack](https://kenney.nl/assets/rpg-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.45s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 11. **Telemetry Blip** (`telemetry-blip.wav` / `telemetry-blip.mp3`)
-    - **Type**: Satellite Telemetry Pulse
-    - **Author / Origin**: Kenney Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Rhythmic dual-harmonic tracking blips for active background queries.
+    - **Type**: Fast Telemetry Sequence Blip (`pep_sound_3`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.44s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 12. **Quantum Flux** (`quantum-flux.wav` / `quantum-flux.mp3`)
-    - **Type**: LFO Electronic Undulation
-    - **Author / Origin**: OpenGameArt Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Smooth undulating electronic rhythm with warm analog filter modulation.
+    - **Type**: Multi-Stage Electronic Pulse (`low_random`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.55s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 13. **Retro Terminal** (`retro-terminal.wav` / `retro-terminal.mp3`)
-    - **Type**: Vintage Computer Relay & Drive
-    - **Author / Origin**: Freesound Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Nostalgic acoustic-electric relay clicks and magnetic disk flutter.
+    - **Type**: Heavy Tactile Industrial Switch Click (`switch3`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.37s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-14. **Spinner** (`spinner.wav` / `spinner.mp3`)
-    - **Type**: Rhythmic Ratchet Tick
-    - **Author / Origin**: Kenney Game Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Fast rhythmic progress ticking for rapid visual-audio feedback.
+14. **Sonar** (`sonar.wav` / `sonar.mp3`)
+    - **Type**: Deep Sonar Echo Ping
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Jam Audio Collection](https://github.com/aucaland/Kenney-jam-Audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Clean acoustic ping with decay, trimmed to 1.2s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 15. **Pulse** (`pulse.wav` / `pulse.mp3`)
-    - **Type**: Sub-bass Heartbeat
-    - **Author / Origin**: Freesound Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Subtle low-frequency acoustic heartbeat rhythm for calm ambient presence.
+    - **Type**: Electronic Phase Jump Pulse (`phase_jump_1`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.47s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-16. **Sonar** (`sonar.wav` / `sonar.mp3`)
-    - **Type**: Deep Ocean Sonar
-    - **Author / Origin**: Freesound Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Periodic deep-sea sonar acoustic pulse with long aquatic tail.
+16. **Tick** (`tick.wav` / `tick.mp3`)
+    - **Type**: High Frequency Tactile Lever Snap (`switch7`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.21s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-17. **Tick** (`tick.wav` / `tick.mp3`)
-    - **Type**: Minimal Precision Metronome
-    - **Author / Origin**: Kenney Game Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Steady minimalist tick tone for clean rhythmic pacing.
-
----
-
-## 3. Cancel Sounds (Aborted / Cancellation Resolves)
-
-Dedicated downward/resolving acoustic acknowledgement tones played when a cancellation word (*"stop"*, *"cancel"*, *"nevermind"*) is spoken or voice interaction times out.
-
-### Organic Acoustic Cancel Sounds (10 Total)
-1. **Warm Kalimba Cancel** (`cancel-warm-kalimba.wav` / `cancel-warm-kalimba.mp3`)
-   - **Type**: Organic Acoustic Thumb Piano Downward Strike
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Downward two-tine kalimba strike with warm wooden body decay.
-
-2. **Meditation Bell Cancel** (`cancel-meditation-bell.wav` / `cancel-meditation-bell.mp3`)
-   - **Type**: Tibetan Singing Bowl Dampening
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Gentle calming singing bowl strike with soft dampening release.
-
-3. **Marimba Cancel** (`cancel-marimba.wav` / `cancel-marimba.mp3`)
-   - **Type**: Descending Rosewood Marimba Triad
-   - **Author / Origin**: Kenney Game Audio / Freesound
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Discreet descending wooden marimba bar strike for ambient cancellation.
-
-4. **Bamboo Chime Cancel** (`cancel-bamboo-chime.wav` / `cancel-bamboo-chime.mp3`)
-   - **Type**: Natural Bamboo Tube Tap
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Hollow bamboo tube strike with natural organic knock.
-
-5. **Tibetan Bowl Cancel** (`cancel-tibetan-bowl.wav` / `cancel-tibetan-bowl.mp3`)
-   - **Type**: Himalayan Brass Bowl Release
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Warm resonant brass bowl release with gentle overtone decay.
-
-6. **Acoustic Harp Cancel** (`cancel-acoustic-harp.wav` / `cancel-acoustic-harp.mp3`)
-   - **Type**: Descending Concert Harp Pluck
-   - **Author / Origin**: dobroide / Freesound
-   - **License**: Creative Commons CC-BY 3.0
-   - **Description**: Gentle downward acoustic harp glissando note with cedar resonance.
-
-7. **Woodblock Cancel** (`cancel-woodblock.wav` / `cancel-woodblock.mp3`)
-   - **Type**: Hardwood Temple Block Click
-   - **Author / Origin**: Kenney Game Audio
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Natural rosewood temple block cancellation click.
-
-8. **Ceramic Bell Cancel** (`cancel-ceramic-bell.wav` / `cancel-ceramic-bell.mp3`)
-   - **Type**: Glazed Porcelain Bell Dampening
-   - **Author / Origin**: soundslikewillem / Freesound
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: High-frequency earthenware glaze strike with soft release.
-
-9. **Crystal Glass Cancel** (`cancel-crystal-glass.wav` / `cancel-crystal-glass.mp3`)
-   - **Type**: Crystal Ping Release
-   - **Author / Origin**: Freesound Community
-   - **License**: Creative Commons CC0 1.0 Universal
-   - **Description**: Downward lead crystal goblet tap with delicate pure decay.
-
-10. **Bell Ping Cancel** (`cancel-bell-ping.wav` / `cancel-bell-ping.mp3`)
-    - **Type**: Resonant Brass Bell Downward Resolve
-    - **Author / Origin**: Freesound Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Crisp descending brass bell tone with smooth acoustic decay.
+17. **Spinner** (`spinner.wav` / `spinner.mp3`)
+    - **Type**: Mechanical Latch Snap (`metal_latch`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney RPG Audio Pack](https://kenney.nl/assets/rpg-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.26s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 ---
 
-### Modern Digital Cancel Sounds (7 Total)
-11. **Modern Chime Cancel** (`cancel-modern-chime.wav` / `cancel-modern-chime.mp3`)
-    - **Type**: Descending Two-Tone Harmonic Resolve
-    - **Author / Origin**: Kenney (kenney.nl)
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Clean downward harmonic two-tone resolve.
+## 3. Cancel Sounds (17 Distinct Dismissal Cues)
 
-12. **Neon Shimmer Cancel** (`cancel-neon-shimmer.wav` / `cancel-neon-shimmer.mp3`)
-    - **Type**: Descending FM Synthesizer Chord
-    - **Author / Origin**: Kenney Interface Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Warm analog FM downward sweep with soft glowing release.
+1. **Cancel Bell Ping** (`cancel-bell-ping.wav` / `cancel-bell-ping.mp3`)
+   - **Type**: Descending Negative Double-Tone (`two_tone_2`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Distinct downward cancellation cue, trimmed to 0.60s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-13. **Prism Ping Cancel** (`cancel-prism-ping.wav` / `cancel-prism-ping.mp3`)
-    - **Type**: Glass-Digital Downward Ping
-    - **Author / Origin**: Little Robot Sound Factory / OpenGameArt
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Pristine digital glass tone with downward overtone sparkle.
+2. **Cancel Modern Chime** (`cancel-modern-chime.wav` / `cancel-modern-chime.mp3`)
+   - **Type**: Soft Tactile Rocker Dismissal (`switch22`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Trimmed to 0.37s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-14. **Cyber Bloom Cancel** (`cancel-cyber-bloom.wav` / `cancel-cyber-bloom.mp3`)
-    - **Type**: Descending Synth Arpeggio
-    - **Author / Origin**: Kenney Game Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Futuristic descending synthesizer arpeggio resolve.
+3. **Cancel Crystal Glass** (`cancel-crystal-glass.wav` / `cancel-crystal-glass.mp3`)
+   - **Type**: Damped Tactile Click (`switch25`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Trimmed to 0.38s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-15. **Quantum Beep Cancel** (`cancel-quantum-beep.wav` / `cancel-quantum-beep.mp3`)
-    - **Type**: Dual-Tone Micro Abort Beep
-    - **Author / Origin**: Kenney Interface Audio
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Fast low-profile dual-tone cancellation blip.
+4. **Cancel Warm Kalimba** (`cancel-warm-kalimba.wav` / `cancel-warm-kalimba.mp3`)
+   - **Type**: Low Coconut Kalimba Tine Pluck
+   - **Author / Source**: Luis Alvaz
+   - **Origin**: [Wikimedia Commons - File:Kalimba de coco (notas sueltas) 03.wav](https://commons.wikimedia.org/wiki/File:Kalimba_de_coco_(notas_sueltas)_03.wav)
+   - **License**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+   - **Adaptation**: Low resonant tine strike with early fade, trimmed to 0.80s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-16. **Aero Chime Cancel** (`cancel-aero-chime.wav` / `cancel-aero-chime.mp3`)
-    - **Type**: Spatial Atmospheric Downward Swell
-    - **Author / Origin**: Erokia / Freesound
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Spatial downward atmospheric electronic note with soft release.
+5. **Cancel Meditation Bell** (`cancel-meditation-bell.wav` / `cancel-meditation-bell.mp3`)
+   - **Type**: Damped Deep Bronze Bell Chime
+   - **Author / Source**: gsb1039
+   - **Origin**: [Wikimedia Commons - File:415061 gsb1039 clock-chime-tubebells-handbells-vibes.wav](https://commons.wikimedia.org/wiki/File:415061_gsb1039_clock-chime-tubebells-handbells-vibes.wav)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Secondary lower bell note with damped tail, trimmed to 0.90s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-17. **Subtle Beep Cancel** (`cancel-subtle-beep.wav` / `cancel-subtle-beep.mp3`)
-    - **Type**: Minimal Downward Sine Blip
-    - **Author / Origin**: OpenGameArt Community
-    - **License**: Creative Commons CC0 1.0 Universal
-    - **Description**: Discrete downward sine blip for quiet environments.
+6. **Cancel Marimba** (`cancel-marimba.wav` / `cancel-marimba.mp3`)
+   - **Type**: Low Wooden Bar Single Strike
+   - **Author / Source**: spazzo_1493
+   - **Origin**: [Wikimedia Commons - File:Xylophone jingle.wav](https://commons.wikimedia.org/wiki/File:Xylophone_jingle.wav)
+   - **License**: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+   - **Adaptation**: Isolated single lower wooden key strike, trimmed to 0.60s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
----
+7. **Cancel Subtle Beep** (`cancel-subtle-beep.wav` / `cancel-subtle-beep.mp3`)
+   - **Type**: Descending Low Electronic Blip (`low_down`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Downward tone, trimmed to 0.50s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
-All sounds are royalty-free for personal, non-commercial, and commercial use under their respective Creative Commons licenses.
+8. **Cancel Bamboo Chime** (`cancel-bamboo-chime.wav` / `cancel-bamboo-chime.mp3`)
+   - **Type**: Damped Hollow Wooden Tap (`switch27`)
+   - **Author / Source**: Kenney (Kenney.nl)
+   - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Trimmed to 0.29s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+9. **Cancel Tibetan Bowl** (`cancel-tibetan-bowl.wav` / `cancel-tibetan-bowl.mp3`)
+   - **Type**: Lower Singing Bowl Fundamental Strike
+   - **Author / Source**: Valera N. Trubin
+   - **Origin**: [Wikimedia Commons - File:The sound of a singing bowl.wav](https://commons.wikimedia.org/wiki/File:The_sound_of_a_singing_bowl.wav)
+   - **License**: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   - **Adaptation**: Low overtone strike with soft 1.0s decay, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+10. **Cancel Acoustic Harp** (`cancel-acoustic-harp.wav` / `cancel-acoustic-harp.mp3`)
+    - **Type**: Muted Acoustic String Pluck
+    - **Author / Source**: Philharmonia Orchestra, London
+    - **Origin**: [Philharmonia Instrument Sound Sample Library](https://philharmonia.co.uk/resources/sound-samples/)
+    - **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+    - **Adaptation**: Lower register pluck with short decay, trimmed to 0.80s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+11. **Cancel Woodblock** (`cancel-woodblock.wav` / `cancel-woodblock.mp3`)
+    - **Type**: Deep Damped Impact (`drop_leather`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney RPG Audio Pack](https://kenney.nl/assets/rpg-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.42s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+12. **Cancel Ceramic Bell** (`cancel-ceramic-bell.wav` / `cancel-ceramic-bell.mp3`)
+    - **Type**: Glazed Porcelain Micro-Tap (`switch28`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.22s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+13. **Cancel Neon Shimmer** (`cancel-neon-shimmer.wav` / `cancel-neon-shimmer.mp3`)
+    - **Type**: Downward Laser/Electronic Descent (`laser_4`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.50s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+14. **Cancel Prism Ping** (`cancel-prism-ping.wav` / `cancel-prism-ping.mp3`)
+    - **Type**: Downward Power Blip (`power_up_2`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.47s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+15. **Cancel Cyber Bloom** (`cancel-cyber-bloom.wav` / `cancel-cyber-bloom.mp3`)
+    - **Type**: Descending Zap Tone (`zap_2`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.50s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+16. **Cancel Quantum Beep** (`cancel-quantum-beep.wav` / `cancel-quantum-beep.mp3`)
+    - **Type**: Releasing Micro-Switch Click (`switch24`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney UI Audio Pack](https://kenney.nl/assets/ui-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.28s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+
+17. **Cancel Aero Chime** (`cancel-aero-chime.wav` / `cancel-aero-chime.mp3`)
+    - **Type**: Downward Phase Jump (`phase_jump_2`)
+    - **Author / Source**: Kenney (Kenney.nl)
+    - **Origin**: [Kenney Digital Audio Pack](https://kenney.nl/assets/digital-audio)
+    - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+    - **Adaptation**: Trimmed to 0.39s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.

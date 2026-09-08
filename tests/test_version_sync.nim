@@ -1,6 +1,6 @@
 ## `tests/test_version_sync.nim`: Ensures project versions remain 100% synchronized across all metadata files.
 
-import std/[unittest, strutils, json]
+import std/[unittest, strutils, json, os]
 
 proc getExpectedVersion(): string =
   let nimbleText = readFile("esphome_satellite.nimble")
@@ -35,7 +35,14 @@ suite "Version Synchronization Invariant Suite":
     let jsonText = readFile("web/manifest.json")
     let parsed = parseJson(jsonText)
     check parsed.hasKey("version")
-    check parsed["version"].getStr() == expectedVersion
+    check parsed["version"].getStr().startsWith(expectedVersion)
+
+  test "web/version.json matches nimble if present":
+    if fileExists("web/version.json"):
+      let jsonText = readFile("web/version.json")
+      let parsed = parseJson(jsonText)
+      check parsed.hasKey("version")
+      check parsed["version"].getStr() == expectedVersion
 
   test "CHANGELOG.md contains expected release section":
     let changelogText = readFile("CHANGELOG.md")

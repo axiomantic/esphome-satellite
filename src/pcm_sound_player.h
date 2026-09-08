@@ -195,6 +195,24 @@ class PcmSoundPlayer {
   static WavInfo parse_wav(const uint8_t *data, size_t max_len) {
     WavInfo info;
     if (data == nullptr || max_len < 44) return info;
+
+    if (nim_pcm_parse_wav) {
+      uint32_t sample_rate = 0;
+      uint16_t channels = 0;
+      uint16_t bits = 0;
+      size_t pcm_offset = 0;
+      size_t pcm_len = 0;
+      if (nim_pcm_parse_wav(data, max_len, &sample_rate, &channels, &bits, &pcm_offset, &pcm_len)) {
+        info.valid = true;
+        info.channels = channels;
+        info.sample_rate = sample_rate;
+        info.bits_per_sample = bits;
+        info.pcm_data = data + pcm_offset;
+        info.pcm_len = pcm_len;
+        return info;
+      }
+    }
+
     if (memcmp(data, "RIFF", 4) != 0 || memcmp(data + 8, "WAVE", 4) != 0) {
       return info;
     }
@@ -495,10 +513,26 @@ class PcmSoundPlayer {
 
         size_t bytes_to_decode = std::min((size_t)128, this->data_len_ - this->read_offset_);
         size_t samples = 0;
-        for (size_t i = 0; i < bytes_to_decode; ++i) {
-          uint8_t byte = this->data_[this->read_offset_++];
-          pcm_buf[samples++] = this->decode_sample_(byte & 0x0F);
-          pcm_buf[samples++] = this->decode_sample_((byte >> 4) & 0x0F);
+        if (nim_pcm_decode_adpcm_chunk) {
+          int16_t vp = static_cast<int16_t>(this->valprev_);
+          int8_t idx = this->index_;
+          samples = nim_pcm_decode_adpcm_chunk(
+              this->data_ + this->read_offset_,
+              bytes_to_decode,
+              pcm_buf,
+              1.0f,
+              &vp,
+              &idx
+          );
+          this->valprev_ = vp;
+          this->index_ = idx;
+          this->read_offset_ += bytes_to_decode;
+        } else {
+          for (size_t i = 0; i < bytes_to_decode; ++i) {
+            uint8_t byte = this->data_[this->read_offset_++];
+            pcm_buf[samples++] = this->decode_sample_(byte & 0x0F);
+            pcm_buf[samples++] = this->decode_sample_((byte >> 4) & 0x0F);
+          }
         }
 
         size_t total_bytes = samples * sizeof(int16_t);

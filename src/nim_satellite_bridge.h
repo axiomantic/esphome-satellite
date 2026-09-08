@@ -33,6 +33,28 @@ bool nim_satellite_is_muted(void) __attribute__((weak));
 bool nim_satellite_is_media_playing(void) __attribute__((weak));
 bool nim_satellite_is_alerting(void) __attribute__((weak));
 
+// Real-Time Audio DSP Hooks
+void nim_audio_dsp_process(int16_t *samples, int count) __attribute__((weak));
+void nim_audio_dsp_process32(int32_t *samples, int count) __attribute__((weak));
+
+// Hardware & Animation Nim Hooks
+void nim_xvf3800_make_gpo_payload(uint8_t pin, uint8_t val, uint8_t *outBuf) __attribute__((weak));
+void nim_xvf3800_update_animation(const char *stateName, const char *patternPref, float brightness, uint32_t nowMs, uint32_t *outColors) __attribute__((weak));
+
+// Partition Loader Nim Hooks
+bool nim_wake_loader_validate_header(const uint8_t *data, uint32_t partSize, int slotIndex, uint32_t *outModelSize, uint8_t *outCutoff, size_t *outWindow, size_t *outArena, char *outName, size_t maxNameLen) __attribute__((weak));
+
+// PCM Player Nim Hooks
+bool nim_pcm_parse_wav(const uint8_t *data, size_t len, uint32_t *outSampleRate, uint16_t *outChannels, uint16_t *outBits, size_t *outPcmOffset, size_t *outPcmLen) __attribute__((weak));
+size_t nim_pcm_decode_adpcm_chunk(const uint8_t *adpcmData, size_t adpcmLen, int16_t *outSamples, float volume, int16_t *valprev, int8_t *index) __attribute__((weak));
+
+inline void call_nim_audio_dsp_process(int16_t *samples, int count) {
+  if (nim_audio_dsp_process) nim_audio_dsp_process(samples, count);
+}
+inline void call_nim_audio_dsp_process32(int32_t *samples, int count) {
+  if (nim_audio_dsp_process32) nim_audio_dsp_process32(samples, count);
+}
+
 // Safe C++ inlined callers
 inline void call_nim_wake_word(const char *word, int angle) {
   if (nim_satellite_wake_word) nim_satellite_wake_word(word, angle);

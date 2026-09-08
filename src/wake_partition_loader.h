@@ -28,11 +28,28 @@ struct __attribute__((packed)) WakeModelHeader {
 };
 static_assert(sizeof(WakeModelHeader) == 64, "WakeModelHeader must be exactly 64 bytes");
 
+extern "C" {
+bool nim_wake_loader_validate_header(
+    const uint8_t *data,
+    uint32_t part_size,
+    int slot_index,
+    uint32_t *out_model_size,
+    uint8_t *out_cutoff,
+    size_t *out_window,
+    size_t *out_arena,
+    char *out_name,
+    size_t max_name_len
+) __attribute__((weak));
+
+uint8_t nim_wake_loader_scale_cutoff(uint8_t base_cutoff, const char *level) __attribute__((weak));
+}
+
 struct CustomWakeSlot {
   std::string name;
   micro_wake_word::WakeWordModel *model{nullptr};
   const void *map_ptr{nullptr};
   esp_partition_mmap_handle_t map_handle{0};
+  uint8_t base_cutoff{102};
 };
 
 class WakePartitionLoader {
@@ -68,35 +85,51 @@ class WakePartitionLoader {
         continue;
       }
 
-      const WakeModelHeader *header = reinterpret_cast<const WakeModelHeader *>(slot.map_ptr);
-      if (header->magic != WAKE_MAGIC) {
-        ESP_LOGI(TAG, "No custom wake word model in %s (magic: 0x%08X)", part_names[i], (unsigned int)header->magic);
-        esp_partition_munmap(slot.map_handle);
-        continue;
-      }
-
-      if (header->model_size < 1000 || header->model_size > (part->size - sizeof(WakeModelHeader))) {
-        ESP_LOGW(TAG, "Invalid model size in %s header: %u bytes", part_names[i], (unsigned int)header->model_size);
-        esp_partition_munmap(slot.map_handle);
-        continue;
-      }
-
+      uint32_t model_size = 0;
+      uint8_t cutoff = 102;
+      size_t window = 5;
+      size_t arena_size = 40960;
       char name_buf[33] = {0};
-      memcpy(name_buf, header->wake_word, 32);
-      name_buf[32] = '\0';
-      if (name_buf[0] == '\0') {
-        std::string fallback = "Custom Wake Word " + std::to_string(i + 1);
-        strncpy(name_buf, fallback.c_str(), 32);
-      }
-      slot.name = std::string(name_buf);
 
+      if (nim_wake_loader_validate_header) {
+        bool ok = nim_wake_loader_validate_header(
+            reinterpret_cast<const uint8_t *>(slot.map_ptr),
+            part->size,
+            i + 1,
+            &model_size,
+            &cutoff,
+            &window,
+            &arena_size,
+            name_buf,
+            sizeof(name_buf)
+        );
+        if (!ok) {
+          esp_partition_munmap(slot.map_handle);
+          continue;
+        }
+      } else {
+        const WakeModelHeader *header = reinterpret_cast<const WakeModelHeader *>(slot.map_ptr);
+        if (header->magic != WAKE_MAGIC || header->model_size < 1000 || header->model_size > (part->size - sizeof(WakeModelHeader))) {
+          esp_partition_munmap(slot.map_handle);
+          continue;
+        }
+        memcpy(name_buf, header->wake_word, 32);
+        if (name_buf[0] == '\0') {
+          std::string fallback = "Custom Wake Word " + std::to_string(i + 1);
+          strncpy(name_buf, fallback.c_str(), 32);
+        }
+        model_size = header->model_size;
+        cutoff = header->probability_cutoff > 0 ? header->probability_cutoff : 102;
+        window = header->sliding_window_size > 0 ? header->sliding_window_size : 5;
+        arena_size = header->tensor_arena_kb > 0 ? (header->tensor_arena_kb * 1024) : 40960;
+      }
+
+      slot.name = std::string(name_buf);
+      slot.base_cutoff = cutoff;
       const uint8_t *model_data = reinterpret_cast<const uint8_t *>(slot.map_ptr) + sizeof(WakeModelHeader);
-      uint8_t cutoff = header->probability_cutoff > 0 ? header->probability_cutoff : 102; // default 0.40 (102/255)
-      size_t window = header->sliding_window_size > 0 ? header->sliding_window_size : 5;
-      size_t arena_size = header->tensor_arena_kb > 0 ? (header->tensor_arena_kb * 1024) : 40960;
 
       ESP_LOGI(TAG, "Registering custom wake word slot %u (%s): '%s' (%u bytes, cutoff=%u, arena=%u)",
-               (unsigned int)(i + 1), part_names[i], slot.name.c_str(), (unsigned int)header->model_size, cutoff, (unsigned int)arena_size);
+               (unsigned int)(i + 1), part_names[i], slot.name.c_str(), (unsigned int)model_size, cutoff, (unsigned int)arena_size);
 
       std::string model_id = "custom_model_" + std::to_string(i + 1);
       slot.model = new micro_wake_word::WakeWordModel(
@@ -172,10 +205,55 @@ class WakePartitionLoader {
     }
   }
 
+  void handle_sensitivity_change(const std::string &level, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+    ESP_LOGI(TAG, "Wake word sensitivity level changed to: '%s'", level.c_str());
+    this->current_sensitivity_ = level;
+
+    // Baseline cutoffs: Clemens = 102 (0.40), Nabu = 170 (0.67)
+    uint8_t clemens_cutoff = 102;
+    uint8_t nabu_cutoff = 170;
+
+    if (nim_wake_loader_scale_cutoff != nullptr) {
+      clemens_cutoff = nim_wake_loader_scale_cutoff(102, level.c_str());
+      nabu_cutoff = nim_wake_loader_scale_cutoff(170, level.c_str());
+    } else {
+      if (level == "Very sensitive") {
+        clemens_cutoff = 71;
+        nabu_cutoff = 119;
+      } else if (level == "Slightly sensitive") {
+        clemens_cutoff = 137;
+        nabu_cutoff = 229;
+      } else {
+        clemens_cutoff = 102;
+        nabu_cutoff = 170;
+      }
+    }
+
+    if (clemens) {
+      clemens->set_probability_cutoff(clemens_cutoff);
+      ESP_LOGI(TAG, "Set Clemens model cutoff to %u (%s)", clemens_cutoff, level.c_str());
+    }
+    if (nabu) {
+      nabu->set_probability_cutoff(nabu_cutoff);
+      ESP_LOGI(TAG, "Set Nabu model cutoff to %u (%s)", nabu_cutoff, level.c_str());
+    }
+    for (auto &s : this->slots_) {
+      if (s.model) {
+        uint8_t scaled = s.base_cutoff;
+        if (nim_wake_loader_scale_cutoff != nullptr) {
+          scaled = nim_wake_loader_scale_cutoff(s.base_cutoff, level.c_str());
+        }
+        s.model->set_probability_cutoff(scaled);
+        ESP_LOGI(TAG, "Set custom model '%s' cutoff to %u (base %u, %s)", s.name.c_str(), scaled, s.base_cutoff, level.c_str());
+      }
+    }
+  }
+
  protected:
   std::vector<CustomWakeSlot> slots_;
   std::vector<std::string> custom_names_;
   std::vector<std::string> options_storage_;
+  std::string current_sensitivity_{"Moderately sensitive"};
 };
 
 inline WakePartitionLoader &get_wake_partition_loader() {

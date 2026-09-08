@@ -16,6 +16,11 @@
 // esp-audio-libs
 #include <pcm_convert.h>
 
+extern "C" {
+void nim_audio_dsp_process(int16_t *samples, int count) __attribute__((weak));
+void nim_audio_dsp_process32(int32_t *samples, int count) __attribute__((weak));
+}
+
 namespace esphome::i2s_audio {
 
 static const char *const TAG = "i2s_audio.speaker.std";
@@ -269,6 +274,13 @@ void I2SAudioSpeaker::run_speaker_task() {
             // Apply volume at the input bit depth, before any narrowing, so the full precision is scaled.
             uint8_t *new_data = audio_source->mutable_data() + audio_source->available() - bytes_read;
             this->apply_software_volume_(new_data, bytes_read);
+
+            // Apply real-time dynamic range compression, vocal boost (+5dB), and limiting in Nim
+            if (nim_audio_dsp_process != nullptr && input_bytes_per_sample == 2) {
+              nim_audio_dsp_process(reinterpret_cast<int16_t *>(new_data), bytes_read / sizeof(int16_t));
+            } else if (nim_audio_dsp_process32 != nullptr && input_bytes_per_sample == 4) {
+              nim_audio_dsp_process32(reinterpret_cast<int32_t *>(new_data), bytes_read / sizeof(int32_t));
+            }
           }
 
           // Convert as many whole frames as fit in the remaining DMA space, bounded by what the source

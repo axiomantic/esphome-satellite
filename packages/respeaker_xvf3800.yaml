@@ -46,6 +46,9 @@ esphome:
             std::string opt = id(active_wake_word).current_option();
             esphome::wake_loader::get_wake_partition_loader().handle_active_wake_word_change(
                 opt, id(clemens_model), id(nabu_model));
+            std::string sens = id(wake_word_sensitivity).current_option();
+            esphome::wake_loader::get_wake_partition_loader().handle_sensitivity_change(
+                sens, id(clemens_model), id(nabu_model));
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -422,6 +425,23 @@ select:
               - api.connected:
           then:
             - micro_wake_word.start:
+
+  - platform: template
+    id: wake_word_sensitivity
+    name: "Wake Word Sensitivity"
+    icon: "mdi:tune"
+    entity_category: config
+    optimistic: true
+    initial_option: "Moderately sensitive"
+    restore_value: true
+    options:
+      - "Slightly sensitive"
+      - "Moderately sensitive"
+      - "Very sensitive"
+    set_action:
+      - lambda: |-
+          esphome::wake_loader::get_wake_partition_loader().handle_sensitivity_change(
+              x, id(clemens_model), id(nabu_model));
 
   - platform: template
     id: processing_sound

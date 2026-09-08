@@ -57,13 +57,16 @@ class XVF3800Hardware {
 
   void write_gpo_pin(uint8_t pin, uint8_t val) {
     if (!this->bus_) return;
-    uint8_t payload[5] = {
-      GPO_SERVICER_RESID,
-      GPO_CMD_WRITE_VALUE,
-      2,
-      pin,
-      val
-    };
+    uint8_t payload[5];
+    if (nim_xvf3800_make_gpo_payload) {
+      nim_xvf3800_make_gpo_payload(pin, val, payload);
+    } else {
+      payload[0] = GPO_SERVICER_RESID;
+      payload[1] = GPO_CMD_WRITE_VALUE;
+      payload[2] = 2;
+      payload[3] = pin;
+      payload[4] = val;
+    }
     i2c::ErrorCode err = this->bus_->write(XVF3800_I2C_ADDR, payload, sizeof(payload));
     if (err != i2c::ERROR_OK) {
       ESP_LOGW(TAG, "Failed writing GPO pin %d val %d (err=%d)", pin, val, (int)err);
@@ -132,6 +135,12 @@ class XVF3800Hardware {
     uint32_t colors[12] = {0};
     uint32_t now = millis();
     brightness = std::max(0.05f, std::min(1.0f, brightness));
+
+    if (nim_xvf3800_update_animation) {
+      nim_xvf3800_update_animation(state_name.c_str(), pattern_pref.c_str(), brightness, now, colors);
+      set_leds(colors);
+      return;
+    }
 
     if (state_name == "Muted") {
       // Solid red ring for privacy mute
