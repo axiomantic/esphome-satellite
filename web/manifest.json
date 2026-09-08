@@ -2,7 +2,7 @@
   "name": "esphome-satellite",
   "version": "0.5.0+68efff0",
   "home_assistant_domain": "esphome",
-  "new_install_prompt_erase": true,
+  "new_install_prompt_erase": false,
   "builds": [
     {
       "chipFamily": "ESP32-S3",

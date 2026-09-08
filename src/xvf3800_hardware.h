@@ -136,89 +136,9 @@ class XVF3800Hardware {
     uint32_t now = millis();
     brightness = std::max(0.05f, std::min(1.0f, brightness));
 
-    if (nim_xvf3800_update_animation) {
+    if (nim_xvf3800_update_animation != nullptr) {
       nim_xvf3800_update_animation(state_name.c_str(), pattern_pref.c_str(), brightness, now, colors);
-      set_leds(colors);
-      return;
     }
-
-    if (state_name == "Muted") {
-      // Solid red ring for privacy mute
-      uint32_t red = ((uint8_t)(255 * brightness) << 16);
-      for (int i = 0; i < 12; i++) colors[i] = red;
-    } else if (state_name == "Woken" || state_name == "Listening") {
-      // Listening: Bright pulsing cyan/blue
-      float pulse = 0.6f + 0.4f * sinf(now * 0.008f);
-      uint8_t r = 0;
-      uint8_t g = (uint8_t)(200 * pulse * brightness);
-      uint8_t b = (uint8_t)(255 * pulse * brightness);
-      uint32_t cyan = (r << 16) | (g << 8) | b;
-      for (int i = 0; i < 12; i++) colors[i] = cyan;
-    } else if (state_name == "Thinking") {
-      // Thinking: Rotating spinner (2-3 lit LEDs circling the ring)
-      int head = (now / 70) % 12;
-      for (int i = 0; i < 12; i++) {
-        int dist = (head - i + 12) % 12;
-        float factor = 0.0f;
-        if (dist == 0) factor = 1.0f;
-        else if (dist == 1) factor = 0.6f;
-        else if (dist == 2) factor = 0.25f;
-        else if (dist == 3) factor = 0.08f;
-
-        if (factor > 0.0f) {
-          uint8_t r = (uint8_t)(100 * factor * brightness);
-          uint8_t g = (uint8_t)(150 * factor * brightness);
-          uint8_t b = (uint8_t)(255 * factor * brightness);
-          colors[i] = (r << 16) | (g << 8) | b;
-        }
-      }
-    } else if (state_name == "Replying") {
-      // Replying: Gentle warm amber/green breathing
-      float breath = 0.5f + 0.5f * sinf(now * 0.006f);
-      uint8_t r = (uint8_t)(255 * breath * brightness);
-      uint8_t g = (uint8_t)(180 * breath * brightness);
-      uint8_t b = (uint8_t)(40 * breath * brightness);
-      uint32_t amber = (r << 16) | (g << 8) | b;
-      for (int i = 0; i < 12; i++) colors[i] = amber;
-    } else if (state_name == "Pipeline Error" || state_name == "Connection Error") {
-      // Error: Fast red flash
-      bool on = (now / 250) % 2 == 0;
-      uint32_t red = on ? ((uint8_t)(255 * brightness) << 16) : 0;
-      for (int i = 0; i < 12; i++) colors[i] = red;
-    } else {
-      // Idle state: Honor user pattern preference
-      if (pattern_pref == "Off" || pattern_pref == "Silent") {
-        // Off
-      } else if (pattern_pref == "Breathe") {
-        float bth = 0.15f + 0.15f * sinf(now * 0.002f);
-        uint8_t val = (uint8_t)(255 * bth * brightness);
-        uint32_t soft_blue = ((val / 2) << 16) | (val << 8) | val;
-        for (int i = 0; i < 12; i++) colors[i] = soft_blue;
-      } else if (pattern_pref == "Rainbow") {
-        float hue_offset = (now % 4000) / 4000.0f;
-        for (int i = 0; i < 12; i++) {
-          float h = fmodf(hue_offset + (i / 12.0f), 1.0f);
-          float rf, gf, bf;
-          int hi = (int)(h * 6.0f);
-          float f = h * 6.0f - hi;
-          float q = 1.0f - f;
-          float val = 0.35f * brightness;
-          switch (hi % 6) {
-            case 0: rf = val; gf = val * f; bf = 0; break;
-            case 1: rf = val * q; gf = val; bf = 0; break;
-            case 2: rf = 0; gf = val; bf = val * f; break;
-            case 3: rf = 0; gf = val * q; bf = val; break;
-            case 4: rf = val * f; gf = 0; bf = val; break;
-            case 5: default: rf = val; gf = 0; bf = val * q; break;
-          }
-          colors[i] = ((uint8_t)(rf * 255) << 16) | ((uint8_t)(gf * 255) << 8) | (uint8_t)(bf * 255);
-        }
-      } else if (pattern_pref == "Spinner") {
-        int head = (now / 200) % 12;
-        colors[head] = ((uint8_t)(40 * brightness) << 8) | (uint8_t)(100 * brightness);
-      }
-    }
-
     set_leds(colors);
   }
 

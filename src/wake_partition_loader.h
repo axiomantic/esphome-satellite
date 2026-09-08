@@ -91,7 +91,7 @@ class WakePartitionLoader {
       size_t arena_size = 40960;
       char name_buf[33] = {0};
 
-      if (nim_wake_loader_validate_header) {
+      if (nim_wake_loader_validate_header != nullptr) {
         bool ok = nim_wake_loader_validate_header(
             reinterpret_cast<const uint8_t *>(slot.map_ptr),
             part->size,
@@ -108,20 +108,8 @@ class WakePartitionLoader {
           continue;
         }
       } else {
-        const WakeModelHeader *header = reinterpret_cast<const WakeModelHeader *>(slot.map_ptr);
-        if (header->magic != WAKE_MAGIC || header->model_size < 1000 || header->model_size > (part->size - sizeof(WakeModelHeader))) {
-          esp_partition_munmap(slot.map_handle);
-          continue;
-        }
-        memcpy(name_buf, header->wake_word, 32);
-        if (name_buf[0] == '\0') {
-          std::string fallback = "Custom Wake Word " + std::to_string(i + 1);
-          strncpy(name_buf, fallback.c_str(), 32);
-        }
-        model_size = header->model_size;
-        cutoff = header->probability_cutoff > 0 ? header->probability_cutoff : 102;
-        window = header->sliding_window_size > 0 ? header->sliding_window_size : 5;
-        arena_size = header->tensor_arena_kb > 0 ? (header->tensor_arena_kb * 1024) : 40960;
+        esp_partition_munmap(slot.map_handle);
+        continue;
       }
 
       slot.name = std::string(name_buf);
@@ -139,7 +127,7 @@ class WakePartitionLoader {
           window,
           slot.name,
           arena_size,
-          false,  // default_enabled (enabled dynamically via active_wake_word)
+          true,   // default_enabled
           false   // internal_only
       );
 
@@ -216,17 +204,6 @@ class WakePartitionLoader {
     if (nim_wake_loader_scale_cutoff != nullptr) {
       clemens_cutoff = nim_wake_loader_scale_cutoff(102, level.c_str());
       nabu_cutoff = nim_wake_loader_scale_cutoff(170, level.c_str());
-    } else {
-      if (level == "Very sensitive") {
-        clemens_cutoff = 71;
-        nabu_cutoff = 119;
-      } else if (level == "Slightly sensitive") {
-        clemens_cutoff = 137;
-        nabu_cutoff = 229;
-      } else {
-        clemens_cutoff = 102;
-        nabu_cutoff = 170;
-      }
     }
 
     if (clemens) {
