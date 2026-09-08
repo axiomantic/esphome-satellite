@@ -88,6 +88,13 @@ class XVF3800Hardware {
     ESP_LOGD(TAG, "AIC3104 DAC volume set to 0dB");
   }
 
+  void reboot_xmos() {
+    if (!this->bus_) return;
+    const uint8_t reboot_req[] = {240, 89, 1, 0};
+    this->bus_->write(XVF3800_I2C_ADDR, reboot_req, sizeof(reboot_req));
+    ESP_LOGI(TAG, "Sent reboot command to XMOS SoC");
+  }
+
   void set_leds(const uint32_t colors[12]) {
     if (!this->bus_) return;
     if (this->leds_valid_ && memcmp(this->last_colors_, colors, sizeof(this->last_colors_)) == 0) {
