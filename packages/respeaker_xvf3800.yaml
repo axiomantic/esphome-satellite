@@ -237,7 +237,12 @@ micro_wake_word:
                           std::string opt = id(wake_chime_sound).current_option();
                           float vol = id(wake_chime_volume).state / 100.0f;
                           esphome::get_pcm_sound_player().play_chime(opt, false, vol);
-                      - delay: 350ms
+                      - delay: 50ms
+                      - wait_until:
+                          condition:
+                            lambda: |-
+                              return !esphome::get_pcm_sound_player().is_playing();
+                          timeout: 1800ms
                 - micro_wake_word.stop:
                 - voice_assistant.start:
                     wake_word: !lambda return wake_word;
@@ -698,7 +703,12 @@ script:
                       std::string opt = id(wake_chime_sound).current_option();
                       float vol = id(wake_chime_volume).state / 100.0f;
                       esphome::get_pcm_sound_player().play_chime(opt, false, vol);
-                  - delay: 350ms
+                  - delay: 50ms
+                  - wait_until:
+                      condition:
+                        lambda: |-
+                          return !esphome::get_pcm_sound_player().is_playing();
+                      timeout: 1800ms
             - voice_assistant.start:
                 wake_word: !lambda return ww;
           else:
