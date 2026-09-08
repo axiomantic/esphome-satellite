@@ -64,9 +64,43 @@ if [ -n "$OTA_BIN" ] && [ -f "$OTA_BIN" ]; then
 fi
 
 echo "SHA256 checksums:"
-shasum -a 256 web/firmware-factory.bin
+FACTORY_SHA256=$(shasum -a 256 web/firmware-factory.bin | awk '{print $1}')
+echo "  factory: $FACTORY_SHA256"
+OTA_SHA256=""
 if [ -f web/firmware-ota.bin ]; then
-    shasum -a 256 web/firmware-ota.bin
+    OTA_SHA256=$(shasum -a 256 web/firmware-ota.bin | awk '{print $1}')
+    echo "  ota:     $OTA_SHA256"
+fi
+
+GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+cat << EOF > web/version.json
+{
+  "name": "esphome-satellite",
+  "version": "$VERSION",
+  "commit": "$GIT_SHA",
+  "built_at": "$BUILD_TIME",
+  "factory_sha256": "$FACTORY_SHA256",
+  "ota_sha256": "$OTA_SHA256"
+}
+EOF
+echo "Generated web/version.json (v$VERSION, commit $GIT_SHA, built $BUILD_TIME)"
+
+# Update version in web/manifest.json
+if [ -f web/manifest.json ]; then
+    python3 -c "
+import json
+with open('web/manifest.json', 'r') as f:
+    m = json.load(f)
+m['version'] = '$VERSION+$GIT_SHA'
+m['commit'] = '$GIT_SHA'
+m['built_at'] = '$BUILD_TIME'
+with open('web/manifest.json', 'w') as f:
+    json.dump(m, f, indent=2)
+"
+    echo "Updated web/manifest.json with build metadata (v$VERSION+$GIT_SHA)"
 fi
 
 echo "=== Factory binary build complete! ==="
+

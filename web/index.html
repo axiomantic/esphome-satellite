@@ -438,6 +438,24 @@
       new_install_prompt_erase: true,
       builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
     };
+    fetch('version.json').then(r => r.json()).then(v => {
+      if (v && v.commit) {
+        BASE_MANIFEST.version = `${v.version}+${v.commit}`;
+        const titleEl = document.querySelector('h1');
+        if (titleEl && !document.getElementById('webCommitBadge')) {
+          const badge = document.createElement('span');
+          badge.id = 'webCommitBadge';
+          badge.style = 'font-size: 0.8rem; font-family: monospace; background: rgba(59, 130, 246, 0.15); color: #93c5fd; padding: 2px 8px; border-radius: 6px; margin-left: 10px; font-weight: normal; vertical-align: middle;';
+          badge.textContent = `v${v.version} (${v.commit})`;
+          badge.title = `Built: ${v.built_at || 'unknown'}`;
+          titleEl.appendChild(badge);
+        }
+        const fwEl = document.getElementById('devInfoFirmware');
+        if (fwEl) {
+          fwEl.textContent = `esphome-satellite v${v.version} (${v.commit})`;
+        }
+      }
+    }).catch(() => {});
     const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation","nativeUsb":true}};
     const targetSelect = document.getElementById('field_hardware_target');
     const targetDesc = document.getElementById('target_desc');

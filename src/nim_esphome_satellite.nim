@@ -20,6 +20,10 @@ import nim_esphome
 import typestates
 import std/strutils
 import nim_esphome/dsl/actions
+include audio_dsp
+include xvf3800_hardware
+include wake_partition_loader
+include pcm_sound_player
 
 type
   SatelliteContext* = object
