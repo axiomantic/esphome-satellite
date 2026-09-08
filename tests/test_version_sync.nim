@@ -48,3 +48,12 @@ suite "Version Synchronization Invariant Suite":
     let changelogText = readFile("CHANGELOG.md")
     let header = "## [" & expectedVersion & "]"
     check changelogText.contains(header)
+
+  test "web/index.html BASE_MANIFEST version matches nimble":
+    let htmlText = readFile("web/index.html")
+    check ("version: \"" & expectedVersion & "\"") in htmlText
+    check ("esphome-satellite v" & expectedVersion) in htmlText
+
+  test "web/index.html includes dynamic version synchronization script":
+    let htmlText = readFile("web/index.html")
+    check "syncDynamicManifestVersion" in htmlText

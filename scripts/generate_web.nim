@@ -1,4 +1,4 @@
-import std/[os, strutils]
+import std/[os, strutils, json]
 import nim_esphome/dsl/installer
 
 proc getPackageVersion(): string =
@@ -71,5 +71,17 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   )
 
 writeFile("web/index.html", satelliteInstaller.generateHtml())
-writeFile("web/manifest.json", satelliteInstaller.generateManifest())
+var manifestObj = parseJson(satelliteInstaller.generateManifest())
+if fileExists("web/manifest.json"):
+  try:
+    let existing = parseJson(readFile("web/manifest.json"))
+    if existing.hasKey("commit"):
+      manifestObj["commit"] = existing["commit"]
+    if existing.hasKey("built_at"):
+      manifestObj["built_at"] = existing["built_at"]
+    if existing.hasKey("version") and existing["version"].getStr().startsWith(currentVersion & "+"):
+      manifestObj["version"] = existing["version"]
+  except:
+    discard
+writeFile("web/manifest.json", pretty(manifestObj, indent = 2) & "\n")
 echo "Successfully generated web/index.html and web/manifest.json (v" & currentVersion & ") via nim-esphome DSL!"

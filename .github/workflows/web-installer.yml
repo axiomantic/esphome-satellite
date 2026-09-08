@@ -56,6 +56,7 @@ jobs:
               - 'scripts/build_factory_binary.sh'
             web_generator:
               - 'scripts/generate_web.nim'
+              - 'esphome_satellite.nimble'
 
       - name: Evaluate Build Requirements
         id: plan
@@ -81,8 +82,8 @@ jobs:
           elif [ ! -f "web/index.html" ]; then
             echo "::notice::web/index.html missing. HTML regeneration required."
             REGEN_HTML="true"
-          elif [ "${{ steps.filter.outputs.web_generator }}" = "true" ]; then
-            echo "::notice::scripts/generate_web.nim modified. HTML regeneration required."
+          elif [ "${{ steps.filter.outputs.web_generator }}" = "true" ] || [ "$REBUILD_FIRMWARE" = "true" ]; then
+            echo "::notice::Generator, version, or firmware rebuilt. HTML regeneration required."
             REGEN_HTML="true"
           else
             echo "::notice::web/index.html is up to date. Skipping HTML regeneration."
