@@ -28,11 +28,11 @@ All sound effects, chimes, and processing audio feedback in `esphome-satellite` 
    - **Adaptation**: Single note struck singly, trimmed to 1.1s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 4. **Warm Kalimba** (`warm-kalimba.wav` / `warm-kalimba.mp3`)
-   - **Type**: Organic Coconut Shell Kalimba Tine Pluck
-   - **Author / Source**: Luis Alvaz (Recorded with TASCAM DR-44WL field recorder)
-   - **Origin**: [Wikimedia Commons - File:Kalimba de coco (notas sueltas) 03.wav](https://commons.wikimedia.org/wiki/File:Kalimba_de_coco_(notas_sueltas)_03.wav)
-   - **License**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
-   - **Adaptation**: Isolated single acoustic tine strike, trimmed to 1.2s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+   - **Type**: Resonant Steel Tine Kalimba Ascending Chime (Hokema Sansula)
+   - **Author / Source**: cabled_mess
+   - **Origin**: [Freesound - Sansula_17.07.2016 (RAW)](https://freesound.org/people/cabled_mess/packs/21410/) (Sounds [380737](https://freesound.org/people/cabled_mess/sounds/380737/) & [380735](https://freesound.org/people/cabled_mess/sounds/380735/))
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Ascending fifth interval (A3 to E4) plucked with 80ms offset, trimmed to 1.15s with natural acoustic decay, resampled to 16 kHz mono, and normalized to -1.0 dBFS.
 
 5. **Meditation Bell** (`meditation-bell.wav` / `meditation-bell.mp3`)
    - **Type**: Acoustic Bronze Church Bell Strike
@@ -272,11 +272,11 @@ All sound effects, chimes, and processing audio feedback in `esphome-satellite` 
    - **Adaptation**: Trimmed to 0.38s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
 
 4. **Cancel Warm Kalimba** (`cancel-warm-kalimba.wav` / `cancel-warm-kalimba.mp3`)
-   - **Type**: Low Coconut Kalimba Tine Pluck
-   - **Author / Source**: Luis Alvaz
-   - **Origin**: [Wikimedia Commons - File:Kalimba de coco (notas sueltas) 03.wav](https://commons.wikimedia.org/wiki/File:Kalimba_de_coco_(notas_sueltas)_03.wav)
-   - **License**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
-   - **Adaptation**: Low resonant tine strike with early fade, trimmed to 0.80s, resampled to 16 kHz mono, compressed and normalized to -1.0 dBFS.
+   - **Type**: Resonant Steel Tine Kalimba Descending Chime (Hokema Sansula)
+   - **Author / Source**: cabled_mess
+   - **Origin**: [Freesound - Sansula_17.07.2016 (RAW)](https://freesound.org/people/cabled_mess/packs/21410/) (Sounds [380735](https://freesound.org/people/cabled_mess/sounds/380735/) & [380737](https://freesound.org/people/cabled_mess/sounds/380737/))
+   - **License**: Creative Commons CC0 1.0 Universal (Public Domain)
+   - **Adaptation**: Descending fifth interval (E4 to A3) with 80ms offset, trimmed to 0.80s with smooth decay, resampled to 16 kHz mono, and normalized to -1.0 dBFS.
 
 5. **Cancel Meditation Bell** (`cancel-meditation-bell.wav` / `cancel-meditation-bell.mp3`)
    - **Type**: Damped Deep Bronze Bell Chime
