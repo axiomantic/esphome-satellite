@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-09-08
 
 ### Added
+- Explicit `Cancelling` typestate in Nim state supervisor (`SatelliteFSM`) preventing wake word or VAD re-triggering while cancel chime plays.
+- Bounded audio hardware and network watchdog timeouts across all states (`Woken`: 2s, `Listening`: 10s, `Thinking`: 20s, `Replying`: 60s, `Cancelling`: 1.5s, `FollowUp`: 5s, `Alerting`: 5m, `Announcing`: 30s, `Updating`: 5m) preventing stuck states.
+- Dedicated `set_on_cancel_finished` callback in `PcmSoundPlayer` ensuring clean wake word re-arming only after cancel audio completes.
 - Native Nim cancellation phrase matcher detecting voice assistant abort intents ("stop", "nevermind", "never mind", "abort", "cancel", "dismiss", "quit", "silence", "quiet", "shut up") with punctuation stripping and whole-word boundary awareness.
 - Sound playback guard preserving cancel sound audio from being cut off early by voice assistant teardown events.
 - Rich sound preset library featuring Modern Minimalist (`Modern Chime`, `Crystal Glass`, `Clockwork`) and Organic Acoustic (`Warm Kalimba`, `Meditation Bell`, `Water Droplets`, and vintage `Typewriter`) options for wake chimes and processing sound feedback loops.
@@ -18,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Replaced `Warm Kalimba` wake chime and cancel sound with authentic, resonant steel-tine Hokema Sansula acoustic recordings under CC0 1.0 Universal license.
+- Replaced arbitrary YAML delays with event-driven playback completion and typestate transitions.
 
 ## [0.4.0] - 2026-09-06
 

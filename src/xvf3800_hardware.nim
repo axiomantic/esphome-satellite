@@ -78,6 +78,10 @@ proc computeAnimationColors*(
     let amber = r or g or b
     for i in 0 ..< 12:
       result[i] = amber
+  of "Cancelling":
+    let orange = (uint32(uint8(255.0'f32 * brightness)) shl 16) or (uint32(uint8(120.0'f32 * brightness)) shl 8)
+    for i in 0 ..< 12:
+      result[i] = orange
   of "Pipeline Error", "Connection Error":
     let on = (nowMs div 250'u32) mod 2'u32 == 0'u32
     let red = if on: (uint32(uint8(255.0'f32 * brightness)) shl 16) else: 0'u32

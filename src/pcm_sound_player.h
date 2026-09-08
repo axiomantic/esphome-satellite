@@ -401,6 +401,7 @@ class PcmSoundPlayer {
   }
 
   void set_on_finished(std::function<void()> callback) { this->on_finished_ = callback; }
+  void set_on_cancel_finished(std::function<void()> callback) { this->on_cancel_finished_ = callback; }
 
   void stop() {
     if (!this->is_playing_ && this->task_handle_ == nullptr) return;
@@ -430,6 +431,7 @@ class PcmSoundPlayer {
   bool is_loop_{false};
   bool is_raw_pcm_{false};
   std::function<void()> on_finished_{nullptr};
+  std::function<void()> on_cancel_finished_{nullptr};
   TaskHandle_t task_handle_{nullptr};
 
   // Memory-mapped flash partitions
@@ -565,8 +567,15 @@ class PcmSoundPlayer {
         wait_count++;
       }
       ESP_LOGD(PCM_PLAYER_TAG, "Audio finished");
+      bool was_cancel = this->is_playing_cancel_;
       if (this->on_finished_) {
         this->on_finished_();
+      }
+      if (was_cancel) {
+        if (this->on_cancel_finished_) {
+          this->on_cancel_finished_();
+        }
+        call_nim_cancel_done(true);
       }
     }
 

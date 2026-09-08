@@ -26,16 +26,27 @@ suite "Satellite Typestate FSM - Happy Path & Invariants":
     check backToIdle is Idle
     check SatelliteContext(backToIdle).wakeWord == ""
 
-  test "Stop word interrupts during listening, thinking, replying":
+  test "Stop word transitions to Cancelling typestate and finishes on cancel chime done":
     var idle = Idle(SatelliteContext())
     var l = idle.onWakeWord("assistant", 0).onChimeFinished()
-    check l.onStopDuringListening() is Idle
+    var cancellingFromListening = l.onStopDuringListening()
+    check cancellingFromListening is Cancelling
+    check cancellingFromListening.onCancelFinished() is Idle
 
     var th = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
-    check th.onStopDuringThinking() is Idle
+    var cancellingFromThinking = th.onStopDuringThinking()
+    check cancellingFromThinking is Cancelling
+    check cancellingFromThinking.onCancelFinished() is Idle
 
     var rep = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
-    check rep.onStopDuringReplying() is Idle
+    var cancellingFromReplying = rep.onStopDuringReplying()
+    check cancellingFromReplying is Cancelling
+    check cancellingFromReplying.onCancelFinished() is Idle
+
+    var w = idle.onWakeWord("assistant", 0)
+    var cancellingFromWoken = w.onStopDuringWoken()
+    check cancellingFromWoken is Cancelling
+    check cancellingFromWoken.onCancelFinished() is Idle
 
 suite "Satellite Typestate FSM - Granular Error Handling":
   test "SilentDismiss on silence / inaudible command":
@@ -281,6 +292,74 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     # 4. Trigger Select state with Custom
     triggerSelectState("processing_sound", "Custom")
     check configuredProcessingStyle == psCustom
+
+suite "Satellite Typestate FSM - Explicit Timeouts & Audio Watchdogs":
+  test "Woken chime hardware timeout transitions to PipelineError":
+    var idle = Idle(SatelliteContext())
+    var woken = idle.onWakeWord("assistant", 0)
+    var pErr = woken.onChimeTimeout()
+    check pErr is PipelineError
+    check SatelliteContext(pErr).errorCode == "chime-timeout"
+
+  test "Thinking processing loop server timeout transitions to PipelineError":
+    var idle = Idle(SatelliteContext())
+    var thinking = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var pErr = thinking.onProcessingTimeout()
+    check pErr is PipelineError
+    check SatelliteContext(pErr).errorCode == "server-timeout"
+
+  test "Replying TTS stream stall timeout transitions to Idle":
+    var idle = Idle(SatelliteContext())
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var backToIdle = replying.onTtsTimeout()
+    check backToIdle is Idle
+
+  test "Cancelling sound timeout transitions to Idle":
+    var idle = Idle(SatelliteContext())
+    var cancelling = idle.onWakeWord("assistant", 0).onChimeFinished().onStopDuringListening()
+    var backToIdle = cancelling.onCancelTimeout()
+    check backToIdle is Idle
+
+  test "FollowUp inactivity timeout transitions to Idle":
+    var idle = Idle(SatelliteContext())
+    var followUp = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted().onFollowUpRequested()
+    var backToIdle = followUp.onFollowUpTimeout()
+    check backToIdle is Idle
+
+  test "Alerting unattended timer timeout transitions to Idle":
+    var idle = Idle(SatelliteContext())
+    var alert = idle.onAlertStart()
+    var backToIdle = alert.onAlertTimeout()
+    check backToIdle is Idle
+
+  test "Announcing server broadcast timeout transitions to Idle":
+    var idle = Idle(SatelliteContext())
+    var ann = idle.onAnnouncementStart()
+    var backToIdle = ann.onAnnouncementTimeout()
+    check backToIdle is Idle
+
+  test "Updating OTA upload stall timeout transitions to Idle":
+    var idle = Idle(SatelliteContext())
+    var up = idle.onOtaStart()
+    var backToIdle = up.onOtaTimeout()
+    check backToIdle is Idle
+
+suite "Runtime C API - Cancelling Lifecycle":
+  test "nim_satellite_stop_word transitions to rsCancelling and returns to rsIdle on chime done":
+    check nim_satellite_get_state() == 0 # Idle
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    check nim_satellite_get_state() == 2 # Listening
+
+    # User says "stop"
+    nim_satellite_stop_word()
+    check nim_satellite_get_state() == 14 # rsCancelling
+    check nim_satellite_is_cancelling()
+
+    # Cancel chime completes on I2S speaker
+    nim_satellite_cancel_done(true)
+    check nim_satellite_get_state() == 0 # rsIdle
+    check not nim_satellite_is_cancelling()
 
 
 
