@@ -45,12 +45,9 @@ esphome:
             });
             id(board_speaker).set_volume(id(voice_volume).state / 100.0f);
         - lambda: |-
-            esphome::wake_loader::get_wake_partition_loader().init(id(mww), id(active_wake_word));
+            esphome::wake_loader::get_wake_partition_loader().init(id(mww));
         - micro_wake_word.start:
         - lambda: |-
-            std::string opt = id(active_wake_word).current_option();
-            esphome::wake_loader::get_wake_partition_loader().handle_active_wake_word_change(
-                opt, id(clemens_model), id(nabu_model));
             std::string sens = id(wake_word_sensitivity).current_option();
             esphome::wake_loader::get_wake_partition_loader().handle_sensitivity_change(
                 sens, id(clemens_model), id(nabu_model));
@@ -372,8 +369,8 @@ voice_assistant:
 text:
   - platform: template
     id: stop_words_config
-    name: "Cancellation Words"
-    icon: "mdi:cancel"
+    name: "Speech: Cancellation Words"
+    icon: "mdi:close-circle-outline"
     entity_category: config
     initial_value: "stop, nevermind, never mind, cancel, abort, dismiss, quit, silence, quiet, shut up"
     restore_value: true
@@ -385,8 +382,8 @@ text:
 text_sensor:
   - platform: template
     id: satellite_fsm_state
-    name: "Satellite State"
-    icon: "mdi:robot"
+    name: "Status: Satellite State"
+    icon: "mdi:state-machine"
     entity_category: diagnostic
     lambda: |-
       static std::string last_state = "";
@@ -400,32 +397,8 @@ text_sensor:
 
 select:
   - platform: template
-    id: active_wake_word
-    name: "Active Wake Word"
-    icon: "mdi:ear-hearing"
-    entity_category: config
-    optimistic: true
-    initial_option: "Mr. Clemens"
-    restore_value: true
-    options:
-      - "Mr. Clemens"
-      - "Okay Nabu"
-      - "All"
-    set_action:
-      - lambda: |-
-          esphome::wake_loader::get_wake_partition_loader().handle_active_wake_word_change(
-              x, id(clemens_model), id(nabu_model));
-      - if:
-          condition:
-            and:
-              - switch.is_off: mic_mute_switch
-              - api.connected:
-          then:
-            - micro_wake_word.start:
-
-  - platform: template
     id: wake_word_sensitivity
-    name: "Wake Word Sensitivity"
+    name: "Speech: Wake Word Sensitivity"
     icon: "mdi:tune"
     entity_category: config
     optimistic: true
@@ -442,8 +415,8 @@ select:
 
   - platform: template
     id: processing_sound
-    name: "Processing Sound"
-    icon: "mdi:progress-clock"
+    name: "Audio: Processing Sound"
+    icon: "mdi:waveform"
     entity_category: config
     optimistic: true
     initial_option: ${processing_sound_default}
@@ -476,8 +449,8 @@ select:
 
   - platform: template
     id: wake_chime_sound
-    name: "Wake Chime Sound"
-    icon: "mdi:bell-ring"
+    name: "Audio: Wake Chime Sound"
+    icon: "mdi:music-note"
     entity_category: config
     optimistic: true
     initial_option: ${wake_chime_sound_default}
@@ -510,8 +483,8 @@ select:
 
   - platform: template
     id: cancel_sound_sound
-    name: "Cancel Sound"
-    icon: "mdi:bell-cancel"
+    name: "Audio: Cancel Sound Sound"
+    icon: "mdi:music-note-off"
     entity_category: config
     optimistic: true
     initial_option: "Match Wake Chime"
@@ -549,7 +522,7 @@ select:
 
   - platform: template
     id: led_pattern
-    name: "LED Idle Pattern"
+    name: "Hardware: LED Idle Pattern"
     icon: "mdi:led-strip-variant"
     entity_category: config
     optimistic: true
@@ -564,7 +537,7 @@ select:
 number:
   - platform: template
     id: voice_volume
-    name: "Voice Volume"
+    name: "Audio: Voice Volume"
     icon: "mdi:volume-high"
     entity_category: config
     min_value: 0
@@ -579,8 +552,8 @@ number:
 
   - platform: template
     id: processing_sound_volume
-    name: "Processing Sound Volume"
-    icon: "mdi:volume-medium"
+    name: "Audio: Processing Sound Volume"
+    icon: "mdi:volume-high"
     entity_category: config
     min_value: 0
     max_value: 100
@@ -596,7 +569,7 @@ number:
 
   - platform: template
     id: wake_chime_volume
-    name: "Wake Chime Volume"
+    name: "Audio: Wake Chime Volume"
     icon: "mdi:volume-high"
     entity_category: config
     min_value: 0
@@ -613,8 +586,8 @@ number:
 
   - platform: template
     id: cancel_sound_volume
-    name: "Cancel Sound Volume"
-    icon: "mdi:volume-medium"
+    name: "Audio: Cancel Sound Volume"
+    icon: "mdi:volume-high"
     entity_category: config
     min_value: 0
     max_value: 100
@@ -634,7 +607,7 @@ number:
 
   - platform: template
     id: led_brightness
-    name: "LED Brightness"
+    name: "Hardware: LED Brightness"
     icon: "mdi:brightness-6"
     entity_category: config
     min_value: 0.05
@@ -668,15 +641,15 @@ switch:
 
   - platform: template
     id: wake_chime
-    name: "Wake Chime"
-    icon: "mdi:bell-ring"
+    name: "Audio: Wake Chime Enabled"
+    icon: "mdi:bell"
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
 
   - platform: template
     id: cancel_sound_switch
-    name: "Cancel Sound"
+    name: "Audio: Cancel Sound Enabled"
     icon: "mdi:bell-cancel"
     entity_category: config
     optimistic: true
@@ -748,7 +721,7 @@ script:
 button:
   - platform: template
     id: reset_audio_hardware_btn
-    name: "Reset Audio Hardware"
+    name: "Hardware: Reset Audio Hardware"
     icon: "mdi:restart"
     entity_category: diagnostic
     on_press:

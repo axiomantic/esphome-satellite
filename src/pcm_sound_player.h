@@ -196,7 +196,7 @@ class PcmSoundPlayer {
     WavInfo info;
     if (data == nullptr || max_len < 44) return info;
 
-    if (nim_pcm_parse_wav) {
+    if (nim_pcm_parse_wav != nullptr) {
       uint32_t sample_rate = 0;
       uint16_t channels = 0;
       uint16_t bits = 0;
@@ -209,39 +209,7 @@ class PcmSoundPlayer {
         info.bits_per_sample = bits;
         info.pcm_data = data + pcm_offset;
         info.pcm_len = pcm_len;
-        return info;
       }
-    }
-
-    if (memcmp(data, "RIFF", 4) != 0 || memcmp(data + 8, "WAVE", 4) != 0) {
-      return info;
-    }
-    size_t offset = 12;
-    bool found_fmt = false;
-    bool found_data = false;
-    while (offset + 8 <= max_len) {
-      uint32_t chunk_size = *reinterpret_cast<const uint32_t *>(data + offset + 4);
-      if (memcmp(data + offset, "fmt ", 4) == 0 && chunk_size >= 16) {
-        uint16_t format = *reinterpret_cast<const uint16_t *>(data + offset + 8);
-        if (format != 1) {
-          ESP_LOGW(PCM_PLAYER_TAG, "Non-PCM WAV format (%u) not supported", format);
-          return info;
-        }
-        info.channels = *reinterpret_cast<const uint16_t *>(data + offset + 10);
-        info.sample_rate = *reinterpret_cast<const uint32_t *>(data + offset + 12);
-        info.bits_per_sample = *reinterpret_cast<const uint16_t *>(data + offset + 22);
-        found_fmt = true;
-      } else if (memcmp(data + offset, "data", 4) == 0) {
-        info.pcm_data = data + offset + 8;
-        info.pcm_len = std::min((size_t)chunk_size, max_len - (offset + 8));
-        found_data = true;
-        break;
-      }
-      offset += 8 + chunk_size;
-      if (chunk_size % 2 != 0) offset += 1;
-    }
-    if (found_fmt && found_data && info.pcm_len > 0) {
-      info.valid = true;
     }
     return info;
   }
@@ -522,7 +490,7 @@ class PcmSoundPlayer {
 
         size_t bytes_to_decode = std::min((size_t)128, this->data_len_ - this->read_offset_);
         size_t samples = 0;
-        if (nim_pcm_decode_adpcm_chunk) {
+        if (nim_pcm_decode_adpcm_chunk != nullptr) {
           int16_t vp = static_cast<int16_t>(this->valprev_);
           int8_t idx = this->index_;
           samples = nim_pcm_decode_adpcm_chunk(
@@ -536,12 +504,6 @@ class PcmSoundPlayer {
           this->valprev_ = vp;
           this->index_ = idx;
           this->read_offset_ += bytes_to_decode;
-        } else {
-          for (size_t i = 0; i < bytes_to_decode; ++i) {
-            uint8_t byte = this->data_[this->read_offset_++];
-            pcm_buf[samples++] = this->decode_sample_(byte & 0x0F);
-            pcm_buf[samples++] = this->decode_sample_((byte >> 4) & 0x0F);
-          }
         }
 
         size_t total_bytes = samples * sizeof(int16_t);
@@ -581,26 +543,6 @@ class PcmSoundPlayer {
 
     this->is_playing_ = false;
     this->is_playing_cancel_ = false;
-  }
-
-  inline int16_t decode_sample_(uint8_t nibble) {
-    int32_t step = satellite_audio::STEP_SIZE_TABLE[this->index_];
-    this->index_ += satellite_audio::INDEX_TABLE[nibble & 0x0F];
-    if (this->index_ < 0) this->index_ = 0;
-    else if (this->index_ > 88) this->index_ = 88;
-
-    int32_t diff = step >> 3;
-    if (nibble & 4) diff += step;
-    if (nibble & 2) diff += step >> 1;
-    if (nibble & 1) diff += step >> 2;
-
-    if (nibble & 8) this->valprev_ -= diff;
-    else this->valprev_ += diff;
-
-    if (this->valprev_ > 32767) this->valprev_ = 32767;
-    else if (this->valprev_ < -32768) this->valprev_ = -32768;
-
-    return static_cast<int16_t>(this->valprev_);
   }
 };
 
