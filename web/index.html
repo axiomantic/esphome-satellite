@@ -320,6 +320,7 @@
           <span>Erase Device</span>
         </button>
       </div>
+      <div class="install-nvs-tip" style="margin-top: 10px; font-size: 13px; color: #94a3b8; text-align: center; line-height: 1.4;">Updating an existing device? Leave <strong>Erase device</strong> unchecked in the install popup to preserve your Wi-Fi settings, volume preferences, wake words, and sound themes.</div>
       <div id="eraseStatus" class="erase-status" style="display: none;"></div>
     </div>
 
@@ -436,9 +437,9 @@
       version: "0.5.0",
       home_assistant_domain: "esphome",
       new_install_prompt_erase: true,
-      builds: [{ chipFamily: "ESP32-S3", parts: [{ path: "firmware-factory.bin", offset: 0 }] }]
+      builds: [{ chipFamily: "ESP32-S3", parts: [{"path":"bootloader.bin","offset":0},{"path":"partitions.bin","offset":32768},{"path":"ota_data_initial.bin","offset":57344},{"path":"firmware-ota.bin","offset":65536}] }]
     };
-    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-factory.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation","nativeUsb":true}};
+    const TARGET_MAP = {"Seeed ReSpeaker XVF3800":{"bin":"firmware-ota.bin","chip":"ESP32-S3","desc":"Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation","nativeUsb":true,"parts":[{"path":"bootloader.bin","offset":0},{"path":"partitions.bin","offset":32768},{"path":"ota_data_initial.bin","offset":57344},{"path":"firmware-ota.bin","offset":65536}]}};
     const targetSelect = document.getElementById('field_hardware_target');
     const targetDesc = document.getElementById('target_desc');
     if (targetSelect) {
@@ -869,7 +870,11 @@
       if (targetSelect && typeof TARGET_MAP !== 'undefined') {
         const info = TARGET_MAP[targetSelect.value];
         if (info) {
-          manifest.builds[0].parts[0].path = info.bin;
+          if (info.parts && info.parts.length > 0) {
+            manifest.builds[0].parts = JSON.parse(JSON.stringify(info.parts));
+          } else if (info.bin) {
+            manifest.builds[0].parts[0].path = info.bin;
+          }
           if (info.chip) manifest.builds[0].chipFamily = info.chip;
         }
       }
@@ -1501,11 +1506,19 @@
         const resp = await fetch('manifest.json?_=' + Date.now());
         if (resp.ok) {
           const remoteManifest = await resp.json();
-          if (remoteManifest && remoteManifest.version && remoteManifest.version !== BASE_MANIFEST.version) {
-            BASE_MANIFEST.version = remoteManifest.version;
-            const fwEl = document.getElementById('devInfoFirmware');
-            if (fwEl) fwEl.textContent = (BASE_MANIFEST.name || "esphome-satellite") + ' v' + remoteManifest.version;
-            updateDynamicManifest();
+          if (remoteManifest) {
+            let changed = false;
+            if (remoteManifest.version && remoteManifest.version !== BASE_MANIFEST.version) {
+              BASE_MANIFEST.version = remoteManifest.version;
+              const fwEl = document.getElementById('devInfoFirmware');
+              if (fwEl) fwEl.textContent = (BASE_MANIFEST.name || "esphome-satellite") + ' v' + remoteManifest.version;
+              changed = true;
+            }
+            if (remoteManifest.builds && remoteManifest.builds[0] && remoteManifest.builds[0].parts && remoteManifest.builds[0].parts.length > 0) {
+              BASE_MANIFEST.builds[0].parts = remoteManifest.builds[0].parts;
+              changed = true;
+            }
+            if (changed) updateDynamicManifest();
           }
         }
       } catch (e) {

@@ -57,3 +57,33 @@ suite "Version Synchronization Invariant Suite":
   test "web/index.html includes dynamic version synchronization script":
     let htmlText = readFile("web/index.html")
     check "syncDynamicManifestVersion" in htmlText
+
+  test "web/manifest.json uses discrete partition flashing skipping NVS":
+    let jsonText = readFile("web/manifest.json")
+    let parsed = parseJson(jsonText)
+    check parsed.hasKey("builds")
+    check parsed["builds"].len > 0
+    let parts = parsed["builds"][0]["parts"]
+    check parts.len == 4
+
+    var paths: seq[string] = @[]
+    var offsets: seq[int] = @[]
+    for p in parts:
+      paths.add(p["path"].getStr())
+      offsets.add(p["offset"].getInt())
+      # NVS partition is at 0x9000 (36864) to 0xE000 (57344)
+      check p["offset"].getInt() < 36864 or p["offset"].getInt() >= 57344
+
+    check paths.contains("bootloader.bin")
+    check paths.contains("partitions.bin")
+    check paths.contains("ota_data_initial.bin")
+    check paths.contains("firmware-ota.bin")
+    check offsets == @[0, 32768, 57344, 65536]
+
+  test "web/index.html BASE_MANIFEST uses discrete partition flashing":
+    let htmlText = readFile("web/index.html")
+    check "bootloader.bin" in htmlText
+    check "partitions.bin" in htmlText
+    check "ota_data_initial.bin" in htmlText
+    check "firmware-ota.bin" in htmlText
+

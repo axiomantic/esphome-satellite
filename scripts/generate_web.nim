@@ -21,12 +21,26 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   installer.chipFamily = "ESP32-S3"
   installer.factoryBinPath = "firmware-factory.bin"
 
+  # Discrete partition parts (skips NVS partition 0x9000-0xE000 to preserve device state across flashes)
+  installer.addBasePart("bootloader.bin", 0x0'u32)
+  installer.addBasePart("partitions.bin", 0x8000'u32)
+  installer.addBasePart("ota_data_initial.bin", 0xE000'u32)
+  installer.addBasePart("firmware-ota.bin", 0x10000'u32)
+
+  let satelliteParts = @[
+    InstallerPart(path: "bootloader.bin", offset: 0x0'u32),
+    InstallerPart(path: "partitions.bin", offset: 0x8000'u32),
+    InstallerPart(path: "ota_data_initial.bin", offset: 0xE000'u32),
+    InstallerPart(path: "firmware-ota.bin", offset: 0x10000'u32)
+  ]
+
   # Hardware Board Targets
   installer.addTarget(
     name = "Seeed ReSpeaker XVF3800",
-    binPath = "firmware-factory.bin",
+    binPath = "firmware-ota.bin",
     chipFamily = "ESP32-S3",
-    description = "Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation"
+    description = "Seeed ReSpeaker XVF3800 with 4-mic array and hardware acoustic echo cancellation",
+    parts = satelliteParts
   )
 
   # Custom Wake Word Models (Up to 3 microWakeWord .tflite models in dedicated partitions)
