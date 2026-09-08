@@ -242,6 +242,16 @@ micro_wake_word:
                 - lambda: |-
                     ESP_LOGW("satellite", "Wake word detected, but Home Assistant API is not connected. Connect Wi-Fi and Home Assistant.");
                     call_nim_error("API not connected");
+                    if (id(cancel_sound_switch).state) {
+                      std::string opt = id(cancel_sound_sound).current_option();
+                      if (opt == "Match Wake Chime") {
+                        opt = id(wake_chime_sound).current_option();
+                      }
+                      if (opt != "Silent") {
+                        float vol = id(cancel_sound_volume).state / 100.0f;
+                        esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+                      }
+                    }
 
 voice_assistant:
   id: va
@@ -335,7 +345,7 @@ voice_assistant:
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
         bool played_cancel = false;
-        if (id(cancel_sound_switch).state && (code == "timeout" || code == "cancelled" || code == "canceled")) {
+        if (id(cancel_sound_switch).state) {
           std::string opt = id(cancel_sound_sound).current_option();
           if (opt == "Match Wake Chime") {
             opt = id(wake_chime_sound).current_option();
@@ -727,6 +737,16 @@ interval:
                 id(va).request_stop();
                 esphome::get_pcm_sound_player().stop();
                 call_nim_stop_word();
+                if (id(cancel_sound_switch).state) {
+                  std::string opt = id(cancel_sound_sound).current_option();
+                  if (opt == "Match Wake Chime") {
+                    opt = id(wake_chime_sound).current_option();
+                  }
+                  if (opt != "Silent") {
+                    float vol = id(cancel_sound_volume).state / 100.0f;
+                    esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+                  }
+                }
                 if (id(mic_mute_switch).state == false) {
                   id(mww).start();
                 }
