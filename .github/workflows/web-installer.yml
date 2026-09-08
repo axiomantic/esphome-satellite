@@ -67,8 +67,8 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_firmware_build }}" = "true" ]; then
             echo "::notice::Firmware rebuild explicitly requested via workflow_dispatch."
             REBUILD_FIRMWARE="true"
-          elif [ ! -f "web/firmware-factory.bin" ] || [ ! -f "web/firmware-ota.bin" ]; then
-            echo "::notice::Factory or OTA binary not found in web/. Firmware build required."
+          elif [ ! -f "web/firmware-factory.bin" ] || [ ! -f "web/firmware-ota.bin" ] || [ ! -f "web/bootloader.bin" ] || [ ! -f "web/partitions.bin" ] || [ ! -f "web/ota_data_initial.bin" ]; then
+            echo "::notice::Factory, OTA, or discrete partition binaries not found in web/. Firmware build required."
             REBUILD_FIRMWARE="true"
           elif [ "${{ steps.filter.outputs.firmware }}" = "true" ]; then
             echo "::notice::Firmware sources or configurations changed. Firmware build required."
@@ -158,7 +158,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/firmware-factory.bin web/firmware-ota.bin web/version.json web/manifest.json web/index.html
+          git add web/firmware-factory.bin web/firmware-ota.bin web/bootloader.bin web/partitions.bin web/ota_data_initial.bin web/version.json web/manifest.json web/index.html
           if ! git diff --cached --quiet; then
             # Discard any incidental unstaged changes from compilation
             git checkout -- . || true
