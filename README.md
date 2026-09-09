@@ -557,8 +557,9 @@ The repository includes a self-contained, high-performance synthetic speech data
 High recall in edge neural wake word models requires acoustic variety across speech speed, pitch, accents, and phonetic permutations. `generate_wakeword_corpus.py` automates positive dataset creation with zero manual recording required.
 
 ### Synthesis Backends
-1. **ElevenLabs API (`--backend elevenlabs`)**: Cloud neural synthesis using high-fidelity production voices. Employs curated voice registries spanning female, male, adolescent, and accented speakers.
-2. **macOS `say` (`--backend macos_say`)**: Built-in zero-dependency local macOS speech synthesizer. Uses system voices (`Samantha`, `Victoria`, `Alex`, `Daniel`, `Oliver`, `Junior`, etc.) without requiring external network access or API tokens.
+1. **ElevenLabs API (`--backend elevenlabs`)**: Cloud neural synthesis using high-fidelity production voices and Instant Voice Cloning (IVC). Employs curated voice registries spanning female, male, adolescent, and accented speakers, plus dynamic on-the-fly cloning of custom household member voice clips via `POST /v1/voices/add`.
+2. **macOS `say` (`--backend macos_say`)**: Built-in zero-dependency local macOS speech synthesizer. Uses dynamically discovered system voices (`Samantha`, `Victoria`, `Alex`, `Daniel`, `Oliver`, `Junior`, etc.) without requiring external network access or API tokens.
+3. **F5-TTS (`--backend f5_tts`)**: Local zero-shot flow-matching non-autoregressive speech synthesizer. Clones reference voices with rich prosody and natural cadence using `f5-tts_infer-cli` or Python bindings (`pip install f5-tts torch torchaudio`).
 
 ### Curated Voice Demographic Balance
 To prevent acoustic overfitting and address gender/age detection disparities, the corpus generator draws from a balanced demographic distribution:
@@ -576,6 +577,19 @@ The generator produces combinatorial phonetic permutations for common wake phras
   - Honorifics: `mister`, `mr`, `mr.`, `mista`, `mist ur`, `miss ter`, `misster`, `miss tack`, `mist ack`.
   - Surnames: `clemens`, `clemen`, `clemence`, `claman`, `clem ins`, `lemons`, `klemens`, `clay mens`, `claymen`.
 
+### Zero-Shot Household Voice Cloning & Additive Composition
+To eliminate acoustic bias and maximize detection reliability for specific family members without sacrificing generalization:
+
+1. **Reference Sample Ingestion**:
+   - Supply single reference clips (`--voice-sample audio.wav --voice-name "Alice" [--voice-transcript "Sample text"]`) or point to an entire folder of household samples (`--household-dir data/household_voices/`).
+   - The directory can contain subdirectories per member (`data/household_voices/partner/sample.wav` and `transcript.txt`) or flat audio files (`data/household_voices/partner.wav`).
+2. **Instant Voice Cloning (Cloud or Local)**:
+   - **ElevenLabs IVC**: Uploads reference audio via `POST /v1/voices/add` to create custom voice profiles on your account, reusing existing cloned voices on subsequent runs.
+   - **F5-TTS**: Clones reference audio locally via flow matching without external API keys or cloud dependencies.
+3. **Additive Multi-Voice Composition (`--household-ratio`)**:
+   - The generator composes the synthetic dataset using an additive ratio (default: 50% household member voices, 50% balanced baseline demographics: 40% female, 40% male, 10% kids, 10% accents).
+   - This hybrid strategy ensures the neural network attains maximum sensitivity to the specific household's resonant frequencies while preserving acoustic generalization across varying voice conditions (morning voice, fatigue) and guests.
+
 ### Content-Addressed Caching
 Generated audio clips are cached in `.cache/mww_corpus/<sha256>.wav` based on the hash of phrase, voice, engine, and acoustic parameters. Subsequent runs with identical parameters complete instantly without incurring duplicate API costs or re-synthesis delay.
 
@@ -587,9 +601,10 @@ python3 scripts/generate_wakeword_corpus.py --wizard
 ```
 The wizard prompts for:
 1. Model target (*Okay Nabu*, *Mr. Clemens*, or Custom phrase)
-2. Synthesis backend (*ElevenLabs API* or *macOS say*)
-3. Sample count (e.g. 50, 500, or 2,000)
-4. Output directory
+2. Synthesis backend (*ElevenLabs API*, *macOS say*, or *F5-TTS*)
+3. Household voice sample ingestion and dataset allocation ratio
+4. Sample count (e.g. 50, 500, or 2,000)
+5. Output directory
 
 Run in headless CLI mode for scripted automation:
 ```bash
@@ -600,13 +615,25 @@ python3 scripts/generate_wakeword_corpus.py \
   --count 100 \
   --output data/mister_clemens/positive
 
-# Generate 500 samples using ElevenLabs API
+# Generate 500 samples using ElevenLabs API with 50% household voice cloning
 export ELEVENLABS_API_KEY="your-api-key"
 python3 scripts/generate_wakeword_corpus.py \
   --model okay_nabu \
   --backend elevenlabs \
+  --household-dir data/household_voices \
+  --household-ratio 0.50 \
   --count 500 \
   --output data/okay_nabu/positive
+
+# Generate using local F5-TTS zero-shot voice cloning
+python3 scripts/generate_wakeword_corpus.py \
+  --model mister_clemens \
+  --backend f5_tts \
+  --voice-sample /path/to/partner_sample.wav \
+  --voice-name "Partner" \
+  --voice-transcript "This is a reference voice sample for wake word training." \
+  --count 100 \
+  --output data/mister_clemens/positive
 
 # Generate custom phrase
 python3 scripts/generate_wakeword_corpus.py \
@@ -632,19 +659,6 @@ Every synthesized audio file is automatically normalized, trimmed of leading/tra
      --output_dir trained_models/mister_clemens/model
    ```
 3. Convert to INT8 quantized `.tflite` model and flash directly to partition `0x510000` (`wake_model`) via the [Web Installer](https://axiomantic.github.io/esphome-satellite/).
-
-### Roadmap: F5-TTS & Zero-Shot Household Voice Cloning
-To maximize detection accuracy for specific family members while maintaining model robustness, the script design accommodates zero-shot voice cloning:
-
-1. **F5-TTS Flow Matching Integration**:
-   - F5-TTS employs non-autoregressive flow matching to generate high-fidelity speech conditioned on a short (3-10 second) reference audio clip.
-   - Provides richer dynamic expressiveness, vocal cadence variation, and prosody shifts than traditional text-to-speech.
-2. **Household Member Voice Cloning**:
-   - Users record or supply a reference audio clip of household members (e.g. self, partner, children) along with a reference transcript.
-   - The generator clones each member's acoustic timbre and fundamental frequency profile using either local F5-TTS or ElevenLabs Instant Voice Cloning (IVC).
-3. **Additive Multi-Voice Composition**:
-   - Household cloned voices operate as an additive layer on top of the default generic voice mix (40% female, 40% male, 10% kids, 10% accents).
-   - This hybrid strategy ensures the neural network attains maximum sensitivity to the specific household's resonant frequencies while preserving generalization and preventing false triggers from background ambient speech.
 
 ---
 
