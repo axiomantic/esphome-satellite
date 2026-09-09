@@ -29,8 +29,12 @@ echo "=== Running 7. Mid-utterance cancellation phrase matcher tests ==="
 nim c -r tests/test_cancellation.nim
 rm -f tests/test_cancellation
 
+echo "=== Running 8. Synthetic wake word corpus generator tests ==="
+python3 -m unittest tests/test_wakeword_corpus.py
+
 echo "=== Testing embedded C++ transpilation (ESP32 target) ==="
 nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on src/nim_esphome_satellite.nim
 
 echo "=== All satellite invariant test suites passed! ==="
+
 
