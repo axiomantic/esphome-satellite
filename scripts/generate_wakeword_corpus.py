@@ -1073,8 +1073,11 @@ def load_household_voices(
                 name = item.stem.replace("_", " ").title()
                 transcript = ""
                 trans_file = item.with_suffix(".txt")
-                if trans_file.exists():
+                dir_trans_file = clean_hdir / "transcript.txt"
+                if trans_file.is_file():
                     transcript = trans_file.read_text(encoding="utf-8")
+                elif dir_trans_file.is_file():
+                    transcript = dir_trans_file.read_text(encoding="utf-8")
                 voices.append(HouseholdVoice(name=name, audio_path=item, transcript=normalize_transcript(transcript)))
 
     return voices
@@ -1339,6 +1342,7 @@ def install_f5_tts_dependencies(console: Optional[Any] = None) -> bool:
 class F5TTSBackend:
     def __init__(self):
         self.cli_binary = self._find_cli()
+        self._api_model = None
 
     def _find_cli(self) -> Optional[str]:
         for bin_name in ["f5-tts_infer-cli", "f5-tts"]:
@@ -1352,13 +1356,20 @@ class F5TTSBackend:
         return None
 
     def is_available(self) -> bool:
-        if self._find_cli() is not None:
-            return True
         try:
             import f5_tts  # noqa: F401
             return True
         except ImportError:
-            return False
+            return self._find_cli() is not None
+
+    def _get_api_model(self):
+        if self._api_model is None:
+            try:
+                from f5_tts.api import F5TTS
+                self._api_model = F5TTS()
+            except Exception as e:
+                print(f"[Warning] Failed to initialize in-process F5TTS engine: {e}", file=sys.stderr)
+        return self._api_model
 
     def synthesize(self, text: str, ref_audio: Path, ref_text: str, out_path: Path) -> bool:
         if not ref_audio.exists():
@@ -1366,14 +1377,38 @@ class F5TTSBackend:
             return False
 
         temp_out = out_path.with_suffix(".temp.wav")
+
+        # 1. High-speed in-process API (persistent model in memory, zero restart overhead)
+        api_model = self._get_api_model()
+        if api_model is not None:
+            try:
+                clean_ref_text = ref_text.strip() if ref_text else ""
+                api_model.infer(
+                    ref_file=str(ref_audio),
+                    ref_text=clean_ref_text,
+                    gen_text=text,
+                    file_wave=str(temp_out),
+                    show_info=lambda *args, **kwargs: None,
+                    progress=None
+                )
+                if temp_out.exists() and temp_out.stat().st_size > 44:
+                    ok = postprocess_audio(temp_out, out_path)
+                    if temp_out.exists():
+                        temp_out.unlink()
+                    return ok
+            except Exception as e:
+                print(f"[F5-TTS Error] In-process inference failed: {e}", file=sys.stderr)
+
+        # 2. CLI fallback
         if self.cli_binary:
             cmd = [
                 self.cli_binary,
-                "--model", "F5-TTS",
+                "--model", "F5TTS_Base",
                 "--ref_audio", str(ref_audio),
                 "--ref_text", ref_text if ref_text else "",
                 "--gen_text", text,
-                "--output_file", str(temp_out)
+                "--output_dir", str(temp_out.parent),
+                "--output_file", temp_out.name
             ]
             res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if res.returncode == 0 and temp_out.exists():
@@ -1382,31 +1417,10 @@ class F5TTSBackend:
                     temp_out.unlink()
                 return ok
 
-        # Python API fallback
-        try:
-            from f5_tts.infer.utils_infer import infer_process, load_model, load_vocoder
-            import soundfile as sf
-            vocoder = load_vocoder()
-            model = load_model("F5-TTS")
-            wav, sr, _ = infer_process(
-                ref_audio=str(ref_audio),
-                ref_text=ref_text if ref_text else "",
-                gen_text=text,
-                model_obj=model,
-                vocoder=vocoder
-            )
-            sf.write(str(temp_out), wav, sr)
-            if temp_out.exists():
-                ok = postprocess_audio(temp_out, out_path)
-                if temp_out.exists():
-                    temp_out.unlink()
-                return ok
-        except Exception as e:
-            print(f"[F5-TTS Error] Execution failed: {e}", file=sys.stderr)
-            print("To use local zero-shot voice cloning with F5-TTS, install via: pip install f5-tts torch torchaudio", file=sys.stderr)
-            return False
-
+        if temp_out.exists():
+            temp_out.unlink()
         return False
+
 
 
 class MacOSSayBackend:
@@ -1619,34 +1633,42 @@ def generate_corpus(
         name_map = {v["name"].lower(): v for v in all_builtin}
         id_map = {v["id"].lower(): v for v in all_builtin}
 
-        for bv_name in builtin_voices:
-            clean_name = bv_name.strip().lower()
-            item = name_map.get(clean_name) or id_map.get(clean_name)
-            if not item:
-                for k, candidate in name_map.items():
-                    if clean_name in k:
-                        item = candidate
-                        break
-            if item:
-                if item["reference_audio"]:
-                    ref_hv = HouseholdVoice(
-                        name=f"{item['name']} (Built-in)",
-                        audio_path=item["reference_audio"],
-                        transcript=item["reference_transcript"],
-                        voice_id=item["id"]
-                    )
-                    selected_builtin_vspecs.append(VoiceSpec(
-                        voice_id=item["id"],
-                        voice_name=ref_hv.name,
-                        category=item["category"],
-                        household=ref_hv
-                    ))
-                else:
-                    selected_builtin_vspecs.append(VoiceSpec(
-                        voice_id=item["id"],
-                        voice_name=item["name"],
-                        category=item["category"]
-                    ))
+        if any(bv.strip().lower() in ("all", "default", "defaults") for bv in builtin_voices):
+            target_items = [v for v in all_builtin if v.get("default", True)]
+        else:
+            target_items = []
+            for bv_name in builtin_voices:
+                clean_name = bv_name.strip().lower()
+                item = name_map.get(clean_name) or id_map.get(clean_name)
+                if not item:
+                    for k, candidate in name_map.items():
+                        if clean_name in k:
+                            item = candidate
+                            break
+                if item and item not in target_items:
+                    target_items.append(item)
+
+        for item in target_items:
+            if item["reference_audio"]:
+                ref_hv = HouseholdVoice(
+                    name=f"{item['name']} (Built-in)",
+                    audio_path=item["reference_audio"],
+                    transcript=item["reference_transcript"],
+                    voice_id=item["id"]
+                )
+                selected_builtin_vspecs.append(VoiceSpec(
+                    voice_id=item["id"],
+                    voice_name=ref_hv.name,
+                    category=item["category"],
+                    household=ref_hv
+                ))
+            else:
+                selected_builtin_vspecs.append(VoiceSpec(
+                    voice_id=item["id"],
+                    voice_name=item["name"],
+                    category=item["category"]
+                ))
+
 
     # Adjust household ratio based on presence of voices
     has_household = bool(household_voices and len(household_voices) > 0)
@@ -2502,8 +2524,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Synthetic Wake Word Corpus Generator for microWakeWord"
     )
-    parser.add_argument("--model", choices=list(BUILTIN_WAKE_WORDS.keys()) + ["custom"], default=None,
-                        help="Pre-configured wake word model name")
+    parser.add_argument("--model", type=str, default=None,
+                        help="Pre-configured wake word model name or custom identifier")
     parser.add_argument("--phrase", type=str, action="append", default=None,
                         help="Custom phrase or phonetic variant (can specify multiple times or comma-separated)")
     parser.add_argument("--phrase-file", type=str, default=None,
@@ -2527,7 +2549,7 @@ def main():
     parser.add_argument("--voice-transcript-file", type=str, action="append", default=None,
                         help="Path to file containing transcript for --voice-sample (can specify multiple times)")
     parser.add_argument("--builtin-voices", type=str, action="append", default=None,
-                        help="Name of built-in voice to include (can specify multiple times or comma-separated)")
+                        help="Name of built-in voice to include (can specify multiple times or comma-separated, or 'all')")
     parser.add_argument("--household-ratio", type=float, default=0.50,
                         help="Ratio of generated corpus allocated to household voices (default: 0.50)")
     parser.add_argument("--list-voices", action="store_true",
@@ -2555,7 +2577,7 @@ def main():
 
     if args.model in BUILTIN_WAKE_WORDS:
         phrases = BUILTIN_WAKE_WORDS[args.model]["generator"]()
-    elif args.model == "custom":
+    else:
         if args.phrase_file:
             p_file = clean_path(args.phrase_file)
             if p_file and p_file.is_file():
@@ -2567,9 +2589,8 @@ def main():
             for p in args.phrase:
                 phrases.extend(parse_variations(p))
         else:
-            parser.error("--phrase or --phrase-file is required when --model is custom")
-    else:
-        phrases = []
+            parser.error("--phrase or --phrase-file is required for custom wake word models")
+
 
     if args.review_phrases:
         phrases = review_phrases_interactive(phrases, args.model)
