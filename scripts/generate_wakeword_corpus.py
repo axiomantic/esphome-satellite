@@ -86,6 +86,25 @@ MACOS_SAY_VOICES = {
     "accents": ["Lee", "Yuri", "Milena"],
 }
 
+def get_available_macos_voices() -> Dict[str, List[str]]:
+    try:
+        proc = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, check=True)
+        installed = set()
+        for line in proc.stdout.splitlines():
+            parts = line.strip().split()
+            if parts:
+                installed.add(parts[0])
+        filtered: Dict[str, List[str]] = {}
+        for cat, vlist in MACOS_SAY_VOICES.items():
+            valid = [v for v in vlist if v in installed]
+            if valid:
+                filtered[cat] = valid
+            elif "Alex" in installed:
+                filtered[cat] = ["Alex"]
+        return filtered if filtered else MACOS_SAY_VOICES
+    except Exception:
+        return MACOS_SAY_VOICES
+
 # ---------------------------------------------------------------------------
 # Phonetic Variation Generators
 # ---------------------------------------------------------------------------
@@ -262,7 +281,7 @@ def generate_corpus(
         voice_pool = ELEVENLABS_VOICES
     elif backend_name == "macos_say":
         backend = MacOSSayBackend()
-        voice_pool = MACOS_SAY_VOICES
+        voice_pool = get_available_macos_voices()
     else:
         print(f"Error: Unknown backend '{backend_name}'.", file=sys.stderr)
         return 0

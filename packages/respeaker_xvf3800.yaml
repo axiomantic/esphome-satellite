@@ -315,7 +315,8 @@ voice_assistant:
             cancel_opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
           }
           float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-          if (cancel_opt != "Silent") {
+          bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
+          if (enabled && cancel_opt != "Silent") {
             esphome::get_pcm_sound_player().play_cancel_sound(cancel_opt, false, vol);
           } else {
             call_nim_cancel_done(true);
@@ -966,13 +967,17 @@ button:
       - lambda: |-
           ESP_LOGI("voice_assistant", "Explicit conversation history reset triggered by user button.");
           id(va).reset_conversation_id();
-          std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
-          if (opt == "Match Wake Chime") {
-            opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-          }
-          float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-          if (opt != "Silent") {
-            esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+          esphome::get_pcm_sound_player().stop();
+          bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
+          if (enabled) {
+            std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
+            if (opt == "Match Wake Chime") {
+              opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+            }
+            float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
+            if (opt != "Silent") {
+              esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+            }
           }
 
   - platform: template
