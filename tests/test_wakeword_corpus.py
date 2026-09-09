@@ -19,6 +19,7 @@ from generate_wakeword_corpus import (
     generate_clemens_variations,
     encode_multipart_formdata,
     load_household_voices,
+    normalize_transcript,
     sample_voices,
     HouseholdVoice,
     VoiceSpec,
@@ -83,6 +84,70 @@ class TestWakewordCorpus(unittest.TestCase):
             self.assertEqual(voices[0].name, "Alice")
             self.assertEqual(voices[0].audio_path, temp_path)
             self.assertEqual(voices[0].transcript, "Testing voice sample")
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
+    def test_normalize_transcript(self):
+        self.assertEqual(normalize_transcript(""), "")
+        self.assertEqual(normalize_transcript("   hello   world   "), "hello world")
+        self.assertEqual(normalize_transcript("Line 1\nLine 2\r\n\tLine 3"), "Line 1 Line 2 Line 3")
+
+    def test_load_household_voices_companion_txt_single(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            wav_file = tmppath / "charlie.wav"
+            wav_file.write_bytes(b"RIFF\x24\x00\x00\x00WAVE")
+            txt_file = tmppath / "charlie.txt"
+            txt_file.write_text("Spoken sentence in companion file\nwith extra newlines.\n", encoding="utf-8")
+
+            voices = load_household_voices(single_sample=wav_file)
+            self.assertEqual(len(voices), 1)
+            self.assertEqual(voices[0].name, "Charlie")
+            self.assertEqual(voices[0].transcript, "Spoken sentence in companion file with extra newlines.")
+
+    def test_load_household_voices_transcript_file_arg(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            wav_file = tmppath / "sample.wav"
+            wav_file.write_bytes(b"RIFF\x24\x00\x00\x00WAVE")
+            txt_file = tmppath / "custom_trans.txt"
+            txt_file.write_text("Custom transcript from external file\nacross multiple lines", encoding="utf-8")
+
+            voices = load_household_voices(
+                single_sample=wav_file,
+                single_transcript_file=txt_file
+            )
+            self.assertEqual(len(voices), 1)
+            self.assertEqual(voices[0].transcript, "Custom transcript from external file across multiple lines")
+
+    def test_load_household_voices_transcript_filepath_in_string_arg(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            wav_file = tmppath / "sample.wav"
+            wav_file.write_bytes(b"RIFF\x24\x00\x00\x00WAVE")
+            txt_file = tmppath / "referenced_trans.txt"
+            txt_file.write_text("Referenced path in string\nline 2", encoding="utf-8")
+
+            voices = load_household_voices(
+                single_sample=wav_file,
+                single_transcript=str(txt_file)
+            )
+            self.assertEqual(len(voices), 1)
+            self.assertEqual(voices[0].transcript, "Referenced path in string line 2")
+
+    def test_load_household_voices_multiline_string_normalized(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(b"RIFF\x24\x00\x00\x00WAVE")
+            temp_path = Path(f.name)
+
+        try:
+            voices = load_household_voices(
+                single_sample=temp_path,
+                single_transcript="Pasted paragraph 1.\n\nPasted paragraph 2 with   spaces."
+            )
+            self.assertEqual(len(voices), 1)
+            self.assertEqual(voices[0].transcript, "Pasted paragraph 1. Pasted paragraph 2 with spaces.")
         finally:
             if temp_path.exists():
                 temp_path.unlink()
