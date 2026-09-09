@@ -40,6 +40,8 @@ import urllib.request
 import urllib.error
 import itertools
 import random
+import select
+import tempfile
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
@@ -185,18 +187,57 @@ class HouseholdVoice:
         self.voice_id = voice_id
 
 
+def normalize_transcript(text: str) -> str:
+    """Collapses newlines, tabs, and duplicate spaces into single spaces."""
+    if not text:
+        return ""
+    return " ".join(text.split()).strip()
+
+
 def load_household_voices(
     household_dir: Optional[Path] = None,
     single_sample: Optional[Path] = None,
     single_name: Optional[str] = None,
-    single_transcript: Optional[str] = None
+    single_transcript: Optional[str] = None,
+    single_transcript_file: Optional[Path] = None
 ) -> List[HouseholdVoice]:
     voices: List[HouseholdVoice] = []
 
     if single_sample and Path(single_sample).exists():
-        name = single_name or Path(single_sample).stem.replace("_", " ").title()
-        transcript = single_transcript or ""
-        voices.append(HouseholdVoice(name=name, audio_path=Path(single_sample), transcript=transcript))
+        sample_path = Path(single_sample)
+        name = single_name or sample_path.stem.replace("_", " ").title()
+        transcript = ""
+
+        if single_transcript_file and Path(single_transcript_file).is_file():
+            try:
+                transcript = Path(single_transcript_file).read_text(encoding="utf-8")
+            except Exception as e:
+                print(f"[Warning] Failed to read transcript file '{single_transcript_file}': {e}", file=sys.stderr)
+        elif single_transcript:
+            candidate_path = Path(single_transcript.strip()).expanduser()
+            if candidate_path.is_file():
+                try:
+                    transcript = candidate_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    print(f"[Warning] Failed to read transcript file '{candidate_path}': {e}", file=sys.stderr)
+            else:
+                transcript = single_transcript
+        else:
+            # Auto-detect companion .txt file next to single_sample
+            companion_txt = sample_path.with_suffix(".txt")
+            dir_txt = sample_path.parent / "transcript.txt"
+            if companion_txt.is_file():
+                try:
+                    transcript = companion_txt.read_text(encoding="utf-8")
+                except Exception as e:
+                    print(f"[Warning] Failed to read companion transcript '{companion_txt}': {e}", file=sys.stderr)
+            elif dir_txt.is_file():
+                try:
+                    transcript = dir_txt.read_text(encoding="utf-8")
+                except Exception as e:
+                    print(f"[Warning] Failed to read companion transcript '{dir_txt}': {e}", file=sys.stderr)
+
+        voices.append(HouseholdVoice(name=name, audio_path=sample_path, transcript=normalize_transcript(transcript)))
 
     if household_dir and Path(household_dir).is_dir():
         for item in sorted(Path(household_dir).iterdir()):
@@ -214,19 +255,137 @@ def load_household_voices(
                 transcript = ""
                 trans_file = item / "transcript.txt"
                 if trans_file.exists():
-                    transcript = trans_file.read_text(encoding="utf-8").strip()
+                    transcript = trans_file.read_text(encoding="utf-8")
                 if audio_file:
                     name = item.name.replace("_", " ").title()
-                    voices.append(HouseholdVoice(name=name, audio_path=audio_file, transcript=transcript))
+                    voices.append(HouseholdVoice(name=name, audio_path=audio_file, transcript=normalize_transcript(transcript)))
             elif item.suffix.lower() in [".wav", ".mp3", ".m4a", ".flac", ".ogg"]:
                 name = item.stem.replace("_", " ").title()
                 transcript = ""
                 trans_file = item.with_suffix(".txt")
                 if trans_file.exists():
-                    transcript = trans_file.read_text(encoding="utf-8").strip()
-                voices.append(HouseholdVoice(name=name, audio_path=item, transcript=transcript))
+                    transcript = trans_file.read_text(encoding="utf-8")
+                voices.append(HouseholdVoice(name=name, audio_path=item, transcript=normalize_transcript(transcript)))
 
     return voices
+
+
+def get_interactive_transcript(sample_path: Optional[Path] = None) -> str:
+    """
+    Interactively captures reference audio transcript supporting:
+    - Automatic companion .txt detection (sample.txt or transcript.txt)
+    - File path selection (bypasses terminal line length / canonical buffer limits)
+    - Multi-line pasting (safe against newlines corrupting subsequent prompts)
+    - Direct editing in $EDITOR / nano
+    """
+    if sample_path:
+        sample_path = Path(sample_path)
+        companion_txt = sample_path.with_suffix(".txt")
+        dir_txt = sample_path.parent / "transcript.txt"
+        candidate = None
+        if companion_txt.is_file():
+            candidate = companion_txt
+        elif dir_txt.is_file():
+            candidate = dir_txt
+
+        if candidate:
+            try:
+                content = candidate.read_text(encoding="utf-8").strip()
+                preview = content[:70] + ("..." if len(content) > 70 else "")
+                print(f"\n   Detected companion transcript: {candidate}")
+                print(f"   Preview: \"{preview}\"")
+                use_comp = input("   Use this companion transcript? [Y/n]: ").strip().lower()
+                if use_comp not in ("n", "no"):
+                    return normalize_transcript(content)
+            except Exception as e:
+                print(f"   [Warning] Could not read companion file {candidate}: {e}", file=sys.stderr)
+
+    print("\n   Reference Audio Transcript:")
+    print("   (Spoken text helps F5-TTS align phonemes for hyper-accurate voice cloning)")
+    print("   [1] Point to a .txt file (recommended: avoids terminal line limits)")
+    print("   [2] Paste or type transcript into terminal (multi-line supported)")
+    print("   [3] Open in text editor ($EDITOR / nano)")
+    print("   [4] Skip (no transcript)")
+
+    choice = input("   Select [1-4, default=1]: ").strip() or "1"
+
+    # Direct file path entered at menu prompt
+    cand_choice = Path(choice).expanduser()
+    if cand_choice.is_file() or choice.lower().endswith(".txt"):
+        try:
+            return normalize_transcript(cand_choice.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"   [Error] Could not read file '{choice}': {e}", file=sys.stderr)
+
+    if choice == "1":
+        while True:
+            path_str = input("   Enter path to transcript file (.txt, or empty to skip): ").strip()
+            if not path_str:
+                return ""
+            fpath = Path(path_str).expanduser()
+            if fpath.is_file():
+                try:
+                    return normalize_transcript(fpath.read_text(encoding="utf-8"))
+                except Exception as e:
+                    print(f"   [Error] Failed to read {fpath}: {e}", file=sys.stderr)
+            else:
+                print(f"   File not found: '{fpath}'. Please try again.")
+
+    elif choice == "2":
+        print("   Paste transcript below.")
+        print("   Type 'EOF' or 'END' on a new line, or press Ctrl-D when finished:")
+        lines = []
+        while True:
+            try:
+                line = input()
+            except EOFError:
+                break
+            if line.strip() in ("EOF", "END", ":wq"):
+                break
+            # If line looks like an empty line, check if more lines are immediately buffered in stdin
+            if not line.strip() and lines:
+                has_more = False
+                try:
+                    r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                    if r:
+                        has_more = True
+                except Exception:
+                    pass
+                if not has_more:
+                    break
+            lines.append(line)
+        raw_text = "\n".join(lines).strip()
+        # If the user pasted a single line that happens to be an existing file path:
+        if raw_text and Path(raw_text).expanduser().is_file():
+            try:
+                return normalize_transcript(Path(raw_text).expanduser().read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        return normalize_transcript(raw_text)
+
+    elif choice == "3":
+        editor = os.environ.get("EDITOR") or ("nano" if sys.platform != "win32" else "notepad")
+        with tempfile.NamedTemporaryFile(suffix=".txt", mode="w+", delete=False, encoding="utf-8") as tf:
+            tf.write("# Paste or type the transcript for your voice sample below.\n")
+            tf.write("# Lines beginning with '#' will be ignored.\n")
+            tf.write("# Save and close when finished.\n\n")
+            tf.flush()
+            temp_path = tf.name
+        try:
+            subprocess.run([editor, temp_path], check=True)
+            content_lines = []
+            for l in Path(temp_path).read_text(encoding="utf-8").splitlines():
+                if not l.strip().startswith("#"):
+                    content_lines.append(l)
+            return normalize_transcript("\n".join(content_lines))
+        except Exception as e:
+            print(f"   [Editor Error]: {e}", file=sys.stderr)
+            return ""
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -708,7 +867,7 @@ def run_tui_wizard():
             else:
                 s_file = input("   Enter path to audio sample (.wav, .mp3, .m4a): ").strip()
                 s_name = input("   Enter person's name: ").strip()
-                s_trans = input("   Enter transcript of audio (optional): ").strip()
+                s_trans = get_interactive_transcript(Path(s_file) if s_file else None)
                 if s_file:
                     household_voices = load_household_voices(
                         single_sample=Path(s_file),
@@ -756,7 +915,9 @@ def run_tui_wizard():
 # CLI Entrypoint
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Synthetic Wake Word Corpus Generator for microWakeWord")
+    parser = argparse.ArgumentParser(
+        description="Synthetic Wake Word Corpus Generator for microWakeWord"
+    )
     parser.add_argument("--model", choices=["okay_nabu", "mister_clemens", "custom"], default=None,
                         help="Pre-configured wake word model name")
     parser.add_argument("--phrase", type=str, default=None,
@@ -776,7 +937,9 @@ def main():
     parser.add_argument("--voice-name", type=str, default=None,
                         help="Name of person for --voice-sample")
     parser.add_argument("--voice-transcript", type=str, default=None,
-                        help="Transcript of spoken audio in --voice-sample")
+                        help="Transcript of spoken audio in --voice-sample (text or path to .txt file)")
+    parser.add_argument("--voice-transcript-file", type=Path, default=None,
+                        help="Path to file containing transcript for --voice-sample")
     parser.add_argument("--household-ratio", type=float, default=0.50,
                         help="Ratio of generated corpus allocated to household voices (default: 0.50)")
     parser.add_argument("--wizard", action="store_true",
@@ -803,7 +966,8 @@ def main():
         household_dir=args.household_dir,
         single_sample=args.voice_sample,
         single_name=args.voice_name,
-        single_transcript=args.voice_transcript
+        single_transcript=args.voice_transcript,
+        single_transcript_file=args.voice_transcript_file
     )
 
     out_dir = args.output or Path(f"data/{args.model}/positive")
