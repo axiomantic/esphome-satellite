@@ -1876,31 +1876,31 @@ def run_tui_wizard():
     hv_mode = questionary.select(
         "3. Household Member Voice Samples (Zero-Shot Cloning):",
         choices=[
-            Choice("Add household member voices interactively (recordings of you, partner, children)", value="interactive"),
-            Choice("Point to a directory of voice samples (e.g. data/household_voices/)", value="directory"),
+            Choice("Add household member voices (one at a time: audio sample, name, transcript)", value="add"),
             Choice("Skip household voices (use built-in / library voices only)", value="skip"),
         ]
     ).ask()
     if hv_mode is None:
         return
 
-    if hv_mode == "directory":
-        h_dir = questionary.text("Enter directory path containing voice samples:").ask()
-        clean_hdir = clean_path(h_dir)
-        if clean_hdir:
-            household_voices = load_household_voices(household_dir=clean_hdir)
-    elif hv_mode == "interactive":
+    if hv_mode == "add":
         while True:
             idx = len(household_voices) + 1
             console.print(f"\n[bold]--- Household Voice Sample #{idx} ---[/bold]")
-            s_file_input = questionary.text("Path to audio sample (.wav, .mp3, .m4a):").ask()
+            s_file_input = questionary.text(
+                "Path to audio sample (.wav, .mp3, .m4a):",
+                default=""
+            ).ask()
+            if not s_file_input or not s_file_input.strip():
+                if not household_voices:
+                    console.print("[dim]No file entered. Skipping household voices.[/dim]")
+                break
             s_file = clean_path(s_file_input)
             if not s_file or not s_file.exists():
                 console.print(f"[yellow]File '{s_file_input}' not found.[/yellow]")
-                if not household_voices:
-                    retry = questionary.confirm("Try again?", default=True).ask()
-                    if retry:
-                        continue
+                retry = questionary.confirm("Try again?", default=True).ask()
+                if retry:
+                    continue
                 break
 
             default_name = s_file.stem.replace("_", " ").title()
@@ -2134,10 +2134,29 @@ def _run_fallback_wizard():
         api_key = key_input if key_input else env_key
 
     household_voices: List[HouseholdVoice] = []
-    h_dir = input("Enter directory containing voice samples (or press enter to skip): ").strip()
-    clean_hdir = clean_path(h_dir)
-    if clean_hdir:
-        household_voices = load_household_voices(household_dir=clean_hdir)
+    print("\n3. Household Member Voice Samples (Zero-Shot Cloning):")
+    add_hv = input("Add household member voices one at a time? [y/N]: ").strip().lower()
+    if add_hv in ("y", "yes"):
+        while True:
+            idx = len(household_voices) + 1
+            s_input = input(f"\nEnter path to audio sample #{idx} (or press Enter to finish): ").strip()
+            if not s_input:
+                break
+            s_file = clean_path(s_input)
+            if not s_file or not s_file.is_file():
+                print(f"Error: Audio file '{s_input}' not found.")
+                continue
+            default_name = s_file.stem.replace("_", " ").title()
+            s_name = input(f"Person's name [default: {default_name}]: ").strip() or default_name
+            s_trans = get_interactive_transcript(s_file)
+            new_voices = load_household_voices(
+                single_sample=s_file,
+                single_name=s_name,
+                single_transcript=s_trans
+            )
+            if new_voices:
+                household_voices.extend(new_voices)
+                print(f"Successfully loaded voice profile for '{new_voices[0].name}'.")
 
     count_str = input("Enter positive sample count [default=50]: ").strip() or "50"
     count = int(count_str)
