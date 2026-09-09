@@ -270,6 +270,22 @@ def generate_clemens_variations() -> List[str]:
     return sorted(list(variants))
 
 
+def parse_variations(raw_text: str) -> List[str]:
+    """
+    Parses comma-separated or newline-delimited phonetic variations.
+    Normalizes whitespace and removes duplicates while preserving order.
+    """
+    lines = raw_text.replace(",", "\n").splitlines()
+    cleaned: List[str] = []
+    seen = set()
+    for line in lines:
+        c = " ".join(line.strip().lower().split())
+        if c and c not in seen:
+            seen.add(c)
+            cleaned.append(c)
+    return cleaned
+
+
 # ---------------------------------------------------------------------------
 # Audio Processing Utilities (via ffmpeg)
 # ---------------------------------------------------------------------------
@@ -1293,14 +1309,46 @@ def run_tui_wizard():
         model_name = "mister_clemens"
         phrases = generate_clemens_variations()
     else:
-        custom_input = questionary.text("Enter custom wake word phrase:").ask()
+        custom_input = questionary.text(
+            "Enter custom wake word identifier (e.g. 'hey_computer', 'jarvis'):",
+            default="custom_wake_word"
+        ).ask()
         if not custom_input:
             console.print("[dim]Aborted.[/dim]")
             return
-        model_name = custom_input.lower().replace(" ", "_")
-        phrases = [custom_input]
+        model_name = custom_input.strip().lower().replace(" ", "_")
 
-    console.print(f"[dim]Loaded {len(phrases)} phonetic variations for '{model_name}'.[/dim]\n")
+        input_mode = questionary.select(
+            "How would you like to provide phonetic variations for this wake word?",
+            choices=[
+                Choice("Type / paste phonetic variations (comma-separated or multi-line)", value="text"),
+                Choice("Load variations from a text file (one variant per line)", value="file"),
+                Choice("Single base phrase only (no phonetic permutations)", value="single"),
+            ]
+        ).ask()
+        if input_mode is None:
+            return
+
+        if input_mode == "file":
+            f_path_str = questionary.text("Path to text file containing variations:").ask()
+            f_path = clean_path(f_path_str)
+            if not f_path or not f_path.is_file():
+                console.print(f"[yellow]File '{f_path_str}' not found. Using default base phrase.[/yellow]")
+                phrases = [model_name.replace("_", " ")]
+            else:
+                phrases = parse_variations(f_path.read_text(encoding="utf-8"))
+        elif input_mode == "text":
+            console.print("[dim]Enter phonetic variants separated by commas or newlines (e.g. 'hey computer, ok computer, hay compyuter'):[/dim]")
+            var_text = questionary.text("Phonetic variations:").ask()
+            phrases = parse_variations(var_text or "")
+        else:
+            base_phrase = questionary.text("Enter base phrase:", default=model_name.replace("_", " ")).ask()
+            phrases = [base_phrase.strip().lower()] if base_phrase else [model_name.replace("_", " ")]
+
+        if not phrases:
+            phrases = [model_name.replace("_", " ")]
+
+    console.print(f"[bold green]Loaded {len(phrases)} phonetic variation(s) for '{model_name}':[/bold green] [dim]{', '.join(phrases[:8])}{'...' if len(phrases) > 8 else ''}[/dim]\n")
 
     # 2. Synthesis Backend
     backend_choice = questionary.select(
@@ -1552,9 +1600,16 @@ def _run_fallback_wizard():
         model_name = "mister_clemens"
         phrases = generate_clemens_variations()
     else:
-        custom_input = input("Enter custom wake word phrase: ").strip()
+        custom_input = input("Enter custom wake word identifier: ").strip()
         model_name = custom_input.lower().replace(" ", "_")
-        phrases = [custom_input]
+        var_input = input("Enter phonetic variations (comma-separated or path to .txt file): ").strip()
+        var_path = clean_path(var_input)
+        if var_path and var_path.is_file():
+            phrases = parse_variations(var_path.read_text(encoding="utf-8"))
+        elif var_input:
+            phrases = parse_variations(var_input)
+        else:
+            phrases = [model_name.replace("_", " ")]
 
     print("\n2. Select Synthesis Backend:")
     print("   [1] ElevenLabs API")
@@ -1614,8 +1669,10 @@ def main():
     )
     parser.add_argument("--model", choices=["okay_nabu", "mister_clemens", "custom"], default=None,
                         help="Pre-configured wake word model name")
-    parser.add_argument("--phrase", type=str, default=None,
-                        help="Custom phrase if --model custom is specified")
+    parser.add_argument("--phrase", type=str, action="append", default=None,
+                        help="Custom phrase or phonetic variant (can specify multiple times or comma-separated)")
+    parser.add_argument("--phrase-file", type=str, default=None,
+                        help="Path to text file containing phonetic variations (one per line)")
     parser.add_argument("--backend", choices=["elevenlabs", "macos_say", "f5_tts"], default="elevenlabs",
                         help="Audio synthesis backend")
     parser.add_argument("--count", type=int, default=50,
@@ -1664,9 +1721,18 @@ def main():
     elif args.model == "mister_clemens":
         phrases = generate_clemens_variations()
     elif args.model == "custom":
-        if not args.phrase:
-            parser.error("--phrase is required when --model is custom")
-        phrases = [args.phrase]
+        if args.phrase_file:
+            p_file = clean_path(args.phrase_file)
+            if p_file and p_file.is_file():
+                phrases = parse_variations(p_file.read_text(encoding="utf-8"))
+            else:
+                parser.error(f"Phrase file '{args.phrase_file}' not found")
+        elif args.phrase:
+            phrases = []
+            for p in args.phrase:
+                phrases.extend(parse_variations(p))
+        else:
+            parser.error("--phrase or --phrase-file is required when --model is custom")
     else:
         phrases = []
 
