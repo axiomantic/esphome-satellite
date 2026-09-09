@@ -1206,6 +1206,13 @@ def run_tui_wizard():
     out_str = input(f"Output directory [default={default_out}]: ").strip()
     out_dir = clean_path(out_str) if out_str else default_out
 
+    force = False
+    if is_corpus_complete(out_dir, count, model_name, backend_name, household_voices):
+        print(f"\n[Notice] A complete cached corpus already exists in '{out_dir}'.")
+        re_synth = input("Re-synthesize and overwrite existing dataset? [y/N]: ").strip().lower()
+        if re_synth in ("y", "yes"):
+            force = True
+
     print("\nReady to generate corpus.")
     confirm = input("Proceed? [Y/n]: ").strip().lower()
     if confirm in ("", "y", "yes"):
@@ -1217,7 +1224,8 @@ def run_tui_wizard():
             output_dir=out_dir,
             api_key=api_key,
             household_voices=household_voices,
-            household_ratio=household_ratio
+            household_ratio=household_ratio,
+            force=force
         )
     else:
         print("Aborted.")
