@@ -217,7 +217,7 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
                 txt_file = wav_file.with_suffix(".txt")
                 transcript = txt_file.read_text(encoding="utf-8").strip() if txt_file.is_file() else ""
                 vname = wav_file.stem.replace("_", " ").title()
-                cat = "female" if vname.lower() in ("samantha", "victoria") else "male"
+                cat = "female" if vname.lower() in ("linda", "amy", "samantha", "victoria") else "male"
                 voices.append({
                     "id": f"builtin_{wav_file.stem}",
                     "name": vname,

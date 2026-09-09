@@ -423,13 +423,19 @@ class TestWakewordCorpus(unittest.TestCase):
         f5_voices = get_available_builtin_voices("f5_tts")
         self.assertGreaterEqual(len(f5_voices), 4)
         f5_names = [v["name"] for v in f5_voices]
-        self.assertIn("Samantha", f5_names)
-        self.assertIn("Alex", f5_names)
-        self.assertIn("Victoria", f5_names)
-        self.assertIn("Fred", f5_names)
+        self.assertIn("Linda", f5_names)
+        self.assertIn("Amy", f5_names)
+        self.assertIn("Grover", f5_names)
+        self.assertIn("Nolan", f5_names)
         for v in f5_voices:
             self.assertTrue(v["default"])
             self.assertTrue(v["reference_audio"].is_file())
+            self.assertGreater(len(v["reference_transcript"]), 0)
+        f5_map = {v["name"]: v["category"] for v in f5_voices}
+        self.assertEqual(f5_map["Linda"], "female")
+        self.assertEqual(f5_map["Amy"], "female")
+        self.assertEqual(f5_map["Grover"], "male")
+        self.assertEqual(f5_map["Nolan"], "male")
 
     def test_sample_voices_selected_builtin_voices(self):
         dist = {"female": 0.50, "male": 0.50}
