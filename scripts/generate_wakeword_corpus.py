@@ -221,7 +221,7 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
                 voices.append({
                     "id": f"builtin_{wav_file.stem}",
                     "name": vname,
-                    "desc": f"Bundled reference clip ({wav_file.name})",
+                    "desc": "Built-in voice preset",
                     "category": cat,
                     "default": True,
                     "reference_audio": wav_file,
