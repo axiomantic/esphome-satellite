@@ -1245,19 +1245,63 @@ class ElevenLabsBackend:
         return False
 
 
+def install_f5_tts_dependencies(console: Optional[Any] = None) -> bool:
+    """
+    Installs f5-tts, torch, and torchaudio into the active Python environment.
+    Uses uv if available, falling back to pip.
+    """
+    msg = "Installing F5-TTS and PyTorch dependencies (this may take a minute)..."
+    if console:
+        console.print(f"\n[bold cyan]{msg}[/bold cyan]")
+    else:
+        print(f"\n{msg}")
+
+    if shutil.which("uv"):
+        cmd = ["uv", "pip", "install", "f5-tts", "torch", "torchaudio"]
+    else:
+        cmd = [sys.executable, "-m", "pip", "install", "f5-tts", "torch", "torchaudio"]
+
+    try:
+        res = subprocess.run(cmd, check=False)
+        if res.returncode == 0:
+            if console:
+                console.print("[bold green]F5-TTS installed successfully![/bold green]\n")
+            else:
+                print("F5-TTS installed successfully!\n")
+            return True
+        else:
+            err_msg = f"Installation command exited with code {res.returncode}."
+            if console:
+                console.print(f"[bold red]{err_msg}[/bold red]")
+            else:
+                print(err_msg, file=sys.stderr)
+            return False
+    except Exception as e:
+        err_msg = f"Failed to run installer: {e}"
+        if console:
+            console.print(f"[bold red]{err_msg}[/bold red]")
+        else:
+            print(err_msg, file=sys.stderr)
+        return False
+
+
 class F5TTSBackend:
     def __init__(self):
         self.cli_binary = self._find_cli()
 
     def _find_cli(self) -> Optional[str]:
         for bin_name in ["f5-tts_infer-cli", "f5-tts"]:
-            res = subprocess.run(["which", bin_name], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            if res.returncode == 0 and res.stdout.strip():
-                return res.stdout.strip()
+            found = shutil.which(bin_name)
+            if found:
+                return found
+            venv_bin = Path(sys.executable).parent
+            cand = venv_bin / bin_name
+            if cand.is_file() and os.access(cand, os.X_OK):
+                return str(cand)
         return None
 
     def is_available(self) -> bool:
-        if self.cli_binary is not None:
+        if self._find_cli() is not None:
             return True
         try:
             import f5_tts  # noqa: F401
@@ -1869,6 +1913,43 @@ def run_tui_wizard():
                 console.print("[yellow]No ElevenLabs API key provided. Falling back to local macOS 'say' backend.[/yellow]")
                 backend_choice = "macos_say"
 
+    elif backend_choice == "f5_tts":
+        f5_backend = F5TTSBackend()
+        if not f5_backend.is_available():
+            console.print("\n[yellow]Notice: F5-TTS is not currently installed in this Python environment.[/yellow]")
+            console.print("[dim]Local zero-shot neural voice cloning requires: f5-tts, torch, torchaudio[/dim]\n")
+            f5_action = questionary.select(
+                "How would you like to proceed?",
+                choices=[
+                    Choice("Install F5-TTS now (auto-install into current environment)", value="install"),
+                    Choice("Switch to macOS 'say' (built-in offline voices, zero dependencies)", value="macos_say"),
+                    Choice("Switch to ElevenLabs API (cloud neural synthesis)", value="elevenlabs"),
+                    Choice("Abort wizard", value="abort"),
+                ]
+            ).ask()
+            if f5_action is None or f5_action == "abort":
+                console.print("[dim]Aborted.[/dim]")
+                return
+            elif f5_action == "install":
+                installed = install_f5_tts_dependencies(console=console)
+                if not installed:
+                    console.print("[yellow]F5-TTS installation was unsuccessful. Falling back to macOS 'say'.[/yellow]")
+                    backend_choice = "macos_say"
+            elif f5_action == "elevenlabs":
+                backend_choice = "elevenlabs"
+                env_key = os.environ.get("ELEVENLABS_API_KEY", "")
+                if env_key:
+                    use_env = questionary.confirm(f"Use existing ELEVENLABS_API_KEY from environment ({env_key[:6]}...)?", default=True).ask()
+                    if use_env:
+                        api_key = env_key
+                if not api_key:
+                    api_key = questionary.password("Enter ElevenLabs API Key:").ask()
+                    if not api_key:
+                        console.print("[yellow]No ElevenLabs API key provided. Falling back to macOS 'say'.[/yellow]")
+                        backend_choice = "macos_say"
+            else:
+                backend_choice = "macos_say"
+
     # 3. Household Voices
     household_voices: List[HouseholdVoice] = []
     household_ratio = 0.50
@@ -2132,6 +2213,19 @@ def _run_fallback_wizard():
         prompt = f"Enter ElevenLabs API Key [{env_key[:6]}...]: " if env_key else "Enter ElevenLabs API Key: "
         key_input = input(prompt).strip()
         api_key = key_input if key_input else env_key
+    elif backend_name == "f5_tts":
+        f5_backend = F5TTSBackend()
+        if not f5_backend.is_available():
+            print("\n[Notice] F5-TTS is not currently installed in this environment.")
+            do_install = input("Install F5-TTS dependencies now? [Y/n]: ").strip().lower()
+            if do_install not in ("n", "no"):
+                success = install_f5_tts_dependencies()
+                if not success:
+                    print("Installation failed. Switching to macOS 'say'.")
+                    backend_name = "macos_say"
+            else:
+                print("Switching to macOS 'say'.")
+                backend_name = "macos_say"
 
     household_voices: List[HouseholdVoice] = []
     print("\n3. Household Member Voice Samples (Zero-Shot Cloning):")
