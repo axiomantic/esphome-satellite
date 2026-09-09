@@ -421,12 +421,19 @@ class TestWakewordCorpus(unittest.TestCase):
 
         # F5-TTS built-in reference voices
         f5_voices = get_available_builtin_voices("f5_tts")
-        self.assertGreaterEqual(len(f5_voices), 4)
+        self.assertGreaterEqual(len(f5_voices), 16)
         f5_names = [v["name"] for v in f5_voices]
         self.assertIn("Linda", f5_names)
         self.assertIn("Amy", f5_names)
         self.assertIn("Grover", f5_names)
         self.assertIn("Nolan", f5_names)
+        self.assertIn("Adam", f5_names)
+        self.assertIn("Claire", f5_names)
+        self.assertIn("David", f5_names)
+        self.assertIn("Emma", f5_names)
+        self.assertIn("Pirate", f5_names)
+        self.assertIn("River", f5_names)
+        self.assertIn("Shelly", f5_names)
         for v in f5_voices:
             self.assertTrue(v["default"])
             self.assertTrue(v["reference_audio"].is_file())
@@ -434,8 +441,13 @@ class TestWakewordCorpus(unittest.TestCase):
         f5_map = {v["name"]: v["category"] for v in f5_voices}
         self.assertEqual(f5_map["Linda"], "female")
         self.assertEqual(f5_map["Amy"], "female")
+        self.assertEqual(f5_map["Claire"], "female")
+        self.assertEqual(f5_map["Emma"], "female")
         self.assertEqual(f5_map["Grover"], "male")
         self.assertEqual(f5_map["Nolan"], "male")
+        self.assertEqual(f5_map["Adam"], "male")
+        self.assertEqual(f5_map["David"], "male")
+        self.assertEqual(f5_map["Pirate"], "accents")
 
     def test_sample_voices_selected_builtin_voices(self):
         dist = {"female": 0.50, "male": 0.50}

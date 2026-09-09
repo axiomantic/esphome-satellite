@@ -184,6 +184,26 @@ def get_available_macos_voices() -> Dict[str, List[str]]:
     except Exception:
         return MACOS_SAY_VOICES
 
+DEFAULT_F5_VOICE_METADATA: Dict[str, Dict[str, str]] = {
+    "adam": {"name": "Adam", "category": "male", "desc": "Deep, Monotone and Commanding"},
+    "amy": {"name": "Amy", "category": "female", "desc": "Natural storytelling (LibriSpeech)"},
+    "claire": {"name": "Claire", "category": "female", "desc": "Goofy, Youthful, Fun & Girly"},
+    "david": {"name": "David", "category": "male", "desc": "Deep, Warm, and Steady"},
+    "davy": {"name": "Davy", "category": "male", "desc": "Deep, Friendly and Round"},
+    "emma": {"name": "Emma", "category": "female", "desc": "Adorable and Upbeat"},
+    "gigi": {"name": "Gigi", "category": "female", "desc": "Cute, Peppy, Energetic"},
+    "grover": {"name": "Grover", "category": "male", "desc": "Classical narration (LibriSpeech)"},
+    "jake": {"name": "Jake", "category": "male", "desc": "Deep, Smooth, Dramatic"},
+    "joy": {"name": "Joy", "category": "female", "desc": "Happy, Sweet, Bubbly"},
+    "linda": {"name": "Linda", "category": "female", "desc": "Studio narration (LJSpeech)"},
+    "lulu_lolipop": {"name": "Lulu Lolipop", "category": "female", "desc": "High-Pitched and Bubbly"},
+    "nolan": {"name": "Nolan", "category": "male", "desc": "Expressive narration (LibriSpeech)"},
+    "pirate": {"name": "Pirate", "category": "accents", "desc": "Character, Pirate Accent"},
+    "river": {"name": "River", "category": "female", "desc": "Relaxed, Neutral, Informative"},
+    "shelly": {"name": "Shelly", "category": "female", "desc": "Warm, Natural"},
+}
+
+
 def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Returns curated list of default/built-in voices for the specified backend.
@@ -212,16 +232,23 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
                 })
     elif backend_name == "f5_tts":
         ref_dir = DEFAULT_REFERENCE_VOICES_DIR
+        female_names = {
+            "linda", "amy", "samantha", "victoria", "claire",
+            "emma", "gigi", "joy", "lulu_lolipop", "river", "shelly"
+        }
         if ref_dir.is_dir():
             for wav_file in sorted(ref_dir.glob("*.wav")):
                 txt_file = wav_file.with_suffix(".txt")
                 transcript = txt_file.read_text(encoding="utf-8").strip() if txt_file.is_file() else ""
-                vname = wav_file.stem.replace("_", " ").title()
-                cat = "female" if vname.lower() in ("linda", "amy", "samantha", "victoria") else "male"
+                stem = wav_file.stem.lower()
+                meta = DEFAULT_F5_VOICE_METADATA.get(stem, {})
+                vname = meta.get("name", wav_file.stem.replace("_", " ").title())
+                vdesc = meta.get("desc", "Built-in voice preset")
+                cat = meta.get("category", "female" if stem in female_names else "male")
                 voices.append({
                     "id": f"builtin_{wav_file.stem}",
                     "name": vname,
-                    "desc": "Built-in voice preset",
+                    "desc": vdesc,
                     "category": cat,
                     "default": True,
                     "reference_audio": wav_file,
