@@ -87,8 +87,8 @@ Once the board has rebooted into ESPHome, connect using either method:
 3. Navigate to **Settings > Devices & Services > ESPHome** and click on your satellite device:
    - **Assistant (Slot 1)**: Select your primary pipeline (e.g., *Mark Twain*).
    - **Wake word (Slot 1)**: Select which wake word triggers Slot 1 (e.g., *Mr. Clemens*).
-   - **Assistant 2 (Slot 2)**: Select your secondary pipeline (e.g., *Jarvis* or *Home Assistant*).
-   - **Wake word 2 (Slot 2)**: Select which wake word triggers Slot 2 (e.g., *Okay Nabu* or your uploaded custom model).
+   - **Assistant 2 (Slot 2)**: Select your secondary pipeline (e.g., *Home Assistant* or *Jarvis*).
+   - **Wake word 2 (Slot 2)**: Select which wake word triggers Slot 2 (e.g., *Bumblebee*, *Hey Gizmo*, *Hey Chief*, *Oh Captain*, *OK Computer*, *Little Wizard*, or your uploaded custom model).
 4. On the device card, customize your audio feedback across 17 pre-compiled acoustic themes:
    - **Wake Chime**: *Bell Ping*, *Modern Chime*, *Crystal Glass*, *Warm Kalimba*, *Meditation Bell*, *Marimba*, *Subtle Beep*, *Bamboo Chime*, *Tibetan Bowl*, *Acoustic Harp*, *Woodblock*, *Ceramic Bell*, *Neon Shimmer*, *Prism Ping*, *Cyber Bloom*, *Quantum Beep*, *Aero Chime*, or *Silent*.
    - **Processing Sound**: *Spinner*, *Pulse*, *Sonar*, *Tick*, *Typewriter*, *Clockwork* (seamless zero-gap loop), *Water Droplets*, *Raindrops*, *Forest Stream*, *Campfire Ember*, *Shishi-Odoshi*, *Soft Footsteps*, *Radar Ping*, *Data Crunch*, *Telemetry Blip*, *Quantum Flux*, *Retro Terminal*, or *Silent*.
@@ -143,16 +143,16 @@ Once the board has rebooted into ESPHome, connect using either method:
 
 In modern Home Assistant voice environments, a single satellite device often needs to address multiple distinct personas, languages, or language models. For instance:
 - *"Mr. Clemens"* can invoke a specialized, literary Mark Twain Ollama LLM persona.
-- *"Okay Nabu"* can invoke the fast local Home Assistant pipeline for home automation commands.
-- *"Hey Jarvis"* or a custom trained model can invoke an uncensored cloud conversational pipeline.
+- *"OK Computer"* or *"Bumblebee"* can invoke the fast local Home Assistant pipeline for home automation commands.
+- *"Hey Gizmo"*, *"Hey Chief"*, *"Oh Captain"*, or *"Little Wizard"* can invoke specialized cloud conversational or smart-home agents.
 
 ### How On-Device Concurrent Multi-Wake-Word Works
 `esphome-satellite` harnesses the ESP32-S3 vector instructions and hardware neural network accelerator to evaluate up to **3 wake word models concurrently in real time**.
 
-1. **Model Advertisement**: When the satellite connects to Home Assistant over the encrypted Native API, the firmware exposes all available on-device models (*Mr. Clemens*, *Okay Nabu*, plus any custom models loaded from dedicated flash partitions).
+1. **Model Advertisement**: When the satellite connects to Home Assistant over the encrypted Native API, the firmware exposes all available on-device models (*Mr. Clemens*, *Bumblebee*, *Hey Gizmo*, *Hey Chief*, *Oh Captain*, *OK Computer*, *Little Wizard*, plus any custom models loaded from dedicated flash partitions).
 2. **Dual-Assistant Configuration**: In the Home Assistant device panel, Home Assistant maps these models into dual-assistant slots:
    - **Assistant (Slot 1)**: Maps your primary pipeline (e.g. *Mark Twain*) to its trigger wake word (e.g. *Mr. Clemens*).
-   - **Assistant 2 (Slot 2)**: Maps your secondary pipeline (e.g. *Jarvis* or *Home Assistant*) to its trigger wake word (e.g. *Okay Nabu*).
+   - **Assistant 2 (Slot 2)**: Maps your secondary pipeline (e.g. *Home Assistant* or *Jarvis*) to its trigger wake word (e.g. *Bumblebee* or *OK Computer*).
 3. **Zero-Latency Routing**: When speech is detected, the on-device microWakeWord engine identifies which specific wake word was matched and transmits the recognized phrase (`wake_word_phrase`) directly inside the `VoiceAssistantRequest` packet.
 4. **Deterministic Server Dispatch**: Home Assistant inspects the incoming phrase and automatically dispatches the audio stream to the exact pipeline bound to that wake word slot. No complex automations, blueprint scripts, or server-side audio rerouting required.
 
@@ -568,14 +568,31 @@ To prevent acoustic overfitting and address gender/age detection disparities, th
 - **Adolescent / Youth (10%)**: Higher vocal tracts and faster cadence (`Mimi`, `Liam`, `Fin`, `Junior`).
 - **Accents (10%)**: British, Irish, Australian, Transatlantic, and Swedish-English intonations (`Dorothy`, `Alice`, `Charlie`, `Matilda`, `Moira`).
 
-### Exhaustive Phonetic Variations
-The generator produces combinatorial phonetic permutations for common wake phrases to cover varied regional pronunciations and elisions:
-- **Okay Nabu**:
-  - Prefixes: `okay`, `ok`, `hey`, `ay`, `kay`, and bare phrase.
-  - Surnames: `nabu`, `nahboo`, `na boo`, `nayboo`, `nah bu`, `naboo`.
-- **Mr. Clemens**:
-  - Honorifics: `mister`, `mr`, `mr.`, `mista`, `mist ur`, `miss ter`, `misster`, `miss tack`, `mist ack`.
-  - Surnames: `clemens`, `clemen`, `clemence`, `claman`, `clem ins`, `lemons`, `klemens`, `clay mens`, `claymen`.
+### Built-in Wake Words & Curated Phonetic Variations
+
+`esphome-satellite` comes with 7 built-in wake words, each featuring an extensive list of curated phonetic variations, acoustic respellings, and conversational prefixes for training microWakeWord models with maximum generalization:
+
+1. **Mr. Clemens** (`mister_clemens`) — 35 phonetic variations:
+   - Primary: *mister clemens*, *hey mister clemens*, *ok mister clemens*, *okay mister clemens*, *hi mister clemens*, *mr clemens*
+   - Phonetic respellings: *mistah clemens*, *mistuh clemens*, *mister clemons*, *misterclemens*, *mistr clemens*, *meester clemens*, *missed her clemens*, *miss tur cleh muns*, *mis ter clem ens*, *mstr clemens*, *mister klemens*, *mrclemens*, *meahster clemens*, etc.
+2. **Bumblebee** (`bumblebee`) — 29 phonetic variations:
+   - Primary: *bumblebee*, *hey bumblebee*, *ok bumblebee*, *okay bumblebee*, *hi bumblebee*
+   - Phonetic respellings: *bum bull bee*, *bumbulbee*, *bummle bee*, *bammel bee*, *hey bumbelbee*, *bum bl bee*, *bumbolbee*, *ok bummlebee*, *hi bummbellbee*, *bahmble bee*, *bomblebee*, *bumbalbee*, *bumblbee*, *bummbell bee*, etc.
+3. **Hey Gizmo** (`hey_gizmo`) — 30 phonetic variations:
+   - Primary: *hey gizmo*, *gizmo*, *ok gizmo*, *okay gizmo*, *hi gizmo*
+   - Phonetic respellings: *hey giz mo*, *heygizmo*, *hay gizmo*, *hey gizz mo*, *ok gizzmo*, *hi gizz moe*, *heygeezmo*, *haygismo*, *gismo*, *hey jizmo*, *okay gizz moe*, *hey guizmo*, *heygezmo*, *giz moe*, *hey gihz mo*, *hay gihzmoh*, *hey gismoe*, etc.
+4. **Hey Chief** (`hey_chief`) — 31 phonetic variations:
+   - Primary: *hey chief*, *chief*, *ok chief*, *okay chief*, *hi chief*
+   - Phonetic respellings: *heychief*, *hay chief*, *hey cheef*, *a chief*, *ey chief*, *ay cheef*, *hay cheef*, *hey cheaf*, *hey chafe*, *ok cheef*, *hi cheef*, *hey chif*, *hay chif*, *ok chif*, *hey tchief*, *hey sheef*, *hey chee eff*, *hey cheeve*, etc.
+5. **Oh Captain** (`oh_captain`) — 32 phonetic variations:
+   - Primary: *oh captain*, *captain*, *hey captain*, *ok captain*, *okay captain*, *hi captain*, *o captain*
+   - Phonetic respellings: *oh cap ten*, *oh cap in*, *oh capn*, *oh cap tin*, *ocapn*, *ohcapn*, *o captin*, *oh capitan*, *ohcaptain*, *hey capn*, *hey cap tin*, *oh kep ten*, *o keptin*, *oh cap ton*, *cap ton*, *oh cappin*, *oak happen*, *oh cap den*, etc.
+6. **OK Computer** (`ok_computer`) — 34 phonetic variations:
+   - Primary: *ok computer*, *okay computer*, *computer*, *hey computer*, *hi computer*
+   - Phonetic respellings: *oh kay computer*, *o k computer*, *okcomputer*, *okaycomputer*, *oh kay com pyoo ter*, *o kay com pu ter*, *ok compyooter*, *ok puter*, *kay puter*, *o kay kahm pyoo ter*, *oak a computer*, *ok cumputer*, *ok compudrr*, *ok compooter*, *okay compooder*, *ok computr*, etc.
+7. **Little Wizard** (`little_wizard`) — 35 phonetic variations:
+   - Primary: *little wizard*, *hey little wizard*, *ok little wizard*, *okay little wizard*, *hi little wizard*, *lil wizard*
+   - Phonetic respellings: *littlewizard*, *hey lil wizard*, *liddle wizard*, *liddl wizzard*, *lit tull wiz urd*, *lih tull wiz ard*, *hey liddle wizard*, *ok lil wizard*, *hi liddo wizzard*, *okay liddl wizard*, *hey litl wizrd*, *litl wizrd*, *liddle whizz urd*, *lee tul wee zard*, *lituhl wizard*, *lid ul wiz erd*, *litul wizerd*, *liddo wizard*, *lit uhl wizz urd*, etc.
 
 ### Zero-Shot Household Voice Cloning & Additive Composition
 To eliminate acoustic bias and maximize detection reliability for specific family members without sacrificing generalization:
@@ -600,7 +617,7 @@ Run the interactive terminal wizard:
 python3 scripts/generate_wakeword_corpus.py --wizard
 ```
 The wizard prompts for:
-1. Model target (*Okay Nabu*, *Mr. Clemens*, or Custom phrase)
+1. Model target (*Mr. Clemens*, *Bumblebee*, *Hey Gizmo*, *Hey Chief*, *Oh Captain*, *OK Computer*, *Little Wizard*, or Custom phrase)
 2. Synthesis backend (*ElevenLabs API*, *macOS say*, or *F5-TTS*)
 3. Household voice sample ingestion and dataset allocation ratio
 4. Sample count (e.g. 50, 500, or 2,000)
@@ -618,12 +635,12 @@ python3 scripts/generate_wakeword_corpus.py \
 # Generate 500 samples using ElevenLabs API with 50% household voice cloning
 export ELEVENLABS_API_KEY="your-api-key"
 python3 scripts/generate_wakeword_corpus.py \
-  --model okay_nabu \
+  --model ok_computer \
   --backend elevenlabs \
   --household-dir data/household_voices \
   --household-ratio 0.50 \
   --count 500 \
-  --output data/okay_nabu/positive
+  --output data/ok_computer/positive
 
 # Generate using local F5-TTS zero-shot voice cloning
 python3 scripts/generate_wakeword_corpus.py \
@@ -668,8 +685,8 @@ Every synthesized audio file is automatically normalized, trimmed of leading/tra
 
 | Entity ID | Domain | Type / Options | Description |
 |---|---|---|---|
-| `select.speech_slot_1_wake_word` | `select` | `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model assigned to Assistant 1 (Slot 1). |
-| `select.speech_slot_2_wake_word` | `select` | `Disabled`, `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model assigned to Assistant 2 (Slot 2). |
+| `select.speech_slot_1_wake_word` | `select` | Built-in (`Mr. Clemens`, `Bumblebee`, `Hey Gizmo`, `Hey Chief`, `Oh Captain`, `OK Computer`, `Little Wizard`), Custom | Wake word model assigned to Assistant 1 (Slot 1). |
+| `select.speech_slot_2_wake_word` | `select` | `Disabled`, Built-in (`Mr. Clemens`, `Bumblebee`, `Hey Gizmo`, `Hey Chief`, `Oh Captain`, `OK Computer`, `Little Wizard`), Custom | Wake word model assigned to Assistant 2 (Slot 2). |
 | `select.speech_slot_1_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Probability cutoff sensitivity for Slot 1 detection. |
 | `select.speech_slot_2_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Probability cutoff sensitivity for Slot 2 detection. |
 | `number.speech_wake_window_size` | `number` | `2` – `5` frames (default `3`) | Detection window length; lower values catch fast female syllables. |
