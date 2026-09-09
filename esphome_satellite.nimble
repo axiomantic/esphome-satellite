@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.5.0"
+version       = "0.6.0"
 author        = "Elijah Rust"
 description   = "An on-device state supervisor for ESPHome voice satellites that eliminates audio glitches, race conditions, and stuck states"
 license       = "MIT"
