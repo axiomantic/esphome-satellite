@@ -42,12 +42,15 @@ import itertools
 import random
 import select
 import tempfile
+import shutil
+import shlex
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Union, Any
 
 try:
     import questionary
     from questionary import Choice, Separator
+    from rich import box
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
@@ -274,16 +277,262 @@ def parse_variations(raw_text: str) -> List[str]:
     """
     Parses comma-separated or newline-delimited phonetic variations.
     Normalizes whitespace and removes duplicates while preserving order.
+    Ignores lines starting with '#' (comments) and empty lines.
     """
     lines = raw_text.replace(",", "\n").splitlines()
     cleaned: List[str] = []
     seen = set()
     for line in lines:
-        c = " ".join(line.strip().lower().split())
+        line_str = line.strip()
+        if not line_str or line_str.startswith("#"):
+            continue
+        c = " ".join(line_str.lower().split())
         if c and c not in seen:
             seen.add(c)
             cleaned.append(c)
     return cleaned
+
+
+def display_variations_table(phrases: List[str], model_name: str, console: Optional[Any] = None) -> None:
+    """Renders phonetic variations in a neat multi-column terminal table."""
+    if not HAVE_TUI:
+        return
+    if console is None:
+        console = Console()
+
+    num = len(phrases)
+    cols = 3 if num >= 15 else (2 if num >= 6 else 1)
+
+    table = Table(
+        title=f"Phonetic Variations for '{model_name}' ({num} total)",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        show_lines=False,
+    )
+    for _ in range(cols):
+        table.add_column("#", style="dim", width=4, justify="right")
+        table.add_column("Variation", style="bold white")
+
+    per_col = (num + cols - 1) // cols
+    for row_idx in range(per_col):
+        row_cells = []
+        for col_idx in range(cols):
+            idx = row_idx + col_idx * per_col
+            if idx < num:
+                row_cells.extend([str(idx + 1), phrases[idx]])
+            else:
+                row_cells.extend(["", ""])
+        table.add_row(*row_cells)
+
+    console.print(table)
+
+
+def edit_phrases_in_editor(phrases: List[str]) -> List[str]:
+    """
+    Opens the current phrases in the user's preferred text editor ($EDITOR, $VISUAL, nano, or vim).
+    Returns the parsed phrases after editing, or original phrases if unchanged or aborted.
+    """
+    header = (
+        "# microWakeWord Phonetic Variations Review & Editor\n"
+        "# Enter one phonetic variation per line (or comma-separated).\n"
+        "# Lines starting with '#' and blank lines are ignored.\n"
+        "# Save and exit your editor when finished.\n"
+        "# ---------------------------------------------------------------------------\n"
+    )
+    temp_fd, temp_path_str = tempfile.mkstemp(suffix=".txt", prefix="mww_variations_")
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            f.write(header)
+            f.write("\n".join(phrases))
+            f.write("\n")
+
+        editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+        if not editor:
+            for candidate in ["nano", "vim", "vi", "emacs", "code -w", "subl -w"]:
+                candidate_bin = candidate.split()[0]
+                if shutil.which(candidate_bin):
+                    editor = candidate
+                    break
+        if not editor:
+            editor = "nano" if shutil.which("nano") else "vi"
+
+        cmd = shlex.split(editor) + [temp_path_str]
+        res = subprocess.call(cmd)
+        if res != 0:
+            print(f"[Warning] Editor exited with non-zero status code: {res}")
+
+        content = Path(temp_path_str).read_text(encoding="utf-8")
+        new_phrases = parse_variations(content)
+        if new_phrases:
+            return new_phrases
+        print("[Warning] No valid phrases found in edited file; keeping existing list.")
+        return phrases
+    except Exception as exc:
+        print(f"[Warning] Failed to edit variations in external editor: {exc}")
+        return phrases
+    finally:
+        try:
+            os.unlink(temp_path_str)
+        except OSError:
+            pass
+
+
+def remove_phrases_interactive(phrases: List[str]) -> List[str]:
+    """Allows user to select phrases to remove using checkboxes."""
+    if len(phrases) <= 1:
+        if HAVE_TUI:
+            Console().print("[yellow]Cannot remove: at least one phrase is required.[/yellow]")
+        else:
+            print("Cannot remove: at least one phrase is required.")
+        return phrases
+
+    choices = [Choice(title=p, value=p) for p in phrases]
+    selected_to_remove = questionary.checkbox(
+        "Select variations to REMOVE (Space to toggle, Enter to confirm):",
+        choices=choices,
+    ).ask()
+
+    if not selected_to_remove:
+        return phrases
+
+    remaining = [p for p in phrases if p not in set(selected_to_remove)]
+    if not remaining:
+        if HAVE_TUI:
+            Console().print("[yellow]Cannot remove all phrases. At least one phrase is required.[/yellow]")
+        else:
+            print("Cannot remove all phrases. At least one phrase is required.")
+        return phrases
+
+    return remaining
+
+
+def add_phrases_interactive(phrases: List[str], console: Optional[Any] = None) -> List[str]:
+    """Prompts user to type or paste new phonetic variations."""
+    raw = questionary.text(
+        "Enter new variation(s) [separated by commas or newlines]:"
+    ).ask()
+
+    if not raw or not raw.strip():
+        return phrases
+
+    new_items = parse_variations(raw)
+    if not new_items:
+        return phrases
+
+    seen = set(phrases)
+    updated = list(phrases)
+    added_count = 0
+    for item in new_items:
+        if item not in seen:
+            seen.add(item)
+            updated.append(item)
+            added_count += 1
+
+    msg = f"Added {added_count} new variation(s)."
+    if console:
+        console.print(f"[green]{msg}[/green]")
+    else:
+        print(msg)
+
+    return updated
+
+
+def review_phrases_fallback(phrases: List[str], model_name: str) -> List[str]:
+    """Text-based review and editing loop for environments without questionary."""
+    current_phrases = list(phrases)
+    while True:
+        print(f"\nCurrent Phonetic Variations for '{model_name}' ({len(current_phrases)} total):")
+        for idx, p in enumerate(current_phrases, 1):
+            print(f"  {idx:2d}. {p}")
+        print("\nOptions:")
+        print(f"  [1] Accept variations as-is ({len(current_phrases)} phrases) [default]")
+        print("  [2] Add more variations (comma-separated)")
+        print("  [3] Edit full list in text editor")
+        print("  [4] Remove variations by numbers (comma-separated, e.g. '1, 3, 5')")
+        choice = input("Select [1-4, default=1]: ").strip() or "1"
+        if choice == "1":
+            break
+        elif choice == "2":
+            new_text = input("Enter variations (comma-separated): ").strip()
+            if new_text:
+                new_items = parse_variations(new_text)
+                seen = set(current_phrases)
+                for item in new_items:
+                    if item not in seen:
+                        seen.add(item)
+                        current_phrases.append(item)
+        elif choice == "3":
+            current_phrases = edit_phrases_in_editor(current_phrases)
+        elif choice == "4":
+            rem_str = input("Enter numbers to remove (comma-separated): ").strip()
+            if rem_str:
+                indices_to_remove = set()
+                for token in rem_str.split(","):
+                    t = token.strip()
+                    if t.isdigit():
+                        indices_to_remove.add(int(t) - 1)
+                remaining = [p for i, p in enumerate(current_phrases) if i not in indices_to_remove]
+                if remaining:
+                    current_phrases = remaining
+                else:
+                    print("Cannot remove all phrases. At least one phrase is required.")
+    return current_phrases
+
+
+def review_phrases_interactive(phrases: List[str], model_name: str, console: Optional[Any] = None) -> List[str]:
+    """
+    Presents an interactive review and editing loop for phonetic variations.
+    Allows accepting, adding, removing, loading from file, or editing in $EDITOR.
+    """
+    if not HAVE_TUI:
+        return review_phrases_fallback(phrases, model_name)
+
+    if console is None:
+        console = Console()
+
+    current_phrases = list(phrases)
+
+    while True:
+        console.print()
+        display_variations_table(current_phrases, model_name, console)
+        console.print()
+
+        action = questionary.select(
+            f"Review & Edit Phonetic Variations ({len(current_phrases)} phrases):",
+            choices=[
+                Choice(f"Accept variations as-is ({len(current_phrases)} phrases - proceed)", value="accept"),
+                Choice("Add more variations (type or paste)", value="add"),
+                Choice("Remove variations (select with checkboxes)", value="remove"),
+                Choice("Edit full list in text editor ($EDITOR / nano)", value="edit"),
+                Choice("Load additional variations from a text file", value="file"),
+            ]
+        ).ask()
+
+        if action is None or action == "accept":
+            break
+        elif action == "add":
+            current_phrases = add_phrases_interactive(current_phrases, console)
+        elif action == "remove":
+            current_phrases = remove_phrases_interactive(current_phrases)
+        elif action == "edit":
+            current_phrases = edit_phrases_in_editor(current_phrases)
+        elif action == "file":
+            f_path_str = questionary.text("Path to text file containing variations:").ask()
+            f_path = clean_path(f_path_str)
+            if f_path and f_path.is_file():
+                added_from_file = parse_variations(f_path.read_text(encoding="utf-8"))
+                seen = set(current_phrases)
+                new_count = 0
+                for p in added_from_file:
+                    if p not in seen:
+                        seen.add(p)
+                        current_phrases.append(p)
+                        new_count += 1
+                console.print(f"[green]Loaded {new_count} new variation(s) from '{f_path.name}'.[/green]")
+            else:
+                console.print(f"[yellow]File not found: {f_path_str}[/yellow]")
+
+    return current_phrases
 
 
 # ---------------------------------------------------------------------------
@@ -1348,7 +1597,11 @@ def run_tui_wizard():
         if not phrases:
             phrases = [model_name.replace("_", " ")]
 
-    console.print(f"[bold green]Loaded {len(phrases)} phonetic variation(s) for '{model_name}':[/bold green] [dim]{', '.join(phrases[:8])}{'...' if len(phrases) > 8 else ''}[/dim]\n")
+    phrases = review_phrases_interactive(phrases, model_name, console)
+    if not phrases:
+        phrases = [model_name.replace("_", " ")]
+
+    console.print(f"[bold green]Finalized {len(phrases)} phonetic variation(s) for '{model_name}':[/bold green] [dim]{', '.join(phrases[:8])}{'...' if len(phrases) > 8 else ''}[/dim]\n")
 
     # 2. Synthesis Backend
     backend_choice = questionary.select(
@@ -1611,6 +1864,12 @@ def _run_fallback_wizard():
         else:
             phrases = [model_name.replace("_", " ")]
 
+    phrases = review_phrases_fallback(phrases, model_name)
+    if not phrases:
+        phrases = [model_name.replace("_", " ")]
+
+    print(f"\nFinalized {len(phrases)} phonetic variation(s) for '{model_name}'.")
+
     print("\n2. Select Synthesis Backend:")
     print("   [1] ElevenLabs API")
     print("   [2] macOS 'say'")
@@ -1699,6 +1958,8 @@ def main():
                         help="List available built-in / library voices for the chosen backend and exit")
     parser.add_argument("--force", action="store_true",
                         help="Force regeneration of audio samples, bypassing cache")
+    parser.add_argument("--review-phrases", action="store_true",
+                        help="Interactively review and edit phonetic variations before synthesizing")
     parser.add_argument("--wizard", action="store_true",
                         help="Run interactive TUI setup wizard")
 
@@ -1735,6 +1996,11 @@ def main():
             parser.error("--phrase or --phrase-file is required when --model is custom")
     else:
         phrases = []
+
+    if args.review_phrases:
+        phrases = review_phrases_interactive(phrases, args.model)
+        if not phrases:
+            phrases = [args.model.replace("_", " ")]
 
     household_voices = load_household_voices(
         household_dir=args.household_dir,

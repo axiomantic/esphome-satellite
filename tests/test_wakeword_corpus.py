@@ -33,9 +33,21 @@ from generate_wakeword_corpus import (
     is_corpus_complete,
     get_available_builtin_voices,
     parse_variations,
+    edit_phrases_in_editor,
+    remove_phrases_interactive,
+    add_phrases_interactive,
+    display_variations_table,
+    review_phrases_fallback,
     PIPELINE_VERSION,
     AUDIO_PIPELINE_PARAMS,
 )
+from unittest.mock import patch, MagicMock
+
+try:
+    import questionary
+    HAVE_QUESTIONARY = True
+except ImportError:
+    HAVE_QUESTIONARY = False
 
 
 class TestWakewordCorpus(unittest.TestCase):
@@ -472,6 +484,95 @@ class TestWakewordCorpus(unittest.TestCase):
         self.assertEqual(parse_variations("hey  computer, hey computer\nHEY COMPUTER"), ["hey computer"])
         # Empty input
         self.assertEqual(parse_variations(""), [])
+
+    def test_parse_variations_comments(self):
+        text = (
+            "# Header comment line\n"
+            "mister clemens\n"
+            "  # Indented comment line\n"
+            "hey clemens, # inline is preserved or handled\n"
+            "\n"
+            "ok clemens\n"
+        )
+        parsed = parse_variations(text)
+        self.assertIn("mister clemens", parsed)
+        self.assertIn("hey clemens", parsed)
+        self.assertIn("ok clemens", parsed)
+        # Ensure pure comment lines are filtered out
+        for p in parsed:
+            self.assertFalse(p.startswith("#"))
+
+    def test_edit_phrases_in_editor(self):
+        orig_env = os.environ.get("EDITOR")
+        try:
+            # Point EDITOR to a sed command that transforms the phrase
+            os.environ["EDITOR"] = "sed -i.bak s/mister/master/g"
+            initial = ["mister clemens", "hey clemens"]
+            edited = edit_phrases_in_editor(initial)
+            self.assertEqual(edited, ["master clemens", "hey clemens"])
+
+            # If editor empties the file, initial phrases must be retained
+            os.environ["EDITOR"] = "cp /dev/null"
+            retained = edit_phrases_in_editor(initial)
+            self.assertEqual(retained, initial)
+        finally:
+            if orig_env is not None:
+                os.environ["EDITOR"] = orig_env
+            else:
+                os.environ.pop("EDITOR", None)
+
+    @unittest.skipUnless(HAVE_QUESTIONARY, "questionary not installed")
+    def test_remove_phrases_interactive(self):
+        initial = ["phrase one", "phrase two", "phrase three"]
+        with patch("questionary.checkbox") as mock_checkbox:
+            # Simulate selecting 'phrase two' to remove
+            mock_checkbox.return_value.ask.return_value = ["phrase two"]
+            remaining = remove_phrases_interactive(initial)
+            self.assertEqual(remaining, ["phrase one", "phrase three"])
+
+            # Simulate selecting ALL phrases (must be rejected to keep at least one)
+            mock_checkbox.return_value.ask.return_value = ["phrase one", "phrase two", "phrase three"]
+            retained = remove_phrases_interactive(initial)
+            self.assertEqual(retained, initial)
+
+            # Simulate cancelling (None)
+            mock_checkbox.return_value.ask.return_value = None
+            cancelled = remove_phrases_interactive(initial)
+            self.assertEqual(cancelled, initial)
+
+    @unittest.skipUnless(HAVE_QUESTIONARY, "questionary not installed")
+    def test_add_phrases_interactive(self):
+        initial = ["phrase one", "phrase two"]
+        with patch("questionary.text") as mock_text:
+            # Simulate adding a comma-separated list with one duplicate
+            mock_text.return_value.ask.return_value = "phrase three, phrase one, phrase four"
+            updated = add_phrases_interactive(initial)
+            self.assertEqual(updated, ["phrase one", "phrase two", "phrase three", "phrase four"])
+
+            # Simulate empty input
+            mock_text.return_value.ask.return_value = "   "
+            unchanged = add_phrases_interactive(initial)
+            self.assertEqual(unchanged, initial)
+
+    def test_display_variations_table(self):
+        # Must execute cleanly across single, dual, and multi-column groupings
+        for count in [1, 5, 20]:
+            sample_phrases = [f"variant {i}" for i in range(count)]
+            display_variations_table(sample_phrases, "test_model")
+
+    def test_review_phrases_fallback_accept(self):
+        initial = ["test variant"]
+        with patch("builtins.input", return_value="1"):
+            result = review_phrases_fallback(initial, "test_model")
+            self.assertEqual(result, initial)
+
+    def test_review_phrases_fallback_add(self):
+        initial = ["first variant"]
+        # Step 1: choose option 2 (add), Step 2: enter new variant, Step 3: choose option 1 (accept)
+        inputs = iter(["2", "second variant, third variant", "1"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            result = review_phrases_fallback(initial, "test_model")
+            self.assertEqual(result, ["first variant", "second variant", "third variant"])
 
 
 if __name__ == "__main__":

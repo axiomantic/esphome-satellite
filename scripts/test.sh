@@ -30,7 +30,11 @@ nim c -r tests/test_cancellation.nim
 rm -f tests/test_cancellation
 
 echo "=== Running 8. Synthetic wake word corpus generator tests ==="
-python3 -m unittest tests/test_wakeword_corpus.py
+if [ -x ".venv/bin/python" ]; then
+  .venv/bin/python -m unittest tests/test_wakeword_corpus.py
+else
+  python3 -m unittest tests/test_wakeword_corpus.py
+fi
 
 echo "=== Running 9. NVS preference migration and hash integrity tests ==="
 nim c -r tests/test_nvs_migration.nim
