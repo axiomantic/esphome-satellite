@@ -1797,9 +1797,9 @@ def run_tui_wizard():
     else:
         custom_input = questionary.text(
             "Enter custom wake word identifier (e.g. 'hey_computer', 'jarvis'):",
-            default="custom_wake_word"
+            default=""
         ).ask()
-        if not custom_input:
+        if not custom_input or not custom_input.strip():
             console.print("[dim]Aborted.[/dim]")
             return
         model_name = custom_input.strip().lower().replace(" ", "_")
