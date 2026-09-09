@@ -26,6 +26,13 @@ from generate_wakeword_corpus import (
     VoiceSpec,
     F5TTSBackend,
     ELEVENLABS_VOICES,
+    VoiceCacheManager,
+    compute_file_hash,
+    get_pipeline_signature,
+    get_sample_cache_key,
+    is_corpus_complete,
+    PIPELINE_VERSION,
+    AUDIO_PIPELINE_PARAMS,
 )
 
 
@@ -260,6 +267,128 @@ class TestWakewordCorpus(unittest.TestCase):
         out_path = Path("/tmp/f5_out.wav")
         res = backend.synthesize("test", missing_path, "ref text", out_path)
         self.assertFalse(res)
+
+    def test_compute_file_hash(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(b"SAMPLE AUDIO CONTENT FOR HASHING")
+            temp_path = Path(f.name)
+        try:
+            h = compute_file_hash(temp_path)
+            self.assertEqual(len(h), 64)
+            # Verify deterministic hash
+            import hashlib
+            expected = hashlib.sha256(b"SAMPLE AUDIO CONTENT FOR HASHING").hexdigest()
+            self.assertEqual(h, expected)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
+    def test_pipeline_signature_determinism(self):
+        sig1 = get_pipeline_signature("f5_tts")
+        sig2 = get_pipeline_signature("f5_tts")
+        sig_eleven = get_pipeline_signature("elevenlabs")
+        self.assertEqual(sig1, sig2)
+        self.assertNotEqual(sig1, sig_eleven)
+        self.assertEqual(len(sig1), 16)
+
+    def test_voice_cache_manager_reentrancy(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_file = Path(tmpdir) / "test_voices.json"
+            vcm = VoiceCacheManager(cache_file)
+
+            name = "Test Partner"
+            audio_hash = "112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00"
+            transcript = "This is a reference transcript"
+
+            # Initially uncached
+            cached = vcm.get_trained_voice("f5_tts", name, audio_hash, transcript)
+            self.assertIsNone(cached)
+
+            # Register trained voice model
+            vcm.register_trained_voice("f5_tts", name, audio_hash, transcript, "voice_model_id_123")
+
+            # Reload manager from disk to verify persistence
+            vcm2 = VoiceCacheManager(cache_file)
+            cached2 = vcm2.get_trained_voice("f5_tts", name, audio_hash, transcript)
+            self.assertIsNotNone(cached2)
+            self.assertEqual(cached2["voice_id"], "voice_model_id_123")
+            self.assertEqual(cached2["audio_hash"], audio_hash)
+            self.assertEqual(cached2["transcript"], transcript)
+
+            # Different audio hash (modified training data) must miss cache
+            modified_hash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            miss_hash = vcm2.get_trained_voice("f5_tts", name, modified_hash, transcript)
+            self.assertIsNone(miss_hash)
+
+            # Different transcript must miss cache
+            miss_trans = vcm2.get_trained_voice("f5_tts", name, audio_hash, "Changed transcript")
+            self.assertIsNone(miss_trans)
+
+    def test_get_sample_cache_key_encodes_audio_hash_and_transcript(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(b"AUDIO CONTENT 1")
+            path1 = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(b"AUDIO CONTENT 2")
+            path2 = Path(f.name)
+
+        try:
+            hv1 = HouseholdVoice(name="User", audio_path=path1, transcript="Hello world")
+            vspec1 = VoiceSpec(voice_id="user", voice_name="User", household=hv1)
+
+            hv2 = HouseholdVoice(name="User", audio_path=path2, transcript="Hello world")
+            vspec2 = VoiceSpec(voice_id="user", voice_name="User", household=hv2)
+
+            hv3 = HouseholdVoice(name="User", audio_path=path1, transcript="Different text")
+            vspec3 = VoiceSpec(voice_id="user", voice_name="User", household=hv3)
+
+            key1_a = get_sample_cache_key("f5_tts", vspec1, "okay nabu")
+            key1_b = get_sample_cache_key("f5_tts", vspec1, "okay nabu")
+            key2 = get_sample_cache_key("f5_tts", vspec2, "okay nabu")
+            key3 = get_sample_cache_key("f5_tts", vspec3, "okay nabu")
+
+            # Deterministic for identical parameters
+            self.assertEqual(key1_a, key1_b)
+            # Different training data hash must produce different cache key
+            self.assertNotEqual(key1_a, key2)
+            # Different transcript must produce different cache key
+            self.assertNotEqual(key1_a, key3)
+        finally:
+            if path1.exists():
+                path1.unlink()
+            if path2.exists():
+                path2.unlink()
+
+    def test_is_corpus_complete_validation(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            sample_file = out_dir / "sample_001.wav"
+            sample_file.write_bytes(b"RIFF" + b"\x00" * 50)
+
+            hv = HouseholdVoice(name="Partner", audio_path=Path("/fake.wav"), audio_hash="hash123")
+            pipeline_sig = get_pipeline_signature("f5_tts")
+
+            manifest_data = {
+                "model": "mister_clemens",
+                "backend": "f5_tts",
+                "pipeline_version": PIPELINE_VERSION,
+                "pipeline_signature": pipeline_sig,
+                "total_samples": 1,
+                "household_voice_hashes": {"Partner": "hash123"},
+                "samples": [{"filename": "sample_001.wav"}]
+            }
+            (out_dir / "manifest.json").write_text(json.dumps(manifest_data), encoding="utf-8")
+
+            # Must be complete
+            self.assertTrue(is_corpus_complete(out_dir, 1, "mister_clemens", "f5_tts", [hv]))
+
+            # If voice hash changed (training data modified), must not be considered complete
+            hv_modified = HouseholdVoice(name="Partner", audio_path=Path("/fake.wav"), audio_hash="hash999")
+            self.assertFalse(is_corpus_complete(out_dir, 1, "mister_clemens", "f5_tts", [hv_modified]))
+
+            # If count expectation is higher, must not be complete
+            self.assertFalse(is_corpus_complete(out_dir, 2, "mister_clemens", "f5_tts", [hv]))
 
 
 if __name__ == "__main__":

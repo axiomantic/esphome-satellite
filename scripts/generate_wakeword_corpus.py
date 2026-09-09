@@ -48,6 +48,67 @@ from typing import List, Dict, Tuple, Optional, Union, Any
 CACHE_DIR = Path(".cache/mww_corpus")
 
 # ---------------------------------------------------------------------------
+# Pipeline Versioning & Training Parameters Specification
+# ---------------------------------------------------------------------------
+# Semantic version for the audio synthesis and feature pipeline.
+# Bump this whenever DSP post-processing, sample rates, silence trimming, or
+# model inference parameters are modified to invalidate stale derived models.
+PIPELINE_VERSION = "1.0.0"
+
+AUDIO_PIPELINE_PARAMS = {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "sample_format": "s16le",
+    "peak_norm_dbfs": -1.0,
+    "silence_trim_db": -40.0,
+    "silence_trim_duration_s": 0.15,
+}
+
+BACKEND_PARAMS = {
+    "f5_tts": {
+        "model": "F5-TTS",
+        "vocoder": "vocos",
+    },
+    "elevenlabs": {
+        "model_id": "eleven_multilingual_v2",
+        "stability": 0.50,
+        "similarity_boost": 0.75,
+    },
+    "macos_say": {
+        "rate": 175,
+    }
+}
+
+
+def compute_file_hash(path: Path) -> str:
+    """Computes deterministic SHA-256 hash of a file for content-addressed verification."""
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            while chunk := f.read(65536):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception as e:
+        print(f"[Warning] Failed to hash file '{path}': {e}", file=sys.stderr)
+        return ""
+
+
+def get_pipeline_signature(backend_name: str) -> str:
+    """
+    Computes a deterministic hash of the pipeline version, audio DSP parameters,
+    and backend synthesis parameters.
+    """
+    spec = {
+        "pipeline_version": PIPELINE_VERSION,
+        "audio_params": AUDIO_PIPELINE_PARAMS,
+        "backend": backend_name,
+        "backend_params": BACKEND_PARAMS.get(backend_name, {})
+    }
+    spec_json = json.dumps(spec, sort_keys=True)
+    return hashlib.sha256(spec_json.encode("utf-8")).hexdigest()[:16]
+
+
+# ---------------------------------------------------------------------------
 # Curated Voice Registry
 # ---------------------------------------------------------------------------
 ELEVENLABS_VOICES = {
@@ -180,11 +241,92 @@ def encode_multipart_formdata(fields: Dict[str, str], files: List[Tuple[str, Pat
 # Household Member Voice Ingestion
 # ---------------------------------------------------------------------------
 class HouseholdVoice:
-    def __init__(self, name: str, audio_path: Path, transcript: str = "", voice_id: Optional[str] = None):
+    def __init__(
+        self,
+        name: str,
+        audio_path: Path,
+        transcript: str = "",
+        voice_id: Optional[str] = None,
+        audio_hash: Optional[str] = None
+    ):
         self.name = name
         self.audio_path = Path(audio_path)
         self.transcript = transcript
         self.voice_id = voice_id
+        self.audio_hash = audio_hash or (compute_file_hash(self.audio_path) if self.audio_path.is_file() else "")
+
+
+class VoiceCacheManager:
+    """
+    Manages persistent, reentrant caching of trained voice models and cloned profiles.
+    Encodes:
+    - PIPELINE_VERSION (explicit semantic version)
+    - AUDIO_PIPELINE_PARAMS (sample rate, channels, bit depth, normalization, silence trim)
+    - BACKEND_PARAMS (model, vocoder, hyperparameters)
+    - Input reference audio SHA-256 hash
+    - Spoken reference transcript
+    """
+    def __init__(self, cache_file: Optional[Path] = None):
+        self.cache_file = cache_file or (CACHE_DIR / "trained_voices.json")
+        self._entries: Dict[str, dict] = self._load()
+
+    def _load(self) -> Dict[str, dict]:
+        if self.cache_file.is_file():
+            try:
+                return json.loads(self.cache_file.read_text(encoding="utf-8"))
+            except Exception as e:
+                print(f"[Warning] Failed to parse voice cache {self.cache_file}: {e}", file=sys.stderr)
+        return {}
+
+    def _save(self):
+        try:
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            self.cache_file.write_text(json.dumps(self._entries, indent=2), encoding="utf-8")
+        except Exception as e:
+            print(f"[Warning] Failed to write voice cache {self.cache_file}: {e}", file=sys.stderr)
+
+    def compute_voice_key(self, backend: str, name: str, audio_hash: str, transcript: str) -> str:
+        data = {
+            "pipeline_version": PIPELINE_VERSION,
+            "backend": backend,
+            "backend_params": BACKEND_PARAMS.get(backend, {}),
+            "audio_params": AUDIO_PIPELINE_PARAMS,
+            "name": name,
+            "audio_hash": audio_hash,
+            "transcript": transcript
+        }
+        serialized = json.dumps(data, sort_keys=True)
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def get_trained_voice(self, backend: str, name: str, audio_hash: str, transcript: str) -> Optional[dict]:
+        key = self.compute_voice_key(backend, name, audio_hash, transcript)
+        return self._entries.get(key)
+
+    def register_trained_voice(
+        self,
+        backend: str,
+        name: str,
+        audio_hash: str,
+        transcript: str,
+        voice_id: str,
+        extra_metadata: Optional[dict] = None
+    ) -> str:
+        key = self.compute_voice_key(backend, name, audio_hash, transcript)
+        entry = {
+            "name": name,
+            "voice_id": voice_id,
+            "backend": backend,
+            "audio_hash": audio_hash,
+            "transcript": transcript,
+            "pipeline_version": PIPELINE_VERSION,
+            "pipeline_sig": get_pipeline_signature(backend),
+            "backend_params": BACKEND_PARAMS.get(backend, {}),
+            "audio_params": AUDIO_PIPELINE_PARAMS,
+            "metadata": extra_metadata or {}
+        }
+        self._entries[key] = entry
+        self._save()
+        return key
 
 
 def clean_path(val: Any) -> Optional[Path]:
@@ -684,6 +826,77 @@ def sample_voices(
     return selected[:total_count]
 
 
+def get_sample_cache_key(backend_name: str, vspec: VoiceSpec, phrase: str) -> str:
+    """
+    Computes content-addressed cache key encoding:
+    - PIPELINE_VERSION
+    - AUDIO_PIPELINE_PARAMS
+    - BACKEND_PARAMS
+    - backend_name
+    - voice identity / audio_hash / transcript
+    - target phrase
+    """
+    voice_token = (
+        f"{vspec.household.audio_hash}_{vspec.household.transcript}_{vspec.household.name}"
+        if vspec.household
+        else str(vspec.voice_id)
+    )
+    spec = {
+        "pipeline_version": PIPELINE_VERSION,
+        "audio_params": AUDIO_PIPELINE_PARAMS,
+        "backend": backend_name,
+        "backend_params": BACKEND_PARAMS.get(backend_name, {}),
+        "voice": voice_token,
+        "phrase": phrase
+    }
+    serialized = json.dumps(spec, sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def is_corpus_complete(
+    output_dir: Path,
+    expected_count: int,
+    model_name: str,
+    backend_name: str,
+    active_household: List[HouseholdVoice]
+) -> bool:
+    """
+    Validates if an output directory already contains a complete, valid corpus
+    matching the exact pipeline signature and household voice audio hashes.
+    """
+    manifest_file = output_dir / "manifest.json"
+    if not manifest_file.is_file():
+        return False
+    try:
+        data = json.loads(manifest_file.read_text(encoding="utf-8"))
+        if data.get("model") != model_name:
+            return False
+        if data.get("backend") != backend_name:
+            return False
+        if data.get("pipeline_version") != PIPELINE_VERSION:
+            return False
+        if data.get("pipeline_signature") != get_pipeline_signature(backend_name):
+            return False
+        if data.get("total_samples", 0) < expected_count:
+            return False
+
+        cached_hashes = data.get("household_voice_hashes", {})
+        for hv in active_household:
+            if cached_hashes.get(hv.name) != hv.audio_hash:
+                return False
+
+        samples = data.get("samples", [])
+        if len(samples) < expected_count:
+            return False
+        for s in samples[:expected_count]:
+            fpath = output_dir / s["filename"]
+            if not fpath.is_file() or fpath.stat().st_size < 44:
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def generate_corpus(
     model_name: str,
     phrases: List[str],
@@ -693,10 +906,12 @@ def generate_corpus(
     api_key: Optional[str] = None,
     distribution: Optional[Dict[str, float]] = None,
     household_voices: Optional[List[HouseholdVoice]] = None,
-    household_ratio: float = 0.50
+    household_ratio: float = 0.50,
+    force: bool = False
 ) -> int:
     """
     Generates synthetic speech corpus saving to output_dir with content caching.
+    Reentrantly caches derived models and synthetic clips using deterministic pipeline parameters.
     """
     if distribution is None:
         distribution = {"female": 0.40, "male": 0.40, "kids": 0.10, "accents": 0.10}
@@ -707,6 +922,8 @@ def generate_corpus(
     backend = None
     voice_pool = {}
     active_household: List[HouseholdVoice] = []
+    voice_cache = VoiceCacheManager()
+    pipeline_sig = get_pipeline_signature(backend_name)
 
     if backend_name == "elevenlabs":
         if not api_key:
@@ -720,16 +937,26 @@ def generate_corpus(
         if household_voices:
             print(f"Processing {len(household_voices)} household voice sample(s) for ElevenLabs IVC...")
             for hv in household_voices:
-                if not hv.voice_id:
-                    print(f"Cloning household voice '{hv.name}' ({hv.audio_path.name})...")
-                    cloned_id = backend.clone_voice(hv.name, hv.audio_path)
-                    if cloned_id:
-                        hv.voice_id = cloned_id
-                        active_household.append(hv)
-                    else:
-                        print(f"Warning: Failed to clone '{hv.name}'. Falling back to generic voices for this profile.", file=sys.stderr)
-                else:
+                if not hv.audio_hash and hv.audio_path.is_file():
+                    hv.audio_hash = compute_file_hash(hv.audio_path)
+                cached = voice_cache.get_trained_voice("elevenlabs", hv.name, hv.audio_hash, hv.transcript)
+                if cached and cached.get("voice_id") and not force:
+                    hv.voice_id = cached["voice_id"]
+                    print(f"Reusing cached trained voice profile for '{hv.name}' (Voice ID: {hv.voice_id})")
                     active_household.append(hv)
+                else:
+                    if not hv.voice_id or force:
+                        print(f"Cloning household voice '{hv.name}' ({hv.audio_path.name})...")
+                        cloned_id = backend.clone_voice(hv.name, hv.audio_path)
+                        if cloned_id:
+                            hv.voice_id = cloned_id
+                            voice_cache.register_trained_voice("elevenlabs", hv.name, hv.audio_hash, hv.transcript, cloned_id)
+                            active_household.append(hv)
+                        else:
+                            print(f"Warning: Failed to clone '{hv.name}'. Falling back to generic voices for this profile.", file=sys.stderr)
+                    else:
+                        voice_cache.register_trained_voice("elevenlabs", hv.name, hv.audio_hash, hv.transcript, hv.voice_id)
+                        active_household.append(hv)
 
     elif backend_name == "f5_tts":
         backend = F5TTSBackend()
@@ -742,7 +969,20 @@ def generate_corpus(
             print("Error: F5-TTS is a zero-shot voice cloning model and requires reference audio.", file=sys.stderr)
             print("Provide at least one reference voice using --voice-sample or --household-dir.", file=sys.stderr)
             return 0
-        active_household = list(household_voices)
+
+        for hv in household_voices:
+            if not hv.audio_hash and hv.audio_path.is_file():
+                hv.audio_hash = compute_file_hash(hv.audio_path)
+            cached = voice_cache.get_trained_voice("f5_tts", hv.name, hv.audio_hash, hv.transcript)
+            vid = hv.voice_id or (cached.get("voice_id") if cached else None) or hv.name.lower().replace(" ", "_")
+            hv.voice_id = vid
+            if not cached or force:
+                voice_cache.register_trained_voice("f5_tts", hv.name, hv.audio_hash, hv.transcript, vid)
+                print(f"Registered voice model specification for '{hv.name}' (hash: {hv.audio_hash[:10]})")
+            else:
+                print(f"Reusing verified trained voice model for '{hv.name}' (hash: {hv.audio_hash[:10]})")
+            active_household.append(hv)
+
         household_ratio = 1.0  # F5-TTS synthesizes against reference clips
 
     elif backend_name == "macos_say":
@@ -754,6 +994,12 @@ def generate_corpus(
         print(f"Error: Unknown backend '{backend_name}'.", file=sys.stderr)
         return 0
 
+    if not force and is_corpus_complete(output_dir, count, model_name, backend_name, active_household):
+        print(f"\n[Reentrant Cache Hit] Output directory '{output_dir}' already contains {count} trained samples.")
+        print(f"Verified against pipeline signature {pipeline_sig} and matching reference audio file hashes.")
+        print("Dataset is complete and up to date. Use --force to re-synthesize.")
+        return count
+
     voices = sample_voices(distribution, count, voice_pool, active_household, household_ratio)
     if not voices:
         print("Error: No voices available for generation.", file=sys.stderr)
@@ -762,30 +1008,24 @@ def generate_corpus(
     generated = 0
     manifest = []
 
-    print(f"Target Model:      {model_name}")
-    print(f"Synthesis Backend: {backend_name}")
-    print(f"Variations Pool:   {len(phrases)} unique phonetic forms")
-    print(f"Target Count:      {count} audio files")
+    print(f"Target Model:       {model_name}")
+    print(f"Synthesis Backend:  {backend_name}")
+    print(f"Pipeline Signature: {pipeline_sig} (v{PIPELINE_VERSION})")
+    print(f"Variations Pool:    {len(phrases)} unique phonetic forms")
+    print(f"Target Count:       {count} audio files")
     if active_household:
-        print(f"Household Voices:  {len(active_household)} ({household_ratio*100:.0f}% allocation)")
-    print(f"Output Directory:  {output_dir}")
+        print(f"Household Voices:   {len(active_household)} ({household_ratio*100:.0f}% allocation)")
+    print(f"Output Directory:   {output_dir}")
     print("-" * 65)
 
     for i, vspec in enumerate(voices):
         phrase = random.choice(phrases)
 
-        # Content-addressed cache key
-        if backend_name == "f5_tts" and vspec.household:
-            mtime = vspec.household.audio_path.stat().st_mtime if vspec.household.audio_path.exists() else 0
-            cache_key = hashlib.sha256(
-                f"{backend_name}_{vspec.voice_id}_{phrase}_{vspec.household.transcript}_{mtime}".encode("utf-8")
-            ).hexdigest()
-        else:
-            cache_key = hashlib.sha256(f"{backend_name}_{vspec.voice_id}_{phrase}".encode("utf-8")).hexdigest()
-
+        # Content-addressed cache key encoding deterministic parameters
+        cache_key = get_sample_cache_key(backend_name, vspec, phrase)
         cached_file = CACHE_DIR / f"{cache_key}.wav"
 
-        if cached_file.exists() and cached_file.stat().st_size > 44:
+        if not force and cached_file.exists() and cached_file.stat().st_size > 44:
             hit = True
         else:
             hit = False
@@ -824,8 +1064,12 @@ def generate_corpus(
             "model": model_name,
             "total_samples": generated,
             "backend": backend_name,
+            "pipeline_version": PIPELINE_VERSION,
+            "pipeline_signature": pipeline_sig,
+            "audio_params": AUDIO_PIPELINE_PARAMS,
             "distribution": distribution,
             "household_voices": [hv.name for hv in active_household],
+            "household_voice_hashes": {hv.name: hv.audio_hash for hv in active_household},
             "household_ratio": household_ratio if active_household else 0.0,
             "samples": manifest
         }, f, indent=2)
@@ -1010,6 +1254,8 @@ def main():
                         help="Path to file containing transcript for --voice-sample (can specify multiple times)")
     parser.add_argument("--household-ratio", type=float, default=0.50,
                         help="Ratio of generated corpus allocated to household voices (default: 0.50)")
+    parser.add_argument("--force", action="store_true",
+                        help="Force regeneration of audio samples, bypassing cache")
     parser.add_argument("--wizard", action="store_true",
                         help="Run interactive TUI setup wizard")
 
@@ -1047,7 +1293,8 @@ def main():
         output_dir=out_dir,
         api_key=args.api_key,
         household_voices=household_voices,
-        household_ratio=args.household_ratio
+        household_ratio=args.household_ratio,
+        force=args.force
     )
 
 
