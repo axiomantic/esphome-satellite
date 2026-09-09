@@ -52,6 +52,20 @@ struct CustomWakeSlot {
   uint8_t base_cutoff{102};
 };
 
+class StreamingModelWindowAccessor : public micro_wake_word::StreamingModel {
+ public:
+  void set_window_size(size_t window_size) {
+    if (window_size < 2) window_size = 2;
+    if (window_size > 10) window_size = 10;
+    this->sliding_window_size_ = window_size;
+    this->recent_streaming_probabilities_.assign(window_size, 0);
+    this->last_n_index_ = 0;
+  }
+  size_t get_window_size() const {
+    return this->sliding_window_size_;
+  }
+};
+
 class WakePartitionLoader {
  public:
   static WakePartitionLoader &instance() {
@@ -59,7 +73,11 @@ class WakePartitionLoader {
     return inst;
   }
 
-  void init(micro_wake_word::MicroWakeWord *mww, select::Select *active_select = nullptr) {
+  void init(
+      micro_wake_word::MicroWakeWord *mww,
+      select::Select *slot1_select = nullptr,
+      select::Select *slot2_select = nullptr
+  ) {
     if (mww == nullptr) {
       ESP_LOGE(TAG, "MicroWakeWord pointer is null!");
       return;
@@ -136,101 +154,177 @@ class WakePartitionLoader {
       this->custom_names_.push_back(slot.name);
     }
 
-    if (active_select != nullptr && !this->slots_.empty()) {
-      this->options_storage_ = {"Mr. Clemens", "Okay Nabu"};
+    if (slot1_select != nullptr) {
+      this->slot1_options_ = {"Mr. Clemens", "Okay Nabu"};
       for (const auto &name : this->custom_names_) {
-        this->options_storage_.push_back(name);
+        this->slot1_options_.push_back(name);
       }
-      this->options_storage_.push_back("All");
-      FixedVector<const char *> fixed_opts;
-      fixed_opts.init(this->options_storage_.size());
-      for (const auto &opt : this->options_storage_) {
-        fixed_opts.push_back(opt.c_str());
+      FixedVector<const char *> fixed_opts1;
+      fixed_opts1.init(this->slot1_options_.size());
+      for (const auto &opt : this->slot1_options_) {
+        fixed_opts1.push_back(opt.c_str());
       }
-      active_select->traits.set_options(fixed_opts);
-      ESP_LOGI(TAG, "Updated Active Wake Word select options with %zu custom model(s)", this->slots_.size());
+      slot1_select->traits.set_options(fixed_opts1);
+      ESP_LOGI(TAG, "Populated Slot 1 Wake Word select with %zu options", this->slot1_options_.size());
+    }
+
+    if (slot2_select != nullptr) {
+      this->slot2_options_ = {"Disabled", "Mr. Clemens", "Okay Nabu"};
+      for (const auto &name : this->custom_names_) {
+        this->slot2_options_.push_back(name);
+      }
+      FixedVector<const char *> fixed_opts2;
+      fixed_opts2.init(this->slot2_options_.size());
+      for (const auto &opt : this->slot2_options_) {
+        fixed_opts2.push_back(opt.c_str());
+      }
+      slot2_select->traits.set_options(fixed_opts2);
+      ESP_LOGI(TAG, "Populated Slot 2 Wake Word select with %zu options", this->slot2_options_.size());
     }
   }
 
   bool has_custom_models() const { return !this->slots_.empty(); }
   const std::vector<std::string> &custom_names() const { return this->custom_names_; }
 
-  void handle_active_wake_word_change(const std::string &opt, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
-    ESP_LOGI(TAG, "Active wake word option changed to: '%s'", opt.c_str());
-    if (opt == "Mr. Clemens") {
-      if (clemens) clemens->enable();
-      if (nabu) nabu->disable();
-      for (auto &s : this->slots_) { if (s.model) s.model->disable(); }
-    } else if (opt == "Okay Nabu") {
-      if (clemens) clemens->disable();
-      if (nabu) nabu->enable();
-      for (auto &s : this->slots_) { if (s.model) s.model->disable(); }
-    } else if (opt == "All") {
-      if (clemens) clemens->enable();
-      if (nabu) nabu->enable();
-      for (auto &s : this->slots_) { if (s.model) s.model->enable(); }
-    } else {
-      bool matched = false;
-      for (auto &s : this->slots_) {
-        if (s.name == opt) {
-          if (clemens) clemens->disable();
-          if (nabu) nabu->disable();
-          for (auto &other : this->slots_) {
-            if (other.model) {
-              if (other.name == opt) other.model->enable();
-              else other.model->disable();
-            }
-          }
-          matched = true;
-          break;
-        }
+  void update_slot_models(
+      const std::string &slot1_choice,
+      const std::string &slot2_choice,
+      micro_wake_word::WakeWordModel *clemens,
+      micro_wake_word::WakeWordModel *nabu
+  ) {
+    this->slot1_model_name_ = slot1_choice;
+    this->slot2_model_name_ = slot2_choice;
+    ESP_LOGI(TAG, "Configured Wake Word Slots -> Slot 1: '%s', Slot 2: '%s'",
+             slot1_choice.c_str(), slot2_choice.c_str());
+
+    auto should_enable = [&](const std::string &name) -> bool {
+      if (name == this->slot1_model_name_) return true;
+      if (this->slot2_model_name_ != "Disabled" && name == this->slot2_model_name_) return true;
+      return false;
+    };
+
+    if (clemens) {
+      if (should_enable("Mr. Clemens")) clemens->enable();
+      else clemens->disable();
+    }
+    if (nabu) {
+      if (should_enable("Okay Nabu")) nabu->enable();
+      else nabu->disable();
+    }
+    for (auto &s : this->slots_) {
+      if (s.model) {
+        if (should_enable(s.name)) s.model->enable();
+        else s.model->disable();
       }
-      if (!matched) {
-        if (clemens) clemens->enable();
-        if (nabu) nabu->enable();
-        for (auto &s : this->slots_) { if (s.model) s.model->enable(); }
+    }
+
+    this->apply_all_sensitivities(clemens, nabu);
+  }
+
+  void set_slot_sensitivity(
+      int slot,
+      const std::string &level,
+      micro_wake_word::WakeWordModel *clemens,
+      micro_wake_word::WakeWordModel *nabu
+  ) {
+    ESP_LOGI(TAG, "Setting Slot %d sensitivity to '%s'", slot, level.c_str());
+    if (slot == 1) {
+      this->slot1_sensitivity_ = level;
+    } else if (slot == 2) {
+      this->slot2_sensitivity_ = level;
+    }
+    this->apply_all_sensitivities(clemens, nabu);
+  }
+
+  void apply_all_sensitivities(
+      micro_wake_word::WakeWordModel *clemens,
+      micro_wake_word::WakeWordModel *nabu
+  ) {
+    auto get_cutoff_for_model = [&](const std::string &model_name, uint8_t base_cutoff) -> uint8_t {
+      std::string level = this->slot1_sensitivity_;
+      if (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_) {
+        level = this->slot2_sensitivity_;
+      }
+      if (nim_wake_loader_scale_cutoff != nullptr) {
+        return nim_wake_loader_scale_cutoff(base_cutoff, level.c_str());
+      }
+      return base_cutoff;
+    };
+
+    if (clemens) {
+      uint8_t c = get_cutoff_for_model("Mr. Clemens", 102);
+      clemens->set_probability_cutoff(c);
+      ESP_LOGI(TAG, "Applied Clemens cutoff %u (%s)", c,
+               (this->slot2_model_name_ == "Mr. Clemens" ? this->slot2_sensitivity_.c_str() : this->slot1_sensitivity_.c_str()));
+    }
+    if (nabu) {
+      uint8_t c = get_cutoff_for_model("Okay Nabu", 170);
+      nabu->set_probability_cutoff(c);
+      ESP_LOGI(TAG, "Applied Nabu cutoff %u (%s)", c,
+               (this->slot2_model_name_ == "Okay Nabu" ? this->slot2_sensitivity_.c_str() : this->slot1_sensitivity_.c_str()));
+    }
+    for (auto &s : this->slots_) {
+      if (s.model) {
+        uint8_t c = get_cutoff_for_model(s.name, s.base_cutoff);
+        s.model->set_probability_cutoff(c);
+        ESP_LOGI(TAG, "Applied '%s' cutoff %u", s.name.c_str(), c);
       }
     }
   }
 
-  void handle_sensitivity_change(const std::string &level, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
-    ESP_LOGI(TAG, "Wake word sensitivity level changed to: '%s'", level.c_str());
-    this->current_sensitivity_ = level;
-
-    // Baseline cutoffs: Clemens = 102 (0.40), Nabu = 170 (0.67)
-    uint8_t clemens_cutoff = 102;
-    uint8_t nabu_cutoff = 170;
-
-    if (nim_wake_loader_scale_cutoff != nullptr) {
-      clemens_cutoff = nim_wake_loader_scale_cutoff(102, level.c_str());
-      nabu_cutoff = nim_wake_loader_scale_cutoff(170, level.c_str());
+  int get_slot_for_wake_word(const std::string &detected_word) const {
+    if (this->slot2_model_name_ != "Disabled" && detected_word == this->slot2_model_name_) {
+      return 2;
     }
+    return 1;
+  }
+
+  void set_sliding_window(size_t window, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+    ESP_LOGI(TAG, "Updating microWakeWord sliding window size to %zu frames", window);
+    this->sliding_window_size_ = window;
 
     if (clemens) {
-      clemens->set_probability_cutoff(clemens_cutoff);
-      ESP_LOGI(TAG, "Set Clemens model cutoff to %u (%s)", clemens_cutoff, level.c_str());
+      reinterpret_cast<StreamingModelWindowAccessor *>(clemens)->set_window_size(window);
     }
     if (nabu) {
-      nabu->set_probability_cutoff(nabu_cutoff);
-      ESP_LOGI(TAG, "Set Nabu model cutoff to %u (%s)", nabu_cutoff, level.c_str());
+      reinterpret_cast<StreamingModelWindowAccessor *>(nabu)->set_window_size(window);
     }
     for (auto &s : this->slots_) {
       if (s.model) {
-        uint8_t scaled = s.base_cutoff;
-        if (nim_wake_loader_scale_cutoff != nullptr) {
-          scaled = nim_wake_loader_scale_cutoff(s.base_cutoff, level.c_str());
-        }
-        s.model->set_probability_cutoff(scaled);
-        ESP_LOGI(TAG, "Set custom model '%s' cutoff to %u (base %u, %s)", s.name.c_str(), scaled, s.base_cutoff, level.c_str());
+        reinterpret_cast<StreamingModelWindowAccessor *>(s.model)->set_window_size(window);
       }
     }
+  }
+
+  void set_mic_pre_gain(float db) {
+    ESP_LOGI(TAG, "Setting microphone pre-gain boost to %.1f dB", db);
+    this->mic_pre_gain_db_ = db;
+    extern void nim_audio_dsp_set_mic_pre_gain(float db) __attribute__((weak));
+    if (nim_audio_dsp_set_mic_pre_gain != nullptr) {
+      nim_audio_dsp_set_mic_pre_gain(db);
+    }
+  }
+
+  // Backward compatibility helpers
+  void handle_active_wake_word_change(const std::string &opt, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+    this->update_slot_models(opt, this->slot2_model_name_, clemens, nabu);
+  }
+
+  void handle_sensitivity_change(const std::string &level, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+    this->set_slot_sensitivity(1, level, clemens, nabu);
   }
 
  protected:
   std::vector<CustomWakeSlot> slots_;
   std::vector<std::string> custom_names_;
-  std::vector<std::string> options_storage_;
-  std::string current_sensitivity_{"Moderately sensitive"};
+  std::vector<std::string> slot1_options_;
+  std::vector<std::string> slot2_options_;
+  std::string slot1_model_name_{"Mr. Clemens"};
+  std::string slot2_model_name_{"Disabled"};
+  std::string slot1_sensitivity_{"Moderately sensitive"};
+  std::string slot2_sensitivity_{"Moderately sensitive"};
+  size_t sliding_window_size_{3};
+  float mic_pre_gain_db_{3.0f};
 };
 
 inline WakePartitionLoader &get_wake_partition_loader() {

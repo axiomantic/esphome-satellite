@@ -71,6 +71,7 @@ suite "Wake Partition Loader Suite (TDD)":
 
   test "Wake word sensitivity cutoff scaling":
     let baseCutoff: uint8 = 100
+    check calculateCutoffForSensitivity(baseCutoff, "Extreme sensitivity") == 45'u8
     check calculateCutoffForSensitivity(baseCutoff, "Very sensitive") == 70'u8
     check calculateCutoffForSensitivity(baseCutoff, "Moderately sensitive") == 100'u8
     check calculateCutoffForSensitivity(baseCutoff, "Slightly sensitive") == 135'u8

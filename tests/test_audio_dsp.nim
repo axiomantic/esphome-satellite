@@ -100,3 +100,26 @@ suite "Real-Time Audio DSP Suite (TDD)":
     nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](samples[0].addr), samples.len)
     # Makeup gain should have increased value from 1000
     check samples[30] > 1400
+
+  test "Microphone pre-gain boost and 32-bit audio scaling":
+    setMicPreGainDb(6.0'f32) # +6 dB is ~1.995x (approx 2.0x)
+    check getMicPreGainLinear() > 1.95'f32
+    check getMicPreGainLinear() < 2.05'f32
+
+    var pcm32: array[4, int32] = [1000'i32, -2000'i32, 1000000'i32, -1000000'i32]
+    applyMicPreGain32(pcm32[0].addr, pcm32.len)
+    check pcm32[0] > 1950 and pcm32[0] < 2050
+    check pcm32[1] < -3900 and pcm32[1] > -4100
+
+    # Test clamping on extreme inputs
+    var extreme32: array[2, int32] = [2000000000'i32, -2000000000'i32]
+    applyMicPreGain32(extreme32[0].addr, extreme32.len)
+    check extreme32[0] == 2147483647'i32
+    check extreme32[1] == -2147483647'i32
+
+    # C ABI export
+    nim_audio_dsp_set_mic_pre_gain(0.0'f32) # unity gain (0 dB)
+    check getMicPreGainLinear() == 1.0'f32
+    var testUnity: array[1, int32] = [12345'i32]
+    nim_audio_dsp_apply_mic_pre_gain32(cast[ptr UncheckedArray[int32]](testUnity[0].addr), 1)
+    check testUnity[0] == 12345'i32
