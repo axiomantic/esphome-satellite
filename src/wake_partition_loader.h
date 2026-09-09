@@ -54,17 +54,17 @@ struct CustomWakeSlot {
 
 class StreamingModelWindowAccessor : public micro_wake_word::StreamingModel {
  public:
-  void set_window_size(size_t window_size) {
+  static void set_window(micro_wake_word::StreamingModel *model, size_t window_size) {
+    if (model == nullptr) return;
+    auto *accessor = static_cast<StreamingModelWindowAccessor *>(model);
     if (window_size < 2) window_size = 2;
     if (window_size > 10) window_size = 10;
-    this->sliding_window_size_ = window_size;
-    this->recent_streaming_probabilities_.assign(window_size, 0);
-    this->last_n_index_ = 0;
-  }
-  size_t get_window_size() const {
-    return this->sliding_window_size_;
+    accessor->sliding_window_size_ = window_size;
+    accessor->recent_streaming_probabilities_.assign(window_size, 0);
+    accessor->last_n_index_ = 0;
   }
 };
+
 
 class WakePartitionLoader {
  public:
@@ -273,6 +273,9 @@ class WakePartitionLoader {
   }
 
   int get_slot_for_wake_word(const std::string &detected_word) const {
+    if (detected_word == this->slot1_model_name_) {
+      return 1;
+    }
     if (this->slot2_model_name_ != "Disabled" && detected_word == this->slot2_model_name_) {
       return 2;
     }
@@ -283,16 +286,10 @@ class WakePartitionLoader {
     ESP_LOGI(TAG, "Updating microWakeWord sliding window size to %zu frames", window);
     this->sliding_window_size_ = window;
 
-    if (clemens) {
-      reinterpret_cast<StreamingModelWindowAccessor *>(clemens)->set_window_size(window);
-    }
-    if (nabu) {
-      reinterpret_cast<StreamingModelWindowAccessor *>(nabu)->set_window_size(window);
-    }
+    StreamingModelWindowAccessor::set_window(clemens, window);
+    StreamingModelWindowAccessor::set_window(nabu, window);
     for (auto &s : this->slots_) {
-      if (s.model) {
-        reinterpret_cast<StreamingModelWindowAccessor *>(s.model)->set_window_size(window);
-      }
+      StreamingModelWindowAccessor::set_window(s.model, window);
     }
   }
 

@@ -576,7 +576,9 @@ def generate_corpus(
         # Content-addressed cache key
         if backend_name == "f5_tts" and vspec.household:
             mtime = vspec.household.audio_path.stat().st_mtime if vspec.household.audio_path.exists() else 0
-            cache_key = hashlib.sha256(f"{backend_name}_{vspec.voice_id}_{phrase}_{mtime}".encode("utf-8")).hexdigest()
+            cache_key = hashlib.sha256(
+                f"{backend_name}_{vspec.voice_id}_{phrase}_{vspec.household.transcript}_{mtime}".encode("utf-8")
+            ).hexdigest()
         else:
             cache_key = hashlib.sha256(f"{backend_name}_{vspec.voice_id}_{phrase}".encode("utf-8")).hexdigest()
 

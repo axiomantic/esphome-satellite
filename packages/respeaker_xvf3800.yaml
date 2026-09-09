@@ -953,7 +953,8 @@ script:
                 }
             - if:
                 condition:
-                  switch.is_off: mic_mute_switch
+                  lambda: |-
+                    return !esphome::get_pcm_sound_player().is_playing_cancel() && !id(mic_mute_switch).state;
                 then:
                   - micro_wake_word.start:
 
@@ -967,7 +968,9 @@ button:
       - lambda: |-
           ESP_LOGI("voice_assistant", "Explicit conversation history reset triggered by user button.");
           id(va).reset_conversation_id();
+          id(va).request_stop();
           esphome::get_pcm_sound_player().stop();
+          call_nim_stop_word();
           bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
           if (enabled) {
             std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
@@ -977,7 +980,11 @@ button:
             float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
             if (opt != "Silent") {
               esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+            } else {
+              call_nim_cancel_done(true);
             }
+          } else {
+            call_nim_cancel_done(true);
           }
 
   - platform: template
@@ -1043,6 +1050,7 @@ interval:
                 esphome::get_pcm_sound_player().stop();
                 call_nim_stop_word();
                 bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
+                bool played_cancel = false;
                 if (enabled) {
                   std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
                   if (opt == "Match Wake Chime") {
@@ -1051,10 +1059,14 @@ interval:
                   if (opt != "Silent") {
                     float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
                     esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+                    played_cancel = true;
                   }
                 }
-                if (id(mic_mute_switch).state == false) {
-                  id(mww).start();
+                if (!played_cancel) {
+                  call_nim_cancel_done(true);
+                  if (id(mic_mute_switch).state == false) {
+                    id(mww).start();
+                  }
                 }
               }
             }
