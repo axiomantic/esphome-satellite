@@ -58,16 +58,20 @@ class TestWakewordCorpus(unittest.TestCase):
     def test_nabu_variations(self):
         variations = generate_nabu_variations()
         self.assertIsInstance(variations, list)
-        self.assertGreaterEqual(len(variations), 10)
+        self.assertEqual(len(variations), 34)
         self.assertIn("okay nabu", variations)
+        self.assertIn("oh kay nah boo", variations)
+        self.assertIn("ay nah boo", variations)
         self.assertEqual(len(variations), len(set(variations)))
 
     def test_clemens_variations(self):
         variations = generate_clemens_variations()
         self.assertIsInstance(variations, list)
-        self.assertGreaterEqual(len(variations), 30)
+        self.assertEqual(len(variations), 35)
         self.assertIn("mister clemens", variations)
-        self.assertIn("miss tack lemons", variations)
+        self.assertIn("hey mister clemens", variations)
+        self.assertIn("missed her clemens", variations)
+        self.assertIn("ey mister clemens", variations)
         self.assertEqual(len(variations), len(set(variations)))
 
     def test_encode_multipart_formdata(self):

@@ -322,29 +322,27 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
 # Phonetic Variation Generators
 # ---------------------------------------------------------------------------
 def generate_nabu_variations() -> List[str]:
-    prefixes = ["okay", "ok", "hey", "ay", "kay", ""]
-    nabus = ["nabu", "nahboo", "na boo", "nayboo", "nah bu", "naboo"]
-
-    variants = set()
-    for p, n in itertools.product(prefixes, nabus):
-        phrase = f"{p} {n}".strip()
-        phrase = " ".join(phrase.split())
-        if phrase:
-            variants.add(phrase)
-    return sorted(list(variants))
+    return [
+        "okay nabu", "ok nabu", "hey nabu", "hi nabu", "nabu",
+        "oh kay nah boo", "okaynahboo", "ok nah boo", "o k na bu", "o kay nah boo",
+        "ohkaynabu", "ok nobu", "okay nahbu", "hey na boo", "ah kay nah boo",
+        "uh kay nah boo", "mkay nabu", "mkay nah boo", "okay naabuu", "ok gnaw boo",
+        "ohkay nahboo", "o kay na boo", "okay naw boo", "okay na bwu", "okey nabu",
+        "oak hey nah boo", "oh kay na boo", "k nabu", "kay nah boo", "okaynaboo",
+        "ok naboo", "hi nah boo", "a nah boo", "ay nah boo"
+    ]
 
 
 def generate_clemens_variations() -> List[str]:
-    honorifics = ["mister", "mr", "mr.", "mista", "mist ur", "miss ter", "misster", "miss tack", "mist ack", ""]
-    clemens = ["clemens", "clemen", "clemence", "claman", "clem ins", "lemons", "klemens", "clay mens", "claymen"]
-
-    variants = set()
-    for h, c in itertools.product(honorifics, clemens):
-        phrase = f"{h} {c}".strip()
-        phrase = " ".join(phrase.split())
-        if phrase:
-            variants.add(phrase)
-    return sorted(list(variants))
+    return [
+        "mister clemens", "hey mister clemens", "ok mister clemens", "okay mister clemens", "hi mister clemens",
+        "mr clemens", "mistah clemens", "mistuh clemens", "mister clemons", "misterclemens",
+        "mistr clemens", "meester clemens", "missed her clemens", "miss tur cleh muns", "mis ter clem ens",
+        "hay mister clemmons", "ey mistuh clem ins", "hey mistah clemens", "ok mistr clemons", "hi missed her clem ens",
+        "heymisterclemens", "missturclemuns", "mstr clemens", "mist ur clem uns", "mister klemens",
+        "a mister clemens", "hey miss ter clem mens", "mrclemens", "mister clem ins", "meahster clemens",
+        "mistuh clemons", "ok mistah clemmens", "hi misterclemens", "hay mistur klemens", "ey mister clemens"
+    ]
 
 
 def parse_variations(raw_text: str) -> List[str]:
@@ -1991,7 +1989,7 @@ def _run_fallback_wizard():
 
     print("\n1. Select Target Wake Word Model:")
     print("   [1] Okay Nabu    (variations: okay nabu, ok nabu, hey nabu, etc.)")
-    print("   [2] Mr. Clemens  (30+ phonetic variants: mister clemens, miss tack lemons, etc.)")
+    print("   [2] Mr. Clemens  (35 phonetic variants: mister clemens, hey mister clemens, etc.)")
     print("   [3] Custom phrase")
     choice = input("Select [1-3, default=1]: ").strip() or "1"
 
