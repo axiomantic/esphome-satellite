@@ -20,6 +20,7 @@ from generate_wakeword_corpus import (
     encode_multipart_formdata,
     load_household_voices,
     normalize_transcript,
+    clean_path,
     sample_voices,
     HouseholdVoice,
     VoiceSpec,
@@ -88,10 +89,42 @@ class TestWakewordCorpus(unittest.TestCase):
             if temp_path.exists():
                 temp_path.unlink()
 
+    def test_clean_path(self):
+        self.assertIsNone(clean_path(None))
+        self.assertIsNone(clean_path(""))
+        self.assertIsNone(clean_path("   "))
+        self.assertEqual(clean_path("~/sample.wav"), Path.home() / "sample.wav")
+        self.assertEqual(clean_path("'~/sample.wav'"), Path.home() / "sample.wav")
+        self.assertEqual(clean_path('"~/sample.wav"'), Path.home() / "sample.wav")
+        self.assertEqual(clean_path("/path/to/my\\ audio.wav"), Path("/path/to/my audio.wav"))
+
     def test_normalize_transcript(self):
         self.assertEqual(normalize_transcript(""), "")
         self.assertEqual(normalize_transcript("   hello   world   "), "hello world")
         self.assertEqual(normalize_transcript("Line 1\nLine 2\r\n\tLine 3"), "Line 1 Line 2 Line 3")
+
+    def test_load_household_voices_multiple_samples(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            wav1 = tmppath / "partner.wav"
+            wav1.write_bytes(b"RIFF\x24\x00\x00\x00WAVE")
+            txt1 = tmppath / "partner.txt"
+            txt1.write_text("Partner speaking reference", encoding="utf-8")
+
+            wav2 = tmppath / "self.wav"
+            wav2.write_bytes(b"RIFF\x24\x00\x00\x00WAVE")
+            txt2 = tmppath / "self.txt"
+            txt2.write_text("Self speaking reference", encoding="utf-8")
+
+            voices = load_household_voices(
+                single_sample=[wav1, str(wav2)],
+                single_name=["Partner", "Self"]
+            )
+            self.assertEqual(len(voices), 2)
+            self.assertEqual(voices[0].name, "Partner")
+            self.assertEqual(voices[0].transcript, "Partner speaking reference")
+            self.assertEqual(voices[1].name, "Self")
+            self.assertEqual(voices[1].transcript, "Self speaking reference")
 
     def test_load_household_voices_companion_txt_single(self):
         with tempfile.TemporaryDirectory() as tmpdir:
