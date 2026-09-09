@@ -38,6 +38,9 @@ from generate_wakeword_corpus import (
     add_phrases_interactive,
     display_variations_table,
     review_phrases_fallback,
+    generate_llm_prompt,
+    copy_to_clipboard,
+    show_llm_prompt_panel,
     PIPELINE_VERSION,
     AUDIO_PIPELINE_PARAMS,
 )
@@ -573,6 +576,28 @@ class TestWakewordCorpus(unittest.TestCase):
         with patch("builtins.input", side_effect=lambda _: next(inputs)):
             result = review_phrases_fallback(initial, "test_model")
             self.assertEqual(result, ["first variant", "second variant", "third variant"])
+
+    def test_generate_llm_prompt(self):
+        prompt = generate_llm_prompt("hey computer")
+        self.assertIn("hey computer", prompt)
+        self.assertIn("microWakeWord", prompt)
+        self.assertIn("phonetic variations", prompt)
+        self.assertIn("comma-separated list", prompt)
+
+    def test_copy_to_clipboard_and_show_panel(self):
+        # Test copy_to_clipboard execution without exception
+        _ = copy_to_clipboard("test phrase")
+        # Test show_llm_prompt_panel renders prompt text
+        prompt = show_llm_prompt_panel("hey computer")
+        self.assertIn("hey computer", prompt)
+
+    def test_review_phrases_fallback_llm_prompt(self):
+        initial = ["base phrase"]
+        # Option 3 (LLM prompt), then enter new variation, then Option 1 (accept)
+        inputs = iter(["3", "new variant", "1"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            result = review_phrases_fallback(initial, "test_model")
+            self.assertEqual(result, ["base phrase", "new variant"])
 
 
 if __name__ == "__main__":
