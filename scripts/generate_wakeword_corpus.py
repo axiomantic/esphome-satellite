@@ -321,18 +321,6 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
 # ---------------------------------------------------------------------------
 # Phonetic Variation Generators
 # ---------------------------------------------------------------------------
-def generate_nabu_variations() -> List[str]:
-    return [
-        "okay nabu", "ok nabu", "hey nabu", "hi nabu", "nabu",
-        "oh kay nah boo", "okaynahboo", "ok nah boo", "o k na bu", "o kay nah boo",
-        "ohkaynabu", "ok nobu", "okay nahbu", "hey na boo", "ah kay nah boo",
-        "uh kay nah boo", "mkay nabu", "mkay nah boo", "okay naabuu", "ok gnaw boo",
-        "ohkay nahboo", "o kay na boo", "okay naw boo", "okay na bwu", "okey nabu",
-        "oak hey nah boo", "oh kay na boo", "k nabu", "kay nah boo", "okaynaboo",
-        "ok naboo", "hi nah boo", "a nah boo", "ay nah boo"
-    ]
-
-
 def generate_clemens_variations() -> List[str]:
     return [
         "mister clemens", "hey mister clemens", "ok mister clemens", "okay mister clemens", "hi mister clemens",
@@ -343,6 +331,115 @@ def generate_clemens_variations() -> List[str]:
         "a mister clemens", "hey miss ter clem mens", "mrclemens", "mister clem ins", "meahster clemens",
         "mistuh clemons", "ok mistah clemmens", "hi misterclemens", "hay mistur klemens", "ey mister clemens"
     ]
+
+
+def generate_bumblebee_variations() -> List[str]:
+    return [
+        "bumblebee", "hey bumblebee", "ok bumblebee", "okay bumblebee", "hi bumblebee",
+        "bum bull bee", "bumbulbee", "bummle bee", "bammel bee", "hey bumbelbee",
+        "bum bl bee", "bumbolbee", "ok bummlebee", "hi bummbellbee", "bumbul bee",
+        "bahmble bee", "bomblebee", "bumbalbee", "ok bum bull bee", "heybumblebee",
+        "okbumblebee", "bumblbee", "a bumblebee", "ay bumblebee", "hey bum ble bee",
+        "o k bumblebee", "oh kay bumbel bee", "hi bummble bee", "bummbell bee"
+    ]
+
+
+def generate_gizmo_variations() -> List[str]:
+    return [
+        "hey gizmo", "gizmo", "ok gizmo", "okay gizmo", "hi gizmo",
+        "hey giz mo", "heygizmo", "hay gizmo", "a gizmo", "ey gizmo",
+        "ay gizmo", "hey gizz mo", "ok gizzmo", "hi gizz moe", "heygeezmo",
+        "haygismo", "gismo", "hey jizmo", "ok gismo", "okay gizz moe",
+        "hey guizmo", "heygezmo", "ey gizzmo", "heyy gizmo", "oh kay giz mo",
+        "mkay gizmo", "giz moe", "hey gihz mo", "hay gihzmoh", "hey gismoe"
+    ]
+
+
+def generate_chief_variations() -> List[str]:
+    return [
+        "hey chief", "chief", "ok chief", "okay chief", "hi chief",
+        "heychief", "hay chief", "hey cheef", "a chief", "ey chief",
+        "ay cheef", "hay cheef", "hey cheaf", "hey chafe", "ok cheef",
+        "hi cheef", "heyyy chief", "heycheef", "hey chif", "hay chif",
+        "ok chif", "hey tchief", "hey sheef", "mkay chief", "oh kay cheef",
+        "o k chief", "k chief", "a cheef", "eh chief", "hey chee eff",
+        "hey cheeve"
+    ]
+
+
+def generate_captain_variations() -> List[str]:
+    return [
+        "oh captain", "captain", "hey captain", "ok captain", "okay captain",
+        "hi captain", "o captain", "oh cap ten", "oh cap in", "oh capn",
+        "oh cap tin", "ocapn", "ohcapn", "o captin", "oh capitan",
+        "ohcaptain", "hey capn", "hey cap tin", "ok capn", "okay cap ten",
+        "hi cap tin", "a captain", "ah captain", "uh captain", "oh kep ten",
+        "o keptin", "oh cap ton", "cap ton", "cap in", "oh cappin",
+        "oak happen", "oh cap den"
+    ]
+
+
+def generate_computer_variations() -> List[str]:
+    return [
+        "ok computer", "okay computer", "computer", "hey computer", "hi computer",
+        "oh kay computer", "o k computer", "okcomputer", "okaycomputer", "oh kay com pyoo ter",
+        "o kay com pu ter", "ok compyooter", "ok puter", "kay puter", "o kay kahm pyoo ter",
+        "oak a computer", "ok cumputer", "ok compudrr", "ok compudah", "ok compooter",
+        "okay compooder", "oak hay computer", "ok compuetar", "okay computa", "mkay computer",
+        "ah kay computer", "ok com pyoo dur", "o k com pew ter", "okay compewter", "ok compooda",
+        "k computer", "ok comp yoo ter", "oh kay compyooter", "ok computr"
+    ]
+
+
+def generate_wizard_variations() -> List[str]:
+    return [
+        "little wizard", "hey little wizard", "ok little wizard", "okay little wizard", "hi little wizard",
+        "lil wizard", "littlewizard", "hey lil wizard", "liddle wizard", "liddl wizzard",
+        "lit tull wiz urd", "lih tull wiz ard", "hey liddle wizard", "ok lil wizard", "hi liddo wizzard",
+        "okay liddl wizard", "a little wizard", "ay little wizard", "ey lil wizard", "hey litl wizrd",
+        "litl wizrd", "mkay liddle wizard", "liddle whizz urd", "lee tul wee zard", "hey lih tul wiz urd",
+        "lituhl wizard", "lid ul wiz erd", "litul wizerd", "hey lidl wizard", "okay liddle whizz ard",
+        "heylittlewizard", "lilwizard", "liddo wizard", "liddlewizard", "lit uhl wizz urd"
+    ]
+
+
+BUILTIN_WAKE_WORDS: Dict[str, Dict[str, Any]] = {
+    "mister_clemens": {
+        "name": "Mr. Clemens",
+        "description": "35 phonetic variations: 'mister clemens', 'hey mister clemens', etc.",
+        "generator": generate_clemens_variations,
+    },
+    "bumblebee": {
+        "name": "Bumblebee",
+        "description": "29 phonetic variations: 'bumblebee', 'hey bumblebee', etc.",
+        "generator": generate_bumblebee_variations,
+    },
+    "hey_gizmo": {
+        "name": "Hey Gizmo",
+        "description": "30 phonetic variations: 'hey gizmo', 'ok gizmo', etc.",
+        "generator": generate_gizmo_variations,
+    },
+    "hey_chief": {
+        "name": "Hey Chief",
+        "description": "31 phonetic variations: 'hey chief', 'ok chief', etc.",
+        "generator": generate_chief_variations,
+    },
+    "oh_captain": {
+        "name": "Oh Captain",
+        "description": "32 phonetic variations: 'oh captain', 'captain', etc.",
+        "generator": generate_captain_variations,
+    },
+    "ok_computer": {
+        "name": "OK Computer",
+        "description": "34 phonetic variations: 'ok computer', 'okay computer', etc.",
+        "generator": generate_computer_variations,
+    },
+    "little_wizard": {
+        "name": "Little Wizard",
+        "description": "35 phonetic variations: 'little wizard', 'hey little wizard', etc.",
+        "generator": generate_wizard_variations,
+    },
+}
 
 
 def parse_variations(raw_text: str) -> List[str]:
@@ -1680,24 +1777,23 @@ def run_tui_wizard():
     ))
 
     # 1. Target Wake Word Model
+    model_choices = [
+        Choice(f"{meta['name']:<14} ({meta['description']})", value=m_id)
+        for m_id, meta in BUILTIN_WAKE_WORDS.items()
+    ]
+    model_choices.append(Choice("Custom Phrase...", value="custom"))
+
     model_choice = questionary.select(
         "1. Select Target Wake Word Model:",
-        choices=[
-            Choice("Mr. Clemens  (30+ phonetic variations: 'mister clemens', 'hey clemens', etc.)", value="mister_clemens"),
-            Choice("Okay Nabu    (variations: 'okay nabu', 'ok nabu', 'hey nabu', etc.)", value="okay_nabu"),
-            Choice("Custom Phrase...", value="custom"),
-        ]
+        choices=model_choices
     ).ask()
     if model_choice is None:
         console.print("[dim]Aborted.[/dim]")
         return
 
-    if model_choice == "okay_nabu":
-        model_name = "okay_nabu"
-        phrases = generate_nabu_variations()
-    elif model_choice == "mister_clemens":
-        model_name = "mister_clemens"
-        phrases = generate_clemens_variations()
+    if model_choice in BUILTIN_WAKE_WORDS:
+        model_name = model_choice
+        phrases = BUILTIN_WAKE_WORDS[model_choice]["generator"]()
     else:
         custom_input = questionary.text(
             "Enter custom wake word identifier (e.g. 'hey_computer', 'jarvis'):",
@@ -1988,17 +2084,22 @@ def _run_fallback_wizard():
     print("=" * 65)
 
     print("\n1. Select Target Wake Word Model:")
-    print("   [1] Okay Nabu    (variations: okay nabu, ok nabu, hey nabu, etc.)")
-    print("   [2] Mr. Clemens  (35 phonetic variants: mister clemens, hey mister clemens, etc.)")
-    print("   [3] Custom phrase")
-    choice = input("Select [1-3, default=1]: ").strip() or "1"
+    builtin_keys = list(BUILTIN_WAKE_WORDS.keys())
+    for idx, key in enumerate(builtin_keys, start=1):
+        ww = BUILTIN_WAKE_WORDS[key]
+        print(f"   [{idx}] {ww['name']:<15} ({ww['description']})")
+    custom_idx = len(builtin_keys) + 1
+    print(f"   [{custom_idx}] Custom phrase")
+    choice = input(f"Select [1-{custom_idx}, default=1]: ").strip() or "1"
 
-    if choice == "1":
-        model_name = "okay_nabu"
-        phrases = generate_nabu_variations()
-    elif choice == "2":
-        model_name = "mister_clemens"
-        phrases = generate_clemens_variations()
+    try:
+        choice_num = int(choice)
+    except ValueError:
+        choice_num = 1
+
+    if 1 <= choice_num <= len(builtin_keys):
+        model_name = builtin_keys[choice_num - 1]
+        phrases = BUILTIN_WAKE_WORDS[model_name]["generator"]()
     else:
         custom_input = input("Enter custom wake word identifier: ").strip()
         model_name = custom_input.lower().replace(" ", "_")
@@ -2074,7 +2175,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Synthetic Wake Word Corpus Generator for microWakeWord"
     )
-    parser.add_argument("--model", choices=["okay_nabu", "mister_clemens", "custom"], default=None,
+    parser.add_argument("--model", choices=list(BUILTIN_WAKE_WORDS.keys()) + ["custom"], default=None,
                         help="Pre-configured wake word model name")
     parser.add_argument("--phrase", type=str, action="append", default=None,
                         help="Custom phrase or phonetic variant (can specify multiple times or comma-separated)")
@@ -2125,10 +2226,8 @@ def main():
         run_tui_wizard()
         return
 
-    if args.model == "okay_nabu":
-        phrases = generate_nabu_variations()
-    elif args.model == "mister_clemens":
-        phrases = generate_clemens_variations()
+    if args.model in BUILTIN_WAKE_WORDS:
+        phrases = BUILTIN_WAKE_WORDS[args.model]["generator"]()
     elif args.model == "custom":
         if args.phrase_file:
             p_file = clean_path(args.phrase_file)
