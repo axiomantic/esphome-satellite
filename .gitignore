@@ -21,3 +21,5 @@ node_modules/
 scripts/generate_web
 scripts/transcode_sounds
 scratch/
+data/
+

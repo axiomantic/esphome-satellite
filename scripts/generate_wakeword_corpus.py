@@ -1828,7 +1828,7 @@ def generate_corpus(
                     continue
 
             clean_vname = vspec.voice_name.lower().replace(" ", "_")
-            out_name = f"{cache_key[:12]}_{clean_vname}_{hashlib.md5(phrase.encode()).hexdigest()[:6]}.wav"
+            out_name = f"{i+1:04d}_{cache_key[:8]}_{clean_vname}_{hashlib.md5(phrase.encode()).hexdigest()[:6]}.wav"
             dest_file = output_dir / out_name
 
             dest_file.write_bytes(cached_file.read_bytes())
