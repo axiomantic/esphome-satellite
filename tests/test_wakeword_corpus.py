@@ -50,6 +50,9 @@ from generate_wakeword_corpus import (
     show_llm_prompt_panel,
     PIPELINE_VERSION,
     AUDIO_PIPELINE_PARAMS,
+    load_wizard_state,
+    save_wizard_field,
+    get_valid_default,
 )
 from unittest.mock import patch, MagicMock
 
@@ -725,6 +728,66 @@ class TestWakewordCorpus(unittest.TestCase):
                 ok = install_f5_tts_dependencies()
                 self.assertFalse(ok)
 
+    def test_load_wizard_state_empty(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing_file = Path(tmpdir) / "nonexistent.json"
+            state = load_wizard_state(missing_file)
+            self.assertEqual(state, {})
+
+            corrupt_file = Path(tmpdir) / "corrupt.json"
+            corrupt_file.write_text("{bad json")
+            state2 = load_wizard_state(corrupt_file)
+            self.assertEqual(state2, {})
+
+    def test_save_and_load_wizard_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / "sub" / "wizard_state.json"
+            save_wizard_field("model_choice", "hey_computer", state_file=state_file)
+            state = load_wizard_state(state_file)
+            self.assertEqual(state.get("model_choice"), "hey_computer")
+
+            # Sequential field saves accumulate
+            save_wizard_field("count", 200, state_file=state_file)
+            save_wizard_field("backend_choice", "f5_tts", state_file=state_file)
+            state_after = load_wizard_state(state_file)
+            self.assertEqual(state_after.get("model_choice"), "hey_computer")
+            self.assertEqual(state_after.get("count"), 200)
+            self.assertEqual(state_after.get("backend_choice"), "f5_tts")
+
+    def test_get_valid_default(self):
+        class DummyChoice:
+            def __init__(self, title, value):
+                self.title = title
+                self.value = value
+
+        class DummySeparator:
+            pass
+
+        choices = [
+            DummySeparator(),
+            DummyChoice("Model A", "model_a"),
+            DummyChoice("Model B", "model_b"),
+            "raw_choice_c",
+        ]
+
+        # Valid desired values match
+        self.assertEqual(get_valid_default(choices, "model_a"), "model_a")
+        self.assertEqual(get_valid_default(choices, "model_b"), "model_b")
+        self.assertEqual(get_valid_default(choices, "raw_choice_c"), "raw_choice_c")
+
+        # Invalid desired value with valid fallback returns fallback
+        self.assertEqual(get_valid_default(choices, "invalid_choice", fallback="model_b"), "model_b")
+
+        # Invalid desired value with invalid fallback returns None
+        self.assertIsNone(get_valid_default(choices, "invalid_choice", fallback="also_invalid"))
+
+        # None desired value with fallback returns fallback
+        self.assertEqual(get_valid_default(choices, None, fallback="model_a"), "model_a")
+
+        # None desired and None fallback returns None
+        self.assertIsNone(get_valid_default(choices, None, fallback=None))
+
 
 if __name__ == "__main__":
     unittest.main()
+
