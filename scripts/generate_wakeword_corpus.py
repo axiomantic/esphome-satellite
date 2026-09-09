@@ -60,6 +60,57 @@ except ImportError:
     HAVE_TUI = False
 
 CACHE_DIR = Path(".cache/mww_corpus")
+WIZARD_STATE_FILE = CACHE_DIR / "wizard_state.json"
+
+
+def load_wizard_state(state_file: Optional[Path] = None) -> Dict[str, Any]:
+    """Loads previously saved wizard state from disk if present."""
+    target = state_file or WIZARD_STATE_FILE
+    if target.is_file():
+        try:
+            return json.loads(target.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_wizard_field(key: str, value: Any, state_file: Optional[Path] = None):
+    """
+    Persists a single wizard input value immediately at select/input time.
+    Ensures user progress is never lost if aborted, interrupted, or execution fails.
+    """
+    target = state_file or WIZARD_STATE_FILE
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        state = load_wizard_state(target)
+        state[key] = value
+        temp_file = target.with_suffix(".tmp")
+        temp_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        temp_file.replace(target)
+    except Exception:
+        pass
+
+
+def get_valid_default(choices: Sequence[Any], desired_val: Any, fallback: Any = None) -> Any:
+    """
+    Returns desired_val if it corresponds to an existing selectable Choice in choices,
+    otherwise returns fallback if present in choices, otherwise None.
+    Prevents ValueError in questionary.select/checkbox.
+    """
+    choices_values = []
+    for c in choices:
+        if type(c).__name__ == "Separator":
+            continue
+        if hasattr(c, "value"):
+            choices_values.append(c.value)
+        else:
+            choices_values.append(c)
+    if desired_val is not None and desired_val in choices_values:
+        return desired_val
+    if fallback is not None and fallback in choices_values:
+        return fallback
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Pipeline Versioning & Training Parameters Specification
@@ -1820,6 +1871,8 @@ def run_tui_wizard():
         border_style="cyan"
     ))
 
+    prev_state = load_wizard_state()
+
     # 1. Target Wake Word Model
     model_choices = [
         Choice(f"{meta['name']:<14} ({meta['description']})", value=m_id)
@@ -1827,40 +1880,56 @@ def run_tui_wizard():
     ]
     model_choices.append(Choice("Custom Phrase...", value="custom"))
 
+    default_model = get_valid_default(model_choices, prev_state.get("model_choice"))
     model_choice = questionary.select(
         "1. Select Target Wake Word Model:",
-        choices=model_choices
+        choices=model_choices,
+        default=default_model
     ).ask()
     if model_choice is None:
         console.print("[dim]Aborted.[/dim]")
         return
+    save_wizard_field("model_choice", model_choice)
 
     if model_choice in BUILTIN_WAKE_WORDS:
         model_name = model_choice
+        save_wizard_field("model_name", model_name)
         phrases = BUILTIN_WAKE_WORDS[model_choice]["generator"]()
     else:
+        prev_custom = prev_state.get("custom_wake_word", "")
         custom_input = questionary.text(
             "Enter custom wake word identifier (e.g. 'hey_computer', 'jarvis'):",
-            default=""
+            default=prev_custom
         ).ask()
         if not custom_input or not custom_input.strip():
             console.print("[dim]Aborted.[/dim]")
             return
+        save_wizard_field("custom_wake_word", custom_input)
         model_name = custom_input.strip().lower().replace(" ", "_")
+        save_wizard_field("model_name", model_name)
 
+        input_mode_choices = [
+            Choice("Type / paste phonetic variations (comma-separated or multi-line)", value="text"),
+            Choice("Load variations from a text file (one variant per line)", value="file"),
+            Choice("Single base phrase only (no phonetic permutations)", value="single"),
+        ]
         input_mode = questionary.select(
             "How would you like to provide phonetic variations for this wake word?",
-            choices=[
-                Choice("Type / paste phonetic variations (comma-separated or multi-line)", value="text"),
-                Choice("Load variations from a text file (one variant per line)", value="file"),
-                Choice("Single base phrase only (no phonetic permutations)", value="single"),
-            ]
+            choices=input_mode_choices,
+            default=get_valid_default(input_mode_choices, prev_state.get("input_mode"))
         ).ask()
         if input_mode is None:
             return
+        save_wizard_field("input_mode", input_mode)
 
         if input_mode == "file":
-            f_path_str = questionary.text("Path to text file containing variations:").ask()
+            prev_file = prev_state.get("variations_file", "")
+            f_path_str = questionary.text(
+                "Path to text file containing variations:",
+                default=prev_file
+            ).ask()
+            if f_path_str is not None:
+                save_wizard_field("variations_file", f_path_str)
             f_path = clean_path(f_path_str)
             if not f_path or not f_path.is_file():
                 console.print(f"[yellow]File '{f_path_str}' not found. Using default base phrase.[/yellow]")
@@ -1870,10 +1939,19 @@ def run_tui_wizard():
         elif input_mode == "text":
             show_llm_prompt_panel(model_name.replace("_", " "), console)
             console.print("[dim]Enter phonetic variants separated by commas or newlines (or press Enter to keep base phrase):[/dim]")
-            var_text = questionary.text("Phonetic variations:").ask()
+            prev_var_text = prev_state.get("variations_text", "")
+            var_text = questionary.text(
+                "Phonetic variations:",
+                default=prev_var_text
+            ).ask()
+            if var_text is not None:
+                save_wizard_field("variations_text", var_text)
             phrases = parse_variations(var_text or "")
         else:
-            base_phrase = questionary.text("Enter base phrase:", default=model_name.replace("_", " ")).ask()
+            prev_base = prev_state.get("base_phrase", model_name.replace("_", " "))
+            base_phrase = questionary.text("Enter base phrase:", default=prev_base).ask()
+            if base_phrase is not None:
+                save_wizard_field("base_phrase", base_phrase)
             phrases = [base_phrase.strip().lower()] if base_phrase else [model_name.replace("_", " ")]
 
         if not phrases:
@@ -1882,21 +1960,25 @@ def run_tui_wizard():
     phrases = review_phrases_interactive(phrases, model_name, console)
     if not phrases:
         phrases = [model_name.replace("_", " ")]
+    save_wizard_field("phrases", phrases)
 
     console.print(f"[bold green]Finalized {len(phrases)} phonetic variation(s) for '{model_name}':[/bold green] [dim]{', '.join(phrases[:8])}{'...' if len(phrases) > 8 else ''}[/dim]\n")
 
     # 2. Synthesis Backend
+    backend_choices = [
+        Choice("ElevenLabs API (High-fidelity neural TTS, diverse voice registry, Instant Voice Cloning)", value="elevenlabs"),
+        Choice("F5-TTS (Local zero-shot neural voice cloning via diffusion - offline)", value="f5_tts"),
+        Choice("macOS 'say' (Fast local offline system voices - zero API key required)", value="macos_say"),
+    ]
     backend_choice = questionary.select(
         "2. Select Speech Synthesis Backend:",
-        choices=[
-            Choice("ElevenLabs API (High-fidelity neural TTS, diverse voice registry, Instant Voice Cloning)", value="elevenlabs"),
-            Choice("F5-TTS (Local zero-shot neural voice cloning via diffusion - offline)", value="f5_tts"),
-            Choice("macOS 'say' (Fast local offline system voices - zero API key required)", value="macos_say"),
-        ]
+        choices=backend_choices,
+        default=get_valid_default(backend_choices, prev_state.get("backend_choice"))
     ).ask()
     if backend_choice is None:
         console.print("[dim]Aborted.[/dim]")
         return
+    save_wizard_field("backend_choice", backend_choice)
 
     api_key = None
     if backend_choice == "elevenlabs":
@@ -1912,31 +1994,37 @@ def run_tui_wizard():
             if not api_key:
                 console.print("[yellow]No ElevenLabs API key provided. Falling back to local macOS 'say' backend.[/yellow]")
                 backend_choice = "macos_say"
+                save_wizard_field("backend_choice", backend_choice)
 
     elif backend_choice == "f5_tts":
         f5_backend = F5TTSBackend()
         if not f5_backend.is_available():
             console.print("\n[yellow]Notice: F5-TTS is not currently installed in this Python environment.[/yellow]")
             console.print("[dim]Local zero-shot neural voice cloning requires: f5-tts, torch, torchaudio[/dim]\n")
+            f5_choices = [
+                Choice("Install F5-TTS now (auto-install into current environment)", value="install"),
+                Choice("Switch to macOS 'say' (built-in offline voices, zero dependencies)", value="macos_say"),
+                Choice("Switch to ElevenLabs API (cloud neural synthesis)", value="elevenlabs"),
+                Choice("Abort wizard", value="abort"),
+            ]
             f5_action = questionary.select(
                 "How would you like to proceed?",
-                choices=[
-                    Choice("Install F5-TTS now (auto-install into current environment)", value="install"),
-                    Choice("Switch to macOS 'say' (built-in offline voices, zero dependencies)", value="macos_say"),
-                    Choice("Switch to ElevenLabs API (cloud neural synthesis)", value="elevenlabs"),
-                    Choice("Abort wizard", value="abort"),
-                ]
+                choices=f5_choices,
+                default=get_valid_default(f5_choices, prev_state.get("f5_action"))
             ).ask()
             if f5_action is None or f5_action == "abort":
                 console.print("[dim]Aborted.[/dim]")
                 return
-            elif f5_action == "install":
+            save_wizard_field("f5_action", f5_action)
+            if f5_action == "install":
                 installed = install_f5_tts_dependencies(console=console)
                 if not installed:
                     console.print("[yellow]F5-TTS installation was unsuccessful. Falling back to macOS 'say'.[/yellow]")
                     backend_choice = "macos_say"
+                    save_wizard_field("backend_choice", backend_choice)
             elif f5_action == "elevenlabs":
                 backend_choice = "elevenlabs"
+                save_wizard_field("backend_choice", backend_choice)
                 env_key = os.environ.get("ELEVENLABS_API_KEY", "")
                 if env_key:
                     use_env = questionary.confirm(f"Use existing ELEVENLABS_API_KEY from environment ({env_key[:6]}...)?", default=True).ask()
@@ -1947,30 +2035,40 @@ def run_tui_wizard():
                     if not api_key:
                         console.print("[yellow]No ElevenLabs API key provided. Falling back to macOS 'say'.[/yellow]")
                         backend_choice = "macos_say"
+                        save_wizard_field("backend_choice", backend_choice)
             else:
                 backend_choice = "macos_say"
+                save_wizard_field("backend_choice", backend_choice)
 
     # 3. Household Voices
     household_voices: List[HouseholdVoice] = []
     household_ratio = 0.50
 
+    hv_choices = [
+        Choice("Add household member voices (one at a time: audio sample, name, transcript)", value="add"),
+        Choice("Skip household voices (use built-in / library voices only)", value="skip"),
+    ]
     hv_mode = questionary.select(
         "3. Household Member Voice Samples (Zero-Shot Cloning):",
-        choices=[
-            Choice("Add household member voices (one at a time: audio sample, name, transcript)", value="add"),
-            Choice("Skip household voices (use built-in / library voices only)", value="skip"),
-        ]
+        choices=hv_choices,
+        default=get_valid_default(hv_choices, prev_state.get("hv_mode"))
     ).ask()
     if hv_mode is None:
         return
+    save_wizard_field("hv_mode", hv_mode)
 
     if hv_mode == "add":
+        prev_hv_list = prev_state.get("household_voices", [])
+        saved_hv_list = []
         while True:
             idx = len(household_voices) + 1
             console.print(f"\n[bold]--- Household Voice Sample #{idx} ---[/bold]")
+            prev_entry = prev_hv_list[idx - 1] if idx - 1 < len(prev_hv_list) else {}
+            default_audio = prev_entry.get("audio_path", "")
+
             s_file_input = questionary.text(
                 "Path to audio sample (.wav, .mp3, .m4a):",
-                default=""
+                default=default_audio
             ).ask()
             if not s_file_input or not s_file_input.strip():
                 if not household_voices:
@@ -1984,9 +2082,17 @@ def run_tui_wizard():
                     continue
                 break
 
-            default_name = s_file.stem.replace("_", " ").title()
+            default_name = prev_entry.get("name") or s_file.stem.replace("_", " ").title()
             s_name = questionary.text("Person's name:", default=default_name).ask() or default_name
             s_trans = get_interactive_transcript(s_file)
+
+            saved_hv_list.append({
+                "audio_path": str(s_file),
+                "name": s_name,
+                "transcript": s_trans
+            })
+            save_wizard_field("household_voices", saved_hv_list)
+
             new_voices = load_household_voices(
                 single_sample=s_file,
                 single_name=s_name,
@@ -1996,7 +2102,11 @@ def run_tui_wizard():
                 household_voices.extend(new_voices)
                 console.print(f"[green]Successfully loaded voice profile for '{new_voices[0].name}'.[/green]")
 
-            more = questionary.confirm("Add another household member's voice (e.g. partner, child)?", default=False).ask()
+            has_more_prev = idx < len(prev_hv_list)
+            more = questionary.confirm(
+                "Add another household member's voice (e.g. partner, child)?",
+                default=has_more_prev
+            ).ask()
             if not more:
                 break
 
@@ -2017,6 +2127,7 @@ def run_tui_wizard():
         }
         max_name_len = max((len(v["name"]) for v in available_builtin), default=12)
         col_width = max(max_name_len + 2, 16)
+        prev_builtin = prev_state.get("builtin_voices")
 
         for cat in ["female", "male", "kids", "accents"]:
             cat_voices = [v for v in available_builtin if v["category"] == cat]
@@ -2027,14 +2138,16 @@ def run_tui_wizard():
                     suffix = " (Default)" if v.get("default") else ""
                     desc_str = f" - {v['desc']}" if v.get("desc") else ""
                     label = f"{v['name']:<{col_width}}{desc_str}{suffix}"
-                    choices.append(Choice(label, value=v["name"], checked=v.get("default", False)))
+                    is_checked = (v["name"] in prev_builtin) if prev_builtin is not None else v.get("default", False)
+                    choices.append(Choice(label, value=v["name"], checked=is_checked))
 
         for v in available_builtin:
             if v["category"] not in ["female", "male", "kids", "accents"]:
                 suffix = " (Default)" if v.get("default") else ""
                 desc_str = f" - {v['desc']}" if v.get("desc") else ""
                 label = f"{v['name']:<{col_width}}{desc_str}{suffix}"
-                choices.append(Choice(label, value=v["name"], checked=v.get("default", False)))
+                is_checked = (v["name"] in prev_builtin) if prev_builtin is not None else v.get("default", False)
+                choices.append(Choice(label, value=v["name"], checked=is_checked))
 
         selected_builtin = questionary.checkbox(
             "4. Select Built-in Voices to Include in Dataset:",
@@ -2043,70 +2156,108 @@ def run_tui_wizard():
         ).ask()
         if selected_builtin is None:
             return
+        save_wizard_field("builtin_voices", selected_builtin)
 
     # 5. Dataset Balance / Allocation Ratio
     if household_voices and selected_builtin:
+        ratio_choices = [
+            Choice("50% Household / 50% Built-in (Balanced accuracy & generalizability - Recommended)", value=0.50),
+            Choice("70% Household / 30% Built-in (Prioritize household member accuracy)", value=0.70),
+            Choice("30% Household / 70% Built-in (Prioritize general population diversity)", value=0.30),
+            Choice("100% Household Voices only", value=1.00),
+            Choice("Custom ratio...", value=-1.0),
+        ]
+        prev_ratio = prev_state.get("household_ratio")
+        default_ratio_choice = get_valid_default(
+            ratio_choices,
+            prev_ratio,
+            fallback=-1.0 if (prev_ratio is not None and isinstance(prev_ratio, (int, float))) else 0.50
+        )
         ratio_choice = questionary.select(
             "5. Dataset Allocation Balance:",
-            choices=[
-                Choice("50% Household / 50% Built-in (Balanced accuracy & generalizability - Recommended)", value=0.50),
-                Choice("70% Household / 30% Built-in (Prioritize household member accuracy)", value=0.70),
-                Choice("30% Household / 70% Built-in (Prioritize general population diversity)", value=0.30),
-                Choice("100% Household Voices only", value=1.00),
-                Choice("Custom ratio...", value=-1.0),
-            ]
+            choices=ratio_choices,
+            default=default_ratio_choice
         ).ask()
         if ratio_choice is None:
             return
         if ratio_choice < 0.0:
-            custom_ratio_str = questionary.text("Enter household ratio [0.0 - 1.0, default=0.50]:", default="0.50").ask()
+            custom_default = f"{prev_ratio:.2f}" if (prev_ratio is not None and prev_ratio > 0.0) else "0.50"
+            custom_ratio_str = questionary.text(
+                "Enter household ratio [0.0 - 1.0, default=0.50]:",
+                default=custom_default
+            ).ask()
             try:
                 household_ratio = float(custom_ratio_str)
-            except ValueError:
+            except (ValueError, TypeError):
                 household_ratio = 0.50
         else:
             household_ratio = ratio_choice
+        save_wizard_field("household_ratio", household_ratio)
     elif household_voices:
         household_ratio = 1.0
+        save_wizard_field("household_ratio", household_ratio)
     else:
         household_ratio = 0.0
+        save_wizard_field("household_ratio", household_ratio)
 
     # 6. Sample Count
+    count_choices = [
+        Choice("100 samples (Recommended for household satellite deployment: balanced speed & coverage)", value=100),
+        Choice("50 samples (Quick smoke test)", value=50),
+        Choice("200 samples (High-fidelity household deployment)", value=200),
+        Choice("500 samples (Large-scale production dataset)", value=500),
+        Choice("Custom sample count...", value=-1),
+    ]
+    prev_count = prev_state.get("count")
+    default_count_choice = get_valid_default(
+        count_choices,
+        prev_count,
+        fallback=-1 if (prev_count is not None and isinstance(prev_count, int)) else 100
+    )
     count_choice = questionary.select(
         "6. Positive Training Samples to Generate:",
-        choices=[
-            Choice("100 samples (Recommended for household satellite deployment: balanced speed & coverage)", value=100),
-            Choice("50 samples (Quick smoke test)", value=50),
-            Choice("200 samples (High-fidelity household deployment)", value=200),
-            Choice("500 samples (Large-scale production dataset)", value=500),
-            Choice("Custom sample count...", value=-1),
-        ]
+        choices=count_choices,
+        default=default_count_choice
     ).ask()
     if count_choice is None:
         return
 
     if count_choice == -1:
-        count_str = questionary.text("Enter positive sample count [default=100]:", default="100").ask()
+        custom_default = str(prev_count) if (prev_count is not None and prev_count > 0) else "100"
+        count_str = questionary.text("Enter positive sample count [default=100]:", default=custom_default).ask()
         try:
             count = int(count_str)
-        except ValueError:
+        except (ValueError, TypeError):
             count = 100
     else:
         count = count_choice
+    save_wizard_field("count", count)
 
     # 7. Output Directory & Cache Check
-    default_out = Path(f"data/{model_name}/positive")
-    out_str = questionary.text("7. Output Directory:", default=str(default_out)).ask()
+    default_out_path = Path(f"data/{model_name}/positive")
+    prev_out_dir = prev_state.get("output_dir")
+    if prev_out_dir and (prev_state.get("model_name") == model_name or prev_state.get("output_dir_custom")):
+        default_out_str = prev_out_dir
+    else:
+        default_out_str = str(default_out_path)
+
+    out_str = questionary.text("7. Output Directory:", default=default_out_str).ask()
     if out_str is None:
         return
-    out_dir = clean_path(out_str) or default_out
+    out_dir = clean_path(out_str) or default_out_path
+    save_wizard_field("output_dir", str(out_dir))
+    save_wizard_field("output_dir_custom", str(out_dir) != str(default_out_path))
 
     force = False
     if is_corpus_complete(out_dir, count, model_name, backend_choice, household_voices, selected_builtin):
         console.print(f"\n[yellow][Notice] A complete cached corpus already exists in '{out_dir}'.[/yellow]")
-        force = questionary.confirm("Re-synthesize and overwrite existing dataset?", default=False).ask()
+        force = questionary.confirm(
+            "Re-synthesize and overwrite existing dataset?",
+            default=prev_state.get("force", False)
+        ).ask()
         if force is None:
             return
+        save_wizard_field("force", force)
 
     # 8. Summary & Confirmation Table
     console.print()
@@ -2164,6 +2315,8 @@ def _run_fallback_wizard():
     print(" microWakeWord Synthetic Corpus Generator (CLI Fallback)")
     print("=" * 65)
 
+    prev_state = load_wizard_state()
+
     print("\n1. Select Target Wake Word Model:")
     builtin_keys = list(BUILTIN_WAKE_WORDS.keys())
     for idx, key in enumerate(builtin_keys, start=1):
@@ -2171,21 +2324,43 @@ def _run_fallback_wizard():
         print(f"   [{idx}] {ww['name']:<15} ({ww['description']})")
     custom_idx = len(builtin_keys) + 1
     print(f"   [{custom_idx}] Custom phrase")
-    choice = input(f"Select [1-{custom_idx}, default=1]: ").strip() or "1"
+
+    prev_model = prev_state.get("model_choice")
+    default_idx = 1
+    if prev_model in builtin_keys:
+        default_idx = builtin_keys.index(prev_model) + 1
+    elif prev_model == "custom":
+        default_idx = custom_idx
+
+    choice = input(f"Select [1-{custom_idx}, default={default_idx}]: ").strip() or str(default_idx)
 
     try:
         choice_num = int(choice)
     except ValueError:
-        choice_num = 1
+        choice_num = default_idx
 
     if 1 <= choice_num <= len(builtin_keys):
         model_name = builtin_keys[choice_num - 1]
+        save_wizard_field("model_choice", model_name)
+        save_wizard_field("model_name", model_name)
         phrases = BUILTIN_WAKE_WORDS[model_name]["generator"]()
     else:
-        custom_input = input("Enter custom wake word identifier: ").strip()
+        save_wizard_field("model_choice", "custom")
+        prev_custom = prev_state.get("custom_wake_word", "")
+        prompt = f"Enter custom wake word identifier [default: {prev_custom}]: " if prev_custom else "Enter custom wake word identifier: "
+        custom_input = input(prompt).strip() or prev_custom
+        if not custom_input:
+            custom_input = "hey_computer"
+        save_wizard_field("custom_wake_word", custom_input)
         model_name = custom_input.lower().replace(" ", "_")
+        save_wizard_field("model_name", model_name)
         show_llm_prompt_panel(model_name.replace("_", " "))
-        var_input = input("Enter phonetic variations (comma-separated or path to .txt file): ").strip()
+
+        prev_var = prev_state.get("variations_text", "")
+        prompt_var = f"Enter phonetic variations (comma-separated or path to .txt file) [default: {prev_var}]: " if prev_var else "Enter phonetic variations (comma-separated or path to .txt file): "
+        var_input = input(prompt_var).strip() or prev_var
+        if var_input:
+            save_wizard_field("variations_text", var_input)
         var_path = clean_path(var_input)
         if var_path and var_path.is_file():
             phrases = parse_variations(var_path.read_text(encoding="utf-8"))
@@ -2197,6 +2372,7 @@ def _run_fallback_wizard():
     phrases = review_phrases_fallback(phrases, model_name)
     if not phrases:
         phrases = [model_name.replace("_", " ")]
+    save_wizard_field("phrases", phrases)
 
     print(f"\nFinalized {len(phrases)} phonetic variation(s) for '{model_name}'.")
 
@@ -2204,8 +2380,14 @@ def _run_fallback_wizard():
     print("   [1] ElevenLabs API")
     print("   [2] macOS 'say'")
     print("   [3] F5-TTS")
-    backend_choice = input("Select [1-3, default=1]: ").strip() or "1"
-    backend_name = "elevenlabs" if backend_choice == "1" else ("macos_say" if backend_choice == "2" else "f5_tts")
+    backend_map = {"1": "elevenlabs", "2": "macos_say", "3": "f5_tts"}
+    rev_backend_map = {"elevenlabs": "1", "macos_say": "2", "f5_tts": "3"}
+    prev_backend = prev_state.get("backend_choice", "elevenlabs")
+    default_backend_idx = rev_backend_map.get(prev_backend, "1")
+
+    backend_choice = input(f"Select [1-3, default={default_backend_idx}]: ").strip() or default_backend_idx
+    backend_name = backend_map.get(backend_choice, "elevenlabs")
+    save_wizard_field("backend_choice", backend_name)
 
     api_key = None
     if backend_name == "elevenlabs":
@@ -2223,26 +2405,45 @@ def _run_fallback_wizard():
                 if not success:
                     print("Installation failed. Switching to macOS 'say'.")
                     backend_name = "macos_say"
+                    save_wizard_field("backend_choice", backend_name)
             else:
                 print("Switching to macOS 'say'.")
                 backend_name = "macos_say"
+                save_wizard_field("backend_choice", backend_name)
 
     household_voices: List[HouseholdVoice] = []
     print("\n3. Household Member Voice Samples (Zero-Shot Cloning):")
-    add_hv = input("Add household member voices one at a time? [y/N]: ").strip().lower()
+    prev_hv_mode = prev_state.get("hv_mode", "skip")
+    default_add = "y" if prev_hv_mode == "add" else "N"
+    add_hv = input(f"Add household member voices one at a time? [y/N, default: {default_add}]: ").strip().lower() or default_add.lower()
+    save_wizard_field("hv_mode", "add" if add_hv in ("y", "yes") else "skip")
+
     if add_hv in ("y", "yes"):
+        prev_hv_list = prev_state.get("household_voices", [])
+        saved_hv_list = []
         while True:
             idx = len(household_voices) + 1
-            s_input = input(f"\nEnter path to audio sample #{idx} (or press Enter to finish): ").strip()
+            prev_entry = prev_hv_list[idx - 1] if idx - 1 < len(prev_hv_list) else {}
+            default_audio = prev_entry.get("audio_path", "")
+            prompt_audio = f"\nEnter path to audio sample #{idx} [default: {default_audio}]: " if default_audio else f"\nEnter path to audio sample #{idx} (or press Enter to finish): "
+            s_input = input(prompt_audio).strip() or default_audio
             if not s_input:
                 break
             s_file = clean_path(s_input)
             if not s_file or not s_file.is_file():
                 print(f"Error: Audio file '{s_input}' not found.")
                 continue
-            default_name = s_file.stem.replace("_", " ").title()
+            default_name = prev_entry.get("name") or s_file.stem.replace("_", " ").title()
             s_name = input(f"Person's name [default: {default_name}]: ").strip() or default_name
             s_trans = get_interactive_transcript(s_file)
+
+            saved_hv_list.append({
+                "audio_path": str(s_file),
+                "name": s_name,
+                "transcript": s_trans
+            })
+            save_wizard_field("household_voices", saved_hv_list)
+
             new_voices = load_household_voices(
                 single_sample=s_file,
                 single_name=s_name,
@@ -2252,12 +2453,24 @@ def _run_fallback_wizard():
                 household_voices.extend(new_voices)
                 print(f"Successfully loaded voice profile for '{new_voices[0].name}'.")
 
-    count_str = input("Enter positive sample count [default=50]: ").strip() or "50"
-    count = int(count_str)
+    prev_count = prev_state.get("count", 50)
+    count_str = input(f"Enter positive sample count [default={prev_count}]: ").strip() or str(prev_count)
+    try:
+        count = int(count_str)
+    except ValueError:
+        count = prev_count
+    save_wizard_field("count", count)
 
-    default_out = Path(f"data/{model_name}/positive")
+    default_out_path = Path(f"data/{model_name}/positive")
+    prev_out_dir = prev_state.get("output_dir")
+    if prev_out_dir and prev_state.get("model_name") == model_name:
+        default_out = Path(prev_out_dir)
+    else:
+        default_out = default_out_path
+
     out_str = input(f"Output directory [default={default_out}]: ").strip()
     out_dir = clean_path(out_str) or default_out
+    save_wizard_field("output_dir", str(out_dir))
 
     force = False
     if is_corpus_complete(out_dir, count, model_name, backend_name, household_voices):
@@ -2265,6 +2478,7 @@ def _run_fallback_wizard():
         re_synth = input("Re-synthesize and overwrite existing dataset? [y/N]: ").strip().lower()
         if re_synth in ("y", "yes"):
             force = True
+        save_wizard_field("force", force)
 
     confirm = input("Proceed? [Y/n]: ").strip().lower()
     if confirm in ("", "y", "yes"):
