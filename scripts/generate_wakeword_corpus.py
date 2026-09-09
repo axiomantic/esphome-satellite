@@ -186,21 +186,17 @@ def get_available_macos_voices() -> Dict[str, List[str]]:
 
 DEFAULT_F5_VOICE_METADATA: Dict[str, Dict[str, str]] = {
     "adam": {"name": "Adam", "category": "male", "desc": "Deep, Monotone and Commanding"},
-    "amy": {"name": "Amy", "category": "female", "desc": "Natural storytelling (LibriSpeech)"},
     "claire": {"name": "Claire", "category": "female", "desc": "Goofy, Youthful, Fun & Girly"},
     "david": {"name": "David", "category": "male", "desc": "Deep, Warm, and Steady"},
     "davy": {"name": "Davy", "category": "male", "desc": "Deep, Friendly and Round"},
     "emma": {"name": "Emma", "category": "female", "desc": "Adorable and Upbeat"},
     "gigi": {"name": "Gigi", "category": "female", "desc": "Cute, Peppy, Energetic"},
-    "grover": {"name": "Grover", "category": "male", "desc": "Classical narration (LibriSpeech)"},
     "jake": {"name": "Jake", "category": "male", "desc": "Deep, Smooth, Dramatic"},
     "joy": {"name": "Joy", "category": "female", "desc": "Happy, Sweet, Bubbly"},
-    "linda": {"name": "Linda", "category": "female", "desc": "Studio narration (LJSpeech)"},
     "lulu_lolipop": {"name": "Lulu Lolipop", "category": "female", "desc": "High-Pitched and Bubbly"},
-    "nolan": {"name": "Nolan", "category": "male", "desc": "Expressive narration (LibriSpeech)"},
-    "pirate": {"name": "Pirate", "category": "accents", "desc": "Character, Pirate Accent"},
+    "pirate": {"name": "Pirate", "category": "accents", "desc": "Nautical, Gritty Character Accent"},
     "river": {"name": "River", "category": "female", "desc": "Relaxed, Neutral, Informative"},
-    "shelly": {"name": "Shelly", "category": "female", "desc": "Warm, Natural"},
+    "shelly": {"name": "Shelly", "category": "female", "desc": "Warm, Natural Storytelling"},
 }
 
 
@@ -232,12 +228,63 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
                 })
     elif backend_name == "f5_tts":
         ref_dir = DEFAULT_REFERENCE_VOICES_DIR
+        manifest_file = ref_dir / "manifest.json"
+
+        # 1. Manifest-driven configuration (preferred)
+        if manifest_file.is_file():
+            try:
+                manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+                default_transcript_rel = manifest_data.get("default_transcript", "transcript.txt")
+                default_transcript_path = ref_dir / default_transcript_rel
+                default_transcript_text = (
+                    default_transcript_path.read_text(encoding="utf-8").strip()
+                    if default_transcript_path.is_file()
+                    else ""
+                )
+
+                for item in manifest_data.get("voices", []):
+                    audio_rel = item.get("audio", f"{item['id']}.wav")
+                    audio_path = ref_dir / audio_rel
+                    if not audio_path.is_file():
+                        continue
+
+                    trans_text = ""
+                    if "transcript_text" in item:
+                        trans_text = item["transcript_text"].strip()
+                    elif "transcript" in item:
+                        t_path = ref_dir / item["transcript"]
+                        if t_path.is_file():
+                            trans_text = t_path.read_text(encoding="utf-8").strip()
+                    if not trans_text:
+                        trans_text = default_transcript_text
+
+                    vid = item.get("id", audio_path.stem)
+                    vname = item.get("name", audio_path.stem.replace("_", " ").title())
+                    vdesc = item.get("description", "Built-in voice preset")
+                    cat = item.get("category", "male")
+
+                    voices.append({
+                        "id": f"builtin_{vid}",
+                        "name": vname,
+                        "desc": vdesc,
+                        "category": cat,
+                        "default": item.get("default", True),
+                        "reference_audio": audio_path,
+                        "reference_transcript": trans_text
+                    })
+            except Exception as e:
+                print(f"[Warning] Failed to parse voice manifest '{manifest_file}': {e}", file=sys.stderr)
+
+        # 2. Fallback discovery for any standalone wav files not listed in manifest
+        known_audio_files = {v["reference_audio"] for v in voices}
         female_names = {
-            "linda", "amy", "samantha", "victoria", "claire",
-            "emma", "gigi", "joy", "lulu_lolipop", "river", "shelly"
+            "claire", "emma", "gigi", "joy", "lulu_lolipop", "river", "shelly",
+            "samantha", "victoria"
         }
         if ref_dir.is_dir():
             for wav_file in sorted(ref_dir.glob("*.wav")):
+                if wav_file in known_audio_files:
+                    continue
                 txt_file = wav_file.with_suffix(".txt")
                 transcript = txt_file.read_text(encoding="utf-8").strip() if txt_file.is_file() else ""
                 stem = wav_file.stem.lower()
@@ -1793,6 +1840,9 @@ def run_tui_wizard():
             "kids": "Youth & Teen Voices",
             "accents": "Regional Accents",
         }
+        max_name_len = max((len(v["name"]) for v in available_builtin), default=12)
+        col_width = max(max_name_len + 2, 16)
+
         for cat in ["female", "male", "kids", "accents"]:
             cat_voices = [v for v in available_builtin if v["category"] == cat]
             if cat_voices:
@@ -1800,13 +1850,15 @@ def run_tui_wizard():
                 choices.append(Separator(f"=== {title} ==="))
                 for v in cat_voices:
                     suffix = " (Default)" if v.get("default") else ""
-                    label = f"{v['name']:<12} - {v['desc']}{suffix}"
+                    desc_str = f" - {v['desc']}" if v.get("desc") else ""
+                    label = f"{v['name']:<{col_width}}{desc_str}{suffix}"
                     choices.append(Choice(label, value=v["name"], checked=v.get("default", False)))
 
         for v in available_builtin:
             if v["category"] not in ["female", "male", "kids", "accents"]:
                 suffix = " (Default)" if v.get("default") else ""
-                label = f"{v['name']:<12} - {v['desc']}{suffix}"
+                desc_str = f" - {v['desc']}" if v.get("desc") else ""
+                label = f"{v['name']:<{col_width}}{desc_str}{suffix}"
                 choices.append(Choice(label, value=v["name"], checked=v.get("default", False)))
 
         selected_builtin = questionary.checkbox(
