@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-09
+
+### Added
+- Independent Assistant Profiles: Multi-slot runtime architecture enabling discrete audio, volume, and wake word configurations for Assistant Slot 1 and Assistant Slot 2 directly in Home Assistant.
+- Dynamic Acoustic Equalization: Added `Extreme sensitivity` tier (0.45x cutoff scaling), runtime dynamic `Speech: Wake Window Size` configuration (2-5 frames), and runtime dynamic `Speech: Mic Pre-Gain Boost` slider (0-12 dB) to improve detection for quieter and higher-pitched vocal ranges.
+- Synthetic Wake Word Corpus Generator & Trainer: Added `scripts/generate_wakeword_corpus.py` supporting ElevenLabs API (cloud neural synthesis and Instant Voice Cloning), local macOS `say` system voices, and F5-TTS zero-shot flow-matching synthesis. Features demographic voice balancing, combinatorial phonetic variations, and additive multi-voice composition.
+- Web Installer microWakeWord Integration: Added guidance callout and README links on the web flashing page to assist users in generating and training custom wake word models.
+- Discrete Partition Flashing: Preserved NVS settings, Wi-Fi credentials, and Home Assistant entity states across web flasher firmware updates.
+
+### Changed
+- Route wake-word triggering through the active assistant slot profile, ensuring independent sound and volume settings apply per assistant.
+- Guaranteed Slot 1 precedence when both assistant slots share the same wake phrase.
+- Reset conversation button (`Speech: Reset Conversation History`) now immediately aborts in-flight voice assistant pipelines and halts active sound playback.
+- Synchronized watchdog and connection timeout cancel playback to eliminate race conditions between cancel audio output and microphone capture.
+
 ## [0.5.0] - 2026-09-08
 
 ### Added

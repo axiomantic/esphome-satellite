@@ -5,7 +5,7 @@
 substitutions:
   name: "esphome-satellite"
   friendly_name: "Voice Satellite"
-  version: "0.5.0"
+  version: "0.6.0"
   processing_sound_default: "Spinner"
   wake_chime_sound_default: "Bell Ping"
   processing_sound_volume_default: "75"
