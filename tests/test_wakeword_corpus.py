@@ -32,6 +32,7 @@ from generate_wakeword_corpus import (
     get_sample_cache_key,
     is_corpus_complete,
     get_available_builtin_voices,
+    parse_variations,
     PIPELINE_VERSION,
     AUDIO_PIPELINE_PARAMS,
 )
@@ -461,6 +462,16 @@ class TestWakewordCorpus(unittest.TestCase):
             self.assertTrue(is_corpus_complete(out_dir, 1, "mister_clemens", "elevenlabs", [], builtin_voices=["adam", "rachel"]))
             # Mismatched voices must invalidate cache
             self.assertFalse(is_corpus_complete(out_dir, 1, "mister_clemens", "elevenlabs", [], builtin_voices=["Rachel", "George"]))
+
+    def test_parse_variations(self):
+        # Comma-separated
+        self.assertEqual(parse_variations("hey computer, ok computer, hay computer"), ["hey computer", "ok computer", "hay computer"])
+        # Multi-line
+        self.assertEqual(parse_variations("hey computer\nok computer\n\nhay computer\n"), ["hey computer", "ok computer", "hay computer"])
+        # Deduping and whitespace normalization
+        self.assertEqual(parse_variations("hey  computer, hey computer\nHEY COMPUTER"), ["hey computer"])
+        # Empty input
+        self.assertEqual(parse_variations(""), [])
 
 
 if __name__ == "__main__":
