@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "default_transcript": "transcript.txt",
+  "voices": [
+    {
+      "id": "claire",
+      "name": "Claire",
+      "category": "female",
+      "description": "Goofy, Youthful, Fun & Girly",
+      "audio": "claire.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "emma",
+      "name": "Emma",
+      "category": "female",
+      "description": "Adorable and Upbeat",
+      "audio": "emma.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "gigi",
+      "name": "Gigi",
+      "category": "female",
+      "description": "Cute, Peppy, Energetic",
+      "audio": "gigi.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "joy",
+      "name": "Joy",
+      "category": "female",
+      "description": "Happy, Sweet, Bubbly",
+      "audio": "joy.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "lulu_lolipop",
+      "name": "Lulu Lolipop",
+      "category": "female",
+      "description": "High-Pitched and Bubbly",
+      "audio": "lulu_lolipop.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "river",
+      "name": "River",
+      "category": "female",
+      "description": "Relaxed, Neutral, Informative",
+      "audio": "river.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "shelly",
+      "name": "Shelly",
+      "category": "female",
+      "description": "Warm, Natural Storytelling",
+      "audio": "shelly.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "adam",
+      "name": "Adam",
+      "category": "male",
+      "description": "Deep, Monotone and Commanding",
+      "audio": "adam.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "david",
+      "name": "David",
+      "category": "male",
+      "description": "Deep, Warm, and Steady",
+      "audio": "david.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "davy",
+      "name": "Davy",
+      "category": "male",
+      "description": "Deep, Friendly and Round",
+      "audio": "davy.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "jake",
+      "name": "Jake",
+      "category": "male",
+      "description": "Deep, Smooth, Dramatic",
+      "audio": "jake.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    },
+    {
+      "id": "pirate",
+      "name": "Pirate",
+      "category": "accents",
+      "description": "Nautical, Gritty Character Accent",
+      "audio": "pirate.wav",
+      "transcript": "transcript.txt",
+      "default": true
+    }
+  ]
+}
