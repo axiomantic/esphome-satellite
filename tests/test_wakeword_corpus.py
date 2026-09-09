@@ -31,6 +31,7 @@ from generate_wakeword_corpus import (
     HouseholdVoice,
     VoiceSpec,
     F5TTSBackend,
+    install_f5_tts_dependencies,
     ELEVENLABS_VOICES,
     VoiceCacheManager,
     compute_file_hash,
@@ -692,11 +693,37 @@ class TestWakewordCorpus(unittest.TestCase):
 
     def test_review_phrases_fallback_llm_prompt(self):
         initial = ["base phrase"]
-        # Option 3 (LLM prompt), then enter new variation, then Option 1 (accept)
         inputs = iter(["3", "new variant", "1"])
         with patch("builtins.input", side_effect=lambda _: next(inputs)):
             result = review_phrases_fallback(initial, "test_model")
             self.assertEqual(result, ["base phrase", "new variant"])
+
+    def test_find_cli_venv(self):
+        backend = F5TTSBackend()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_bin = Path(tmpdir) / "f5-tts_infer-cli"
+            fake_bin.write_text("#!/bin/sh\necho ok\n")
+            fake_bin.chmod(0o755)
+
+            with patch("shutil.which", return_value=None):
+                with patch("sys.executable", str(Path(tmpdir) / "python")):
+                    found = backend._find_cli()
+                    self.assertEqual(found, str(fake_bin))
+
+    def test_install_f5_tts_dependencies_success(self):
+        with patch("shutil.which", return_value="/usr/local/bin/uv"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                ok = install_f5_tts_dependencies()
+                self.assertTrue(ok)
+                mock_run.assert_called_once_with(["uv", "pip", "install", "f5-tts", "torch", "torchaudio"], check=False)
+
+    def test_install_f5_tts_dependencies_failure(self):
+        with patch("shutil.which", return_value=None):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=1)
+                ok = install_f5_tts_dependencies()
+                self.assertFalse(ok)
 
 
 if __name__ == "__main__":
