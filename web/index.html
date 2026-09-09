@@ -84,6 +84,8 @@
     .ha-selection-note strong { color: #60a5fa; }
     .ha-selection-note em { color: #f8fafc; font-style: normal; font-weight: 600; }
     .ha-selection-note code { background: #1e293b; color: #38bdf8; padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; }
+    .ha-selection-note a, .hint a { color: #38bdf8; text-decoration: underline; text-underline-offset: 2px; }
+    .ha-selection-note a:hover, .hint a:hover { color: #7dd3fc; }
     .install-warning-notice { width: 100%; box-sizing: border-box; margin-bottom: 8px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 4px; font-size: 0.82rem; color: #fca5a5; display: none; text-align: left; }
     button.install-btn:disabled, button.install-btn.disabled-btn { background: #334155 !important; color: #64748b !important; cursor: not-allowed !important; box-shadow: none !important; opacity: 0.6; }
     .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -189,6 +191,7 @@
         <label for="field_custom_wake_words">Custom Wake Word Models (.tflite)</label>
         <div class="custom-wake-slots" id="customWakeSlots_custom_wake_words">
           <div class="ha-selection-note"><strong>Dedicated Wake Word Partitions:</strong> Flashed into dedicated slots (up to 3 models).<br><strong>Note:</strong> Uploading and flashing custom wake words stores them in device flash memory, but does not set the active wake word. After flashing, open Home Assistant, go to your satellite's device controls page, and choose your wake word from the <em>Active Wake Word</em> dropdown.</div>
+          <div class="ha-selection-note" style="border-left-color: #8b5cf6; background: rgba(139, 92, 246, 0.08);"><strong>Train Custom Wake Words:</strong> Generate balanced synthetic training datasets using ElevenLabs, F5-TTS, or local macOS speech synthesis via <a href="https://github.com/axiomantic/esphome-satellite/blob/main/scripts/generate_wakeword_corpus.py" target="_blank" rel="noopener"><code>scripts/generate_wakeword_corpus.py</code></a>. See the <a href="https://github.com/axiomantic/esphome-satellite#synthetic-wake-word-corpus-generator--trainer" target="_blank" rel="noopener">microWakeWord Training Guide</a> in the README.</div>
           <div class="wake-slots-grid" style="display: flex; flex-direction: column; gap: 12px;">
             <div class="wake-slot-card" id="slotCard_custom_wake_words_0">
               <div class="slot-header">
@@ -246,7 +249,7 @@
             </div>
           </div>
         </div>
-        <div class="hint">Optional: Upload up to 3 custom microWakeWord .tflite models to flash into dedicated partitions. Note: Flashing custom wake words stores them on the device, but does not activate them. After flashing and setting up your device, open Home Assistant, navigate to your device controls page, and select your wake word from the Active Wake Word dropdown.</div>
+        <div class="hint">Optional: Upload up to 3 custom microWakeWord .tflite models to flash into dedicated partitions. Need to train a custom model? Use <a href="https://github.com/axiomantic/esphome-satellite/blob/main/scripts/generate_wakeword_corpus.py" target="_blank" rel="noopener"><code>scripts/generate_wakeword_corpus.py</code></a>—see the <a href="https://github.com/axiomantic/esphome-satellite#synthetic-wake-word-corpus-generator--trainer" target="_blank" rel="noopener">microWakeWord Training Guide</a> in the README. Note: Flashing custom wake words stores them on the device, but does not activate them. After flashing and setting up your device, open Home Assistant, navigate to your device controls page, and select your wake word from the Active Wake Word dropdown.</div>
       </div>
       <div class="form-group" id="group_custom_chimes" data-field="custom_chimes">
         <label for="field_custom_chimes">Custom Wake Chimes</label>

@@ -50,8 +50,8 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
     maxSlots = 3,
     slotOffsets = @[0x510000'u32, 0x550000'u32, 0x590000'u32],
     slotPartitions = @["wake_model", "wake_model_2", "wake_model_3"],
-    maxSize = 262144, # 256 KB per slot
-    description = "Optional: Upload up to 3 custom microWakeWord .tflite models to flash into dedicated partitions. Note: Flashing custom wake words stores them on the device, but does not activate them. After flashing and setting up your device, open Home Assistant, navigate to your device controls page, and select your wake word from the Active Wake Word dropdown."
+    description = "Optional: Upload up to 3 custom microWakeWord .tflite models to flash into dedicated partitions. Need to train a custom model? Use <a href=\"https://github.com/axiomantic/esphome-satellite/blob/main/scripts/generate_wakeword_corpus.py\" target=\"_blank\" rel=\"noopener\"><code>scripts/generate_wakeword_corpus.py</code></a>—see the <a href=\"https://github.com/axiomantic/esphome-satellite#synthetic-wake-word-corpus-generator--trainer\" target=\"_blank\" rel=\"noopener\">microWakeWord Training Guide</a> in the README. Note: Flashing custom wake words stores them on the device, but does not activate them. After flashing and setting up your device, open Home Assistant, navigate to your device controls page, and select your wake word from the Active Wake Word dropdown.",
+    calloutHtml = "<strong>Train Custom Wake Words:</strong> Generate balanced synthetic training datasets using ElevenLabs, F5-TTS, or local macOS speech synthesis via <a href=\"https://github.com/axiomantic/esphome-satellite/blob/main/scripts/generate_wakeword_corpus.py\" target=\"_blank\" rel=\"noopener\"><code>scripts/generate_wakeword_corpus.py</code></a>. See the <a href=\"https://github.com/axiomantic/esphome-satellite#synthetic-wake-word-corpus-generator--trainer\" target=\"_blank\" rel=\"noopener\">microWakeWord Training Guide</a> in the README."
   )
 
   # Custom Wake Chimes (chime_data partition at 0x4D0000)
