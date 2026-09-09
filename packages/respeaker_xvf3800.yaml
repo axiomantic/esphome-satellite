@@ -20,6 +20,9 @@ globals:
     type: int
     initial_value: '1'
 
+preferences:
+  flash_write_interval: 10s
+
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -33,12 +36,17 @@ esphome:
     - ../src/sound_data.h
     - ../src/pcm_sound_player.h
     - ../src/wake_partition_loader.h
+    - ../src/nvs_migration.h
   build_flags:
     - -Wno-write-strings
   on_boot:
     - priority: -100
       then:
         - lambda: |-
+            esphome::migrate_legacy_nvs_preferences(
+                id(slot1_volume), id(slot1_cancel_sound), id(slot1_wake_chime_sound),
+                id(slot1_processing_sound), id(slot1_sensitivity),
+                id(slot1_wake_chime), id(slot1_cancel_sound_switch));
             esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
             esphome::get_pcm_sound_player().set_speaker(id(board_speaker));
             esphome::get_pcm_sound_player().init_partitions(
@@ -436,6 +444,9 @@ text:
     min_length: 0
     max_length: 255
     mode: text
+    set_action:
+      - lambda: |-
+          global_preferences->sync();
 
 text_sensor:
   - platform: template
@@ -469,6 +480,7 @@ select:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().update_slot_models(
               x, id(slot2_wake_word).current_option(), id(clemens_model), id(nabu_model));
+          global_preferences->sync();
 
   - platform: template
     id: slot2_wake_word
@@ -486,6 +498,7 @@ select:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().update_slot_models(
               id(slot1_wake_word).current_option(), x, id(clemens_model), id(nabu_model));
+          global_preferences->sync();
 
   - platform: template
     id: slot1_sensitivity
@@ -504,6 +517,7 @@ select:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
               1, x, id(clemens_model), id(nabu_model));
+          global_preferences->sync();
 
   - platform: template
     id: slot2_sensitivity
@@ -522,6 +536,7 @@ select:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
               2, x, id(clemens_model), id(nabu_model));
+          global_preferences->sync();
 
   - platform: template
     id: slot1_processing_sound
@@ -558,6 +573,7 @@ select:
             float vol = id(slot1_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
           }
+          global_preferences->sync();
 
   - platform: template
     id: slot2_processing_sound
@@ -594,6 +610,7 @@ select:
             float vol = id(slot2_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
           }
+          global_preferences->sync();
 
   - platform: template
     id: slot1_wake_chime_sound
@@ -630,6 +647,7 @@ select:
             float vol = id(slot1_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_chime(x, false, vol);
           }
+          global_preferences->sync();
 
   - platform: template
     id: slot2_wake_chime_sound
@@ -666,6 +684,7 @@ select:
             float vol = id(slot2_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_chime(x, false, vol);
           }
+          global_preferences->sync();
 
   - platform: template
     id: slot1_cancel_sound
@@ -703,6 +722,7 @@ select:
             float vol = id(slot1_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
           }
+          global_preferences->sync();
 
   - platform: template
     id: slot2_cancel_sound
@@ -740,6 +760,7 @@ select:
             float vol = id(slot2_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
           }
+          global_preferences->sync();
 
   - platform: template
     id: led_pattern
@@ -754,6 +775,9 @@ select:
       - "Breathe"
       - "Rainbow"
       - "Spinner"
+    set_action:
+      - lambda: |-
+          global_preferences->sync();
 
 number:
   - platform: template
@@ -772,6 +796,7 @@ number:
           if (id(active_assistant_slot) == 1) {
             id(board_speaker).set_volume(x / 100.0f);
           }
+          global_preferences->sync();
 
   - platform: template
     id: slot2_volume
@@ -789,6 +814,7 @@ number:
           if (id(active_assistant_slot) == 2) {
             id(board_speaker).set_volume(x / 100.0f);
           }
+          global_preferences->sync();
 
   - platform: template
     id: wake_window_size
@@ -806,6 +832,7 @@ number:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_sliding_window(
               static_cast<size_t>(x), id(clemens_model), id(nabu_model));
+          global_preferences->sync();
 
   - platform: template
     id: mic_pre_gain_boost
@@ -823,6 +850,7 @@ number:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_mic_pre_gain(x);
+          global_preferences->sync();
 
   - platform: template
     id: led_brightness
@@ -835,6 +863,9 @@ number:
     initial_value: 0.5
     restore_value: true
     optimistic: true
+    set_action:
+      - lambda: |-
+          global_preferences->sync();
 
 switch:
   - platform: template
@@ -865,6 +896,12 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - lambda: |-
+          global_preferences->sync();
+    on_turn_off:
+      - lambda: |-
+          global_preferences->sync();
 
   - platform: template
     id: slot2_wake_chime
@@ -873,6 +910,12 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - lambda: |-
+          global_preferences->sync();
+    on_turn_off:
+      - lambda: |-
+          global_preferences->sync();
 
   - platform: template
     id: slot1_cancel_sound_switch
@@ -881,6 +924,12 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - lambda: |-
+          global_preferences->sync();
+    on_turn_off:
+      - lambda: |-
+          global_preferences->sync();
 
   - platform: template
     id: slot2_cancel_sound_switch
@@ -889,6 +938,12 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - lambda: |-
+          global_preferences->sync();
+    on_turn_off:
+      - lambda: |-
+          global_preferences->sync();
 
 script:
   - id: connect_and_start_assistant
