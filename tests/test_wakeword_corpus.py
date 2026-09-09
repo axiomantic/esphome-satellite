@@ -15,8 +15,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from generate_wakeword_corpus import (
-    generate_nabu_variations,
+    BUILTIN_WAKE_WORDS,
     generate_clemens_variations,
+    generate_bumblebee_variations,
+    generate_gizmo_variations,
+    generate_chief_variations,
+    generate_captain_variations,
+    generate_computer_variations,
+    generate_wizard_variations,
     encode_multipart_formdata,
     load_household_voices,
     normalize_transcript,
@@ -55,14 +61,80 @@ except ImportError:
 
 class TestWakewordCorpus(unittest.TestCase):
 
-    def test_nabu_variations(self):
-        variations = generate_nabu_variations()
+    def test_bumblebee_variations(self):
+        variations = generate_bumblebee_variations()
+        self.assertIsInstance(variations, list)
+        self.assertEqual(len(variations), 29)
+        self.assertIn("bumblebee", variations)
+        self.assertIn("hey bumblebee", variations)
+        self.assertIn("bummbell bee", variations)
+        self.assertEqual(len(variations), len(set(variations)))
+
+    def test_gizmo_variations(self):
+        variations = generate_gizmo_variations()
+        self.assertIsInstance(variations, list)
+        self.assertEqual(len(variations), 30)
+        self.assertIn("hey gizmo", variations)
+        self.assertIn("gizmo", variations)
+        self.assertIn("hey gismoe", variations)
+        self.assertEqual(len(variations), len(set(variations)))
+
+    def test_chief_variations(self):
+        variations = generate_chief_variations()
+        self.assertIsInstance(variations, list)
+        self.assertEqual(len(variations), 31)
+        self.assertIn("hey chief", variations)
+        self.assertIn("chief", variations)
+        self.assertIn("hey cheeve", variations)
+        self.assertEqual(len(variations), len(set(variations)))
+
+    def test_captain_variations(self):
+        variations = generate_captain_variations()
+        self.assertIsInstance(variations, list)
+        self.assertEqual(len(variations), 32)
+        self.assertIn("oh captain", variations)
+        self.assertIn("captain", variations)
+        self.assertIn("oh cap den", variations)
+        self.assertEqual(len(variations), len(set(variations)))
+
+    def test_computer_variations(self):
+        variations = generate_computer_variations()
         self.assertIsInstance(variations, list)
         self.assertEqual(len(variations), 34)
-        self.assertIn("okay nabu", variations)
-        self.assertIn("oh kay nah boo", variations)
-        self.assertIn("ay nah boo", variations)
+        self.assertIn("ok computer", variations)
+        self.assertIn("okay computer", variations)
+        self.assertIn("ok computr", variations)
         self.assertEqual(len(variations), len(set(variations)))
+
+    def test_wizard_variations(self):
+        variations = generate_wizard_variations()
+        self.assertIsInstance(variations, list)
+        self.assertEqual(len(variations), 35)
+        self.assertIn("little wizard", variations)
+        self.assertIn("hey little wizard", variations)
+        self.assertIn("lit uhl wizz urd", variations)
+        self.assertEqual(len(variations), len(set(variations)))
+
+    def test_builtin_wake_words_registry(self):
+        expected_keys = [
+            "mister_clemens",
+            "bumblebee",
+            "hey_gizmo",
+            "hey_chief",
+            "oh_captain",
+            "ok_computer",
+            "little_wizard",
+        ]
+        self.assertEqual(list(BUILTIN_WAKE_WORDS.keys()), expected_keys)
+        for key in expected_keys:
+            entry = BUILTIN_WAKE_WORDS[key]
+            self.assertIn("name", entry)
+            self.assertIn("description", entry)
+            self.assertTrue(callable(entry["generator"]))
+            variations = entry["generator"]()
+            self.assertIsInstance(variations, list)
+            self.assertGreaterEqual(len(variations), 25)
+            self.assertEqual(len(variations), len(set(variations)))
 
     def test_clemens_variations(self):
         variations = generate_clemens_variations()
@@ -363,10 +435,10 @@ class TestWakewordCorpus(unittest.TestCase):
             hv3 = HouseholdVoice(name="User", audio_path=path1, transcript="Different text")
             vspec3 = VoiceSpec(voice_id="user", voice_name="User", household=hv3)
 
-            key1_a = get_sample_cache_key("f5_tts", vspec1, "okay nabu")
-            key1_b = get_sample_cache_key("f5_tts", vspec1, "okay nabu")
-            key2 = get_sample_cache_key("f5_tts", vspec2, "okay nabu")
-            key3 = get_sample_cache_key("f5_tts", vspec3, "okay nabu")
+            key1_a = get_sample_cache_key("f5_tts", vspec1, "mister clemens")
+            key1_b = get_sample_cache_key("f5_tts", vspec1, "mister clemens")
+            key2 = get_sample_cache_key("f5_tts", vspec2, "mister clemens")
+            key3 = get_sample_cache_key("f5_tts", vspec3, "mister clemens")
 
             # Deterministic for identical parameters
             self.assertEqual(key1_a, key1_b)
