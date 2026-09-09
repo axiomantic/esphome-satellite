@@ -437,6 +437,60 @@ def add_phrases_interactive(phrases: List[str], console: Optional[Any] = None) -
     return updated
 
 
+def generate_llm_prompt(phrase: str) -> str:
+    """Generates an optimized LLM prompt for creating diverse phonetic variations."""
+    return (
+        f"Generate 25-35 diverse phonetic variations, homophones, and acoustic respellings of the wake word phrase \"{phrase}\" for training a microWakeWord neural speech model.\n\n"
+        "Requirements:\n"
+        "1. Include natural conversational prefixes and omissions (e.g., 'hey', 'ok', 'okay', 'hi', or omitting the prefix entirely).\n"
+        "2. Include intentional phonetic misspellings that instruct text-to-speech engines to produce slurred consonants, vowel shifts, fast speech blends, and regional dialect variations.\n"
+        "3. Include both single-word contractions and spaced-out syllable breakdowns.\n"
+        "4. Format the result ONLY as a comma-separated list on a single line (no numbering, markdown bullet points, or introductory commentary), e.g.:\n"
+        f"   {phrase}, ...\n"
+    )
+
+
+def copy_to_clipboard(text: str) -> bool:
+    """Attempts to copy text to system clipboard (macOS pbcopy, Linux wl-copy/xclip, Windows clip)."""
+    for cmd in [["pbcopy"], ["wl-copy"], ["xclip", "-selection", "clipboard"], ["clip"]]:
+        if shutil.which(cmd[0]):
+            try:
+                res = subprocess.run(cmd, input=text.encode("utf-8"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if res.returncode == 0:
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def show_llm_prompt_panel(phrase: str, console: Optional[Any] = None) -> str:
+    """Displays a ready-to-copy LLM prompt for generating phonetic variations."""
+    prompt_text = generate_llm_prompt(phrase)
+    copied = copy_to_clipboard(prompt_text)
+    clip_status = " [green](Copied to clipboard!)[/green]" if copied else ""
+
+    if HAVE_TUI:
+        c = console or Console()
+        c.print()
+        c.print(Panel(
+            f"[bold cyan]LLM Prompt for Phonetic Variations[/bold cyan]{clip_status}\n"
+            f"[dim]Copy and paste this into ChatGPT, Claude, or Gemini, then paste the output below:[/dim]\n\n"
+            f"[white]{prompt_text}[/white]",
+            border_style="cyan",
+            title="Prompt Generator",
+            expand=False,
+        ))
+        c.print()
+    else:
+        print("\n" + "=" * 65)
+        print(f" LLM Prompt for Phonetic Variations{' (Copied to clipboard!)' if copied else ''}")
+        print("=" * 65)
+        print(prompt_text)
+        print("=" * 65 + "\n")
+
+    return prompt_text
+
+
 def review_phrases_fallback(phrases: List[str], model_name: str) -> List[str]:
     """Text-based review and editing loop for environments without questionary."""
     current_phrases = list(phrases)
@@ -447,9 +501,10 @@ def review_phrases_fallback(phrases: List[str], model_name: str) -> List[str]:
         print("\nOptions:")
         print(f"  [1] Accept variations as-is ({len(current_phrases)} phrases) [default]")
         print("  [2] Add more variations (comma-separated)")
-        print("  [3] Edit full list in text editor")
-        print("  [4] Remove variations by numbers (comma-separated, e.g. '1, 3, 5')")
-        choice = input("Select [1-4, default=1]: ").strip() or "1"
+        print("  [3] Generate LLM prompt for phonetic variations (copies to clipboard)")
+        print("  [4] Edit full list in text editor")
+        print("  [5] Remove variations by numbers (comma-separated, e.g. '1, 3, 5')")
+        choice = input("Select [1-5, default=1]: ").strip() or "1"
         if choice == "1":
             break
         elif choice == "2":
@@ -462,8 +517,18 @@ def review_phrases_fallback(phrases: List[str], model_name: str) -> List[str]:
                         seen.add(item)
                         current_phrases.append(item)
         elif choice == "3":
-            current_phrases = edit_phrases_in_editor(current_phrases)
+            show_llm_prompt_panel(model_name.replace("_", " "))
+            new_text = input("Enter variations (comma-separated): ").strip()
+            if new_text:
+                new_items = parse_variations(new_text)
+                seen = set(current_phrases)
+                for item in new_items:
+                    if item not in seen:
+                        seen.add(item)
+                        current_phrases.append(item)
         elif choice == "4":
+            current_phrases = edit_phrases_in_editor(current_phrases)
+        elif choice == "5":
             rem_str = input("Enter numbers to remove (comma-separated): ").strip()
             if rem_str:
                 indices_to_remove = set()
@@ -502,6 +567,7 @@ def review_phrases_interactive(phrases: List[str], model_name: str, console: Opt
             choices=[
                 Choice(f"Accept variations as-is ({len(current_phrases)} phrases - proceed)", value="accept"),
                 Choice("Add more variations (type or paste)", value="add"),
+                Choice("Generate LLM prompt for phonetic variations (copies to clipboard)", value="llm_prompt"),
                 Choice("Remove variations (select with checkboxes)", value="remove"),
                 Choice("Edit full list in text editor ($EDITOR / nano)", value="edit"),
                 Choice("Load additional variations from a text file", value="file"),
@@ -511,6 +577,9 @@ def review_phrases_interactive(phrases: List[str], model_name: str, console: Opt
         if action is None or action == "accept":
             break
         elif action == "add":
+            current_phrases = add_phrases_interactive(current_phrases, console)
+        elif action == "llm_prompt":
+            show_llm_prompt_panel(model_name.replace("_", " "), console)
             current_phrases = add_phrases_interactive(current_phrases, console)
         elif action == "remove":
             current_phrases = remove_phrases_interactive(current_phrases)
@@ -1587,7 +1656,8 @@ def run_tui_wizard():
             else:
                 phrases = parse_variations(f_path.read_text(encoding="utf-8"))
         elif input_mode == "text":
-            console.print("[dim]Enter phonetic variants separated by commas or newlines (e.g. 'hey computer, ok computer, hay compyuter'):[/dim]")
+            show_llm_prompt_panel(model_name.replace("_", " "), console)
+            console.print("[dim]Enter phonetic variants separated by commas or newlines (or press Enter to keep base phrase):[/dim]")
             var_text = questionary.text("Phonetic variations:").ask()
             phrases = parse_variations(var_text or "")
         else:
@@ -1855,6 +1925,7 @@ def _run_fallback_wizard():
     else:
         custom_input = input("Enter custom wake word identifier: ").strip()
         model_name = custom_input.lower().replace(" ", "_")
+        show_llm_prompt_panel(model_name.replace("_", " "))
         var_input = input("Enter phonetic variations (comma-separated or path to .txt file): ").strip()
         var_path = clean_path(var_input)
         if var_path and var_path.is_file():
