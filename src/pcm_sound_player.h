@@ -57,7 +57,14 @@ class PcmSoundPlayer {
  public:
   void set_speaker(speaker::Speaker *speaker) { this->speaker_ = speaker; }
 
-  void init_partitions(select::Select *chime_sel = nullptr, select::Select *proc_sel = nullptr, select::Select *cancel_sel = nullptr) {
+  void init_partitions(
+      select::Select *chime_sel = nullptr,
+      select::Select *proc_sel = nullptr,
+      select::Select *cancel_sel = nullptr,
+      select::Select *chime_sel2 = nullptr,
+      select::Select *proc_sel2 = nullptr,
+      select::Select *cancel_sel2 = nullptr
+  ) {
     if (this->partitions_initialized_) return;
     this->partitions_initialized_ = true;
 
@@ -107,7 +114,7 @@ class PcmSoundPlayer {
     }
 
     // Update Home Assistant select entities if custom sounds were found
-    if (chime_sel != nullptr && !this->custom_chimes_.empty()) {
+    if (!this->custom_chimes_.empty()) {
       this->chime_options_storage_ = {
         "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba", "Meditation Bell",
         "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl", "Acoustic Harp", "Woodblock",
@@ -120,11 +127,12 @@ class PcmSoundPlayer {
       FixedVector<const char *> fixed_opts;
       fixed_opts.init(this->chime_options_storage_.size());
       for (const auto &opt : this->chime_options_storage_) fixed_opts.push_back(opt.c_str());
-      chime_sel->traits.set_options(fixed_opts);
+      if (chime_sel != nullptr) chime_sel->traits.set_options(fixed_opts);
+      if (chime_sel2 != nullptr) chime_sel2->traits.set_options(fixed_opts);
       ESP_LOGI(PCM_PLAYER_TAG, "Updated Wake Chime Sound options with %zu custom sound(s)", this->custom_chimes_.size());
     }
 
-    if (proc_sel != nullptr && !this->custom_processing_sounds_.empty()) {
+    if (!this->custom_processing_sounds_.empty()) {
       this->proc_options_storage_ = {
         "Spinner", "Pulse", "Sonar", "Tick", "Typewriter", "Clockwork", "Water Droplets",
         "Raindrops", "Forest Stream", "Campfire Ember", "Shishi-Odoshi", "Soft Footsteps",
@@ -137,11 +145,12 @@ class PcmSoundPlayer {
       FixedVector<const char *> fixed_opts;
       fixed_opts.init(this->proc_options_storage_.size());
       for (const auto &opt : this->proc_options_storage_) fixed_opts.push_back(opt.c_str());
-      proc_sel->traits.set_options(fixed_opts);
+      if (proc_sel != nullptr) proc_sel->traits.set_options(fixed_opts);
+      if (proc_sel2 != nullptr) proc_sel2->traits.set_options(fixed_opts);
       ESP_LOGI(PCM_PLAYER_TAG, "Updated Processing Sound options with %zu custom sound(s)", this->custom_processing_sounds_.size());
     }
 
-    if (cancel_sel != nullptr && !this->custom_cancel_sounds_.empty()) {
+    if (!this->custom_cancel_sounds_.empty()) {
       this->cancel_options_storage_ = {
         "Match Wake Chime", "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba",
         "Meditation Bell", "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl",
@@ -154,7 +163,8 @@ class PcmSoundPlayer {
       FixedVector<const char *> fixed_opts;
       fixed_opts.init(this->cancel_options_storage_.size());
       for (const auto &opt : this->cancel_options_storage_) fixed_opts.push_back(opt.c_str());
-      cancel_sel->traits.set_options(fixed_opts);
+      if (cancel_sel != nullptr) cancel_sel->traits.set_options(fixed_opts);
+      if (cancel_sel2 != nullptr) cancel_sel2->traits.set_options(fixed_opts);
       ESP_LOGI(PCM_PLAYER_TAG, "Updated Cancel Sound options with %zu custom sound(s)", this->custom_cancel_sounds_.size());
     }
   }

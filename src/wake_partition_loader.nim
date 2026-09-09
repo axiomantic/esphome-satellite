@@ -95,10 +95,14 @@ proc nim_wake_loader_validate_header*(
 
 proc calculateCutoffForSensitivity*(baseCutoff: uint8, level: string): uint8 =
   ## Scales quantized probability cutoff based on sensitivity level:
+  ## "Extreme sensitivity" -> 0.45x cutoff (ultra-low threshold for high recall/female voice/distance)
   ## "Very sensitive" -> 0.70x cutoff (lower threshold, easier trigger)
   ## "Moderately sensitive" -> 1.0x cutoff (nominal baseline)
   ## "Slightly sensitive" -> 1.35x cutoff (higher threshold, strict rejection)
   case level
+  of "Extreme sensitivity":
+    let scaled = int(float(baseCutoff) * 0.45)
+    uint8(max(10, min(scaled, 245)))
   of "Very sensitive":
     let scaled = int(float(baseCutoff) * 0.70)
     uint8(max(10, min(scaled, 245)))

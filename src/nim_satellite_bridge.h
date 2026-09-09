@@ -18,6 +18,7 @@ void nim_satellite_error(const char *code) __attribute__((weak));
 void nim_satellite_disconnected(void) __attribute__((weak));
 void nim_satellite_connected(void) __attribute__((weak));
 bool nim_satellite_is_cancellation(const char *text, const char *config) __attribute__((weak));
+bool nim_satellite_is_reset_phrase(const char *text) __attribute__((weak));
 int nim_satellite_get_state(void) __attribute__((weak));
 bool nim_satellite_is_cancelling(void) __attribute__((weak));
 
@@ -39,6 +40,8 @@ bool nim_satellite_is_alerting(void) __attribute__((weak));
 // Real-Time Audio DSP Hooks
 void nim_audio_dsp_process(int16_t *samples, int count) __attribute__((weak));
 void nim_audio_dsp_process32(int32_t *samples, int count) __attribute__((weak));
+void nim_audio_dsp_set_mic_pre_gain(float db) __attribute__((weak));
+void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) __attribute__((weak));
 
 // Hardware & Animation Nim Hooks
 void nim_xvf3800_make_gpo_payload(uint8_t pin, uint8_t val, uint8_t *outBuf) __attribute__((weak));
@@ -56,6 +59,12 @@ inline void call_nim_audio_dsp_process(int16_t *samples, int count) {
 }
 inline void call_nim_audio_dsp_process32(int32_t *samples, int count) {
   if (nim_audio_dsp_process32) nim_audio_dsp_process32(samples, count);
+}
+inline void call_nim_audio_dsp_set_mic_pre_gain(float db) {
+  if (nim_audio_dsp_set_mic_pre_gain) nim_audio_dsp_set_mic_pre_gain(db);
+}
+inline void call_nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) {
+  if (nim_audio_dsp_apply_mic_pre_gain32) nim_audio_dsp_apply_mic_pre_gain32(samples, count);
 }
 
 // Safe C++ inlined callers
@@ -95,6 +104,10 @@ inline void call_nim_disconnected(void) {
 }
 inline bool call_nim_is_cancellation(const char *text, const char *config = nullptr) {
   if (nim_satellite_is_cancellation) return nim_satellite_is_cancellation(text, config);
+  return false;
+}
+inline bool call_nim_is_reset_phrase(const char *text) {
+  if (nim_satellite_is_reset_phrase) return nim_satellite_is_reset_phrase(text);
   return false;
 }
 inline void call_nim_set_muted(bool muted) {

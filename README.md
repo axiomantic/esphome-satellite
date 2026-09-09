@@ -104,6 +104,13 @@ Once the board has rebooted into ESPHome, connect using either method:
 - [Quick Install](#quick-install)
 - [Post-Installation Setup](#post-installation-setup)
 - [Multi-Wake-Word to Multi-Assistant Pipeline Mapping](#multi-wake-word-to-multi-assistant-pipeline-mapping)
+  - [Dual-Assistant Profiles & Independent Feedback](#dual-assistant-profiles--independent-feedback)
+  - [5-Minute Conversation Memory & Context Isolation](#5-minute-conversation-memory--context-isolation)
+  - [Dynamic Partition Loader for Custom Models](#dynamic-partition-loader-for-custom-models)
+- [Acoustic Tuning & Female Voice Equalization](#acoustic-tuning--female-voice-equalization)
+  - [Microphone Pre-Gain Boost](#microphone-pre-gain-boost)
+  - [Sliding Window Size Tuning](#sliding-window-size-tuning)
+  - [Extreme Sensitivity Tier](#extreme-sensitivity-tier)
 - [Real-Time Audio DSP & Speech Optimization](#real-time-audio-dsp--speech-optimization)
 - [Discrete Partition Flashing & NVS State Preservation](#discrete-partition-flashing--nvs-state-preservation)
 - [The Voice Satellite Race Condition Problem](#the-voice-satellite-race-condition-problem)
@@ -113,6 +120,13 @@ Once the board has rebooted into ESPHome, connect using either method:
 - [Extended Lifecycle States](#extended-lifecycle-states)
 - [Audio Feedback, Processing Loops & Cancel Sounds](#audio-feedback-processing-loops--cancel-sounds)
 - [In-Browser Audio Transcoding & WebSerial Diagnostics](#in-browser-audio-transcoding--webserial-diagnostics)
+- [Synthetic Wake Word Corpus Generator & Trainer](#synthetic-wake-word-corpus-generator--trainer)
+  - [Synthesis Backends](#synthesis-backends)
+  - [Curated Voice Demographic Balance](#curated-voice-demographic-balance)
+  - [Exhaustive Phonetic Variations](#exhaustive-phonetic-variations)
+  - [Interactive TUI Wizard & Headless CLI](#interactive-tui-wizard--headless-cli)
+  - [Exporting to microWakeWord Training Pipeline](#exporting-to-microwakeword-training-pipeline)
+  - [Roadmap: F5-TTS & Zero-Shot Household Voice Cloning](#roadmap-f5-tts--zero-shot-household-voice-cloning)
 - [Home Assistant Surface Controls & Entities](#home-assistant-surface-controls--entities)
 - [Integration Guide for ESPHome](#integration-guide-for-esphome)
   - [Step 1: Include External Components](#step-1-include-external-components)
@@ -142,8 +156,50 @@ In modern Home Assistant voice environments, a single satellite device often nee
 3. **Zero-Latency Routing**: When speech is detected, the on-device microWakeWord engine identifies which specific wake word was matched and transmits the recognized phrase (`wake_word_phrase`) directly inside the `VoiceAssistantRequest` packet.
 4. **Deterministic Server Dispatch**: Home Assistant inspects the incoming phrase and automatically dispatches the audio stream to the exact pipeline bound to that wake word slot. No complex automations, blueprint scripts, or server-side audio rerouting required.
 
+### Dual-Assistant Profiles & Independent Feedback
+Each assistant slot operates as a fully independent profile with its own acoustic identity:
+- **Dedicated Volume Levels**: Set independent volume controls for Slot 1 (`Audio: Slot 1 Volume`) and Slot 2 (`Audio: Slot 2 Volume`), enabling quiet, unobtrusive volume for administrative commands while preserving full fidelity for literary or conversational assistants.
+- **Independent Acoustic Themes**: Select distinct Wake Chimes, Processing Loops, and Cancel Sounds per slot. For instance, Slot 1 can play a warm acoustic kalimba chime with a vintage typewriter processing loop, while Slot 2 plays a crisp digital bell ping with a subtle spinner loop.
+- **Per-Slot Wake Word Selectors**: Home Assistant device configuration panels restrict wake word selection to a single active wake word per device. `esphome-satellite` bypasses this limitation with native on-device template selectors (`Speech: Slot 1 Wake Word` and `Speech: Slot 2 Wake Word`), allowing you to assign any built-in or custom partition model to either slot independently.
+- **Slot 2 Disable Option**: Setting Slot 2's wake word to `Disabled` safely reverts the satellite to dedicated single-assistant mode with zero overhead.
+
+### 5-Minute Conversation Memory & Context Isolation
+Voice interactions often span multi-turn dialogue where context should persist across pauses:
+1. **Extended Conversation Memory (300 Seconds)**: `conversation_timeout` is set to `300s` (5 minutes), perfectly aligning with Home Assistant Core's `chat_session.py` garbage collection window. You can issue a command, pause for several minutes, trigger the wake word again, and ask contextual follow-up questions (such as *"repeat what you just did and undo it"*).
+2. **Slot-Level Context Isolation**: To prevent personas from bleeding context into each other, the satellite tracks the active assistant slot. When a wake word activates a different slot than the preceding turn, the satellite immediately invokes `id(va).reset_conversation_id()`. This forces Home Assistant to spin up a clean conversation context for the new assistant.
+3. **Spoken Conversation Reset**: Saying *"forget our conversation"*, *"clear history"*, *"reset conversation"*, *"new conversation"*, or *"forget everything"* is intercepted directly in `on_stt_end`. The satellite wipes the Home Assistant conversation ID, dismisses the turn, and plays the cancel sound as an audible confirmation cue without sending unnecessary LLM prompts.
+4. **Manual Reset Button**: The dashboard exposes `Speech: Reset Conversation History` for one-tap memory clearing.
+
 ### Dynamic Partition Loader for Custom Models
 Using [`src/wake_partition_loader.nim`](src/wake_partition_loader.nim), users can flash up to 3 custom microWakeWord `.tflite` models into dedicated flash partitions (`wake_model`, `wake_model_2`, `wake_model_3` at `0x510000`, `0x550000`, `0x590000`). At boot time, the partition loader validates 64-byte `WAKE` headers, extracts tensor arena sizes and probability cutoffs, memory-maps the weights directly from SPI flash (avoiding heap allocation), and dynamically registers them into the active detection pool.
+
+---
+
+## Acoustic Tuning & Female Voice Equalization
+
+Far-field microWakeWord neural networks frequently exhibit acoustic bias toward male voices. Female speech generally exhibits:
+- Higher fundamental frequencies ($F_0 \approx 200-260 \text{ Hz}$ vs. $100-140 \text{ Hz}$ for adult males).
+- Shorter vowel durations and faster formant transitions across consonants.
+- Lower acoustic energy in the lower register where small voice satellite microphones have the highest SNR.
+
+`esphome-satellite` provides three runtime acoustic equalization controls to eliminate gender bias and maximize detection reliability across all household members:
+
+### Microphone Pre-Gain Boost
+- **Entity**: `Speech: Mic Pre-Gain Boost` (`number.speech_mic_pre_gain_boost`)
+- **Range**: `0 dB` to `+12 dB` (step `1 dB`, default `3 dB`)
+- **Implementation**: Written in Nim ([`src/audio_dsp.nim`](src/audio_dsp.nim)), applying 64-bit precision linear gain scaling directly to 32-bit microphone samples in the I2S capture loop before microWakeWord 40-band Mel-frequency spectrogram extraction.
+- **Tuning**: A `+3 dB` to `+6 dB` boost brings female vocal energy up to parity with male speech without clipping the XVF3800 beamformed microphone stream.
+
+### Sliding Window Size Tuning
+- **Entity**: `Speech: Wake Window Size` (`number.speech_wake_window_size`)
+- **Range**: `2` to `5` frames (default `3` frames, where 1 frame = ~100 ms)
+- **Implementation**: Dynamically resizes the sliding probability window in the microWakeWord `StreamingModel` neural network runtime.
+- **Tuning**: Standard wake word engines require 4 to 5 consecutive frames above threshold to trigger. Because female speech often articulates syllables more briskly, a 5-frame window can reject valid wake words during fast cadence. Lowering the window to `2` or `3` frames captures shorter syllable bursts cleanly.
+
+### Extreme Sensitivity Tier
+- **Entities**: `Speech: Slot 1 Sensitivity` and `Speech: Slot 2 Sensitivity`
+- **Options**: `Slightly sensitive` (1.35x cutoff), `Moderately sensitive` (1.0x cutoff), `Very sensitive` (0.70x cutoff), `Extreme sensitivity` (0.45x cutoff).
+- **Implementation**: Scales the neural network's activation threshold cutoff dynamically in SPI flash memory structures. Selecting `Extreme sensitivity` drops the required activation barrier by 55%, enabling effortless far-field triggers across quiet voices, soft accents, or high ambient noise environments.
 
 ---
 
@@ -494,31 +550,135 @@ The [`esphome-satellite` Web Installer](https://axiomantic.github.io/esphome-sat
 
 ---
 
+## Synthetic Wake Word Corpus Generator & Trainer
+
+The repository includes a self-contained, high-performance synthetic speech dataset generator and microWakeWord preparation script: [`scripts/generate_wakeword_corpus.py`](scripts/generate_wakeword_corpus.py).
+
+High recall in edge neural wake word models requires acoustic variety across speech speed, pitch, accents, and phonetic permutations. `generate_wakeword_corpus.py` automates positive dataset creation with zero manual recording required.
+
+### Synthesis Backends
+1. **ElevenLabs API (`--backend elevenlabs`)**: Cloud neural synthesis using high-fidelity production voices. Employs curated voice registries spanning female, male, adolescent, and accented speakers.
+2. **macOS `say` (`--backend macos_say`)**: Built-in zero-dependency local macOS speech synthesizer. Uses system voices (`Samantha`, `Victoria`, `Alex`, `Daniel`, `Oliver`, `Junior`, etc.) without requiring external network access or API tokens.
+
+### Curated Voice Demographic Balance
+To prevent acoustic overfitting and address gender/age detection disparities, the corpus generator draws from a balanced demographic distribution:
+- **Female (40%)**: Voices with higher pitch and faster formant transitions (`Rachel`, `Sarah`, `Freya`, `Nicole`, `Charlotte`, `Samantha`, `Victoria`).
+- **Male (40%)**: Deep and mid-range baritone voices (`Adam`, `Antoni`, `Josh`, `Arnold`, `George`, `Alex`, `Daniel`).
+- **Adolescent / Youth (10%)**: Higher vocal tracts and faster cadence (`Mimi`, `Liam`, `Fin`, `Junior`).
+- **Accents (10%)**: British, Irish, Australian, Transatlantic, and Swedish-English intonations (`Dorothy`, `Alice`, `Charlie`, `Matilda`, `Moira`).
+
+### Exhaustive Phonetic Variations
+The generator produces combinatorial phonetic permutations for common wake phrases to cover varied regional pronunciations and elisions:
+- **Okay Nabu**:
+  - Prefixes: `okay`, `ok`, `hey`, `ay`, `kay`, and bare phrase.
+  - Surnames: `nabu`, `nahboo`, `na boo`, `nayboo`, `nah bu`, `naboo`.
+- **Mr. Clemens**:
+  - Honorifics: `mister`, `mr`, `mr.`, `mista`, `mist ur`, `miss ter`, `misster`, `miss tack`, `mist ack`.
+  - Surnames: `clemens`, `clemen`, `clemence`, `claman`, `clem ins`, `lemons`, `klemens`, `clay mens`, `claymen`.
+
+### Content-Addressed Caching
+Generated audio clips are cached in `.cache/mww_corpus/<sha256>.wav` based on the hash of phrase, voice, engine, and acoustic parameters. Subsequent runs with identical parameters complete instantly without incurring duplicate API costs or re-synthesis delay.
+
+### Interactive TUI Wizard & Headless CLI
+
+Run the interactive terminal wizard:
+```bash
+python3 scripts/generate_wakeword_corpus.py --wizard
+```
+The wizard prompts for:
+1. Model target (*Okay Nabu*, *Mr. Clemens*, or Custom phrase)
+2. Synthesis backend (*ElevenLabs API* or *macOS say*)
+3. Sample count (e.g. 50, 500, or 2,000)
+4. Output directory
+
+Run in headless CLI mode for scripted automation:
+```bash
+# Generate 100 samples of Mr. Clemens using macOS say
+python3 scripts/generate_wakeword_corpus.py \
+  --model mister_clemens \
+  --backend macos_say \
+  --count 100 \
+  --output data/mister_clemens/positive
+
+# Generate 500 samples using ElevenLabs API
+export ELEVENLABS_API_KEY="your-api-key"
+python3 scripts/generate_wakeword_corpus.py \
+  --model okay_nabu \
+  --backend elevenlabs \
+  --count 500 \
+  --output data/okay_nabu/positive
+
+# Generate custom phrase
+python3 scripts/generate_wakeword_corpus.py \
+  --model custom \
+  --phrase "computer activate" \
+  --backend macos_say \
+  --count 50 \
+  --output data/custom/positive
+```
+
+### Exporting to microWakeWord Training Pipeline
+Every synthesized audio file is automatically normalized, trimmed of leading/trailing silence, and transcoded to **16,000 Hz 16-bit mono PCM** matching microWakeWord input requirements:
+1. Feed generated `.wav` files into the microWakeWord feature generator:
+   ```bash
+   python3 -m microwakeword.feature_generator \
+     --dataset_dir data/mister_clemens \
+     --output_dir trained_models/mister_clemens/features
+   ```
+2. Train the streaming neural network model:
+   ```bash
+   python3 -m microwakeword.train \
+     --feature_dir trained_models/mister_clemens/features \
+     --output_dir trained_models/mister_clemens/model
+   ```
+3. Convert to INT8 quantized `.tflite` model and flash directly to partition `0x510000` (`wake_model`) via the [Web Installer](https://axiomantic.github.io/esphome-satellite/).
+
+### Roadmap: F5-TTS & Zero-Shot Household Voice Cloning
+To maximize detection accuracy for specific family members while maintaining model robustness, the script design accommodates zero-shot voice cloning:
+
+1. **F5-TTS Flow Matching Integration**:
+   - F5-TTS employs non-autoregressive flow matching to generate high-fidelity speech conditioned on a short (3-10 second) reference audio clip.
+   - Provides richer dynamic expressiveness, vocal cadence variation, and prosody shifts than traditional text-to-speech.
+2. **Household Member Voice Cloning**:
+   - Users record or supply a reference audio clip of household members (e.g. self, partner, children) along with a reference transcript.
+   - The generator clones each member's acoustic timbre and fundamental frequency profile using either local F5-TTS or ElevenLabs Instant Voice Cloning (IVC).
+3. **Additive Multi-Voice Composition**:
+   - Household cloned voices operate as an additive layer on top of the default generic voice mix (40% female, 40% male, 10% kids, 10% accents).
+   - This hybrid strategy ensures the neural network attains maximum sensitivity to the specific household's resonant frequencies while preserving generalization and preventing false triggers from background ambient speech.
+
+---
+
 ## Home Assistant Surface Controls & Entities
 
 `esphome-satellite` exposes native Home Assistant entities generated via `nim-esphome`'s declarative controls DSL, enabling full runtime configuration and automation from your dashboards:
 
 | Entity ID | Domain | Type / Options | Description |
 |---|---|---|---|
-| `select.assistant` | `select` | Available HA pipelines | Primary voice assistant pipeline (Slot 1). |
-| `select.wake_word` | `select` | `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model mapped to primary Assistant (Slot 1). |
-| `select.assistant_2` | `select` | Available HA pipelines | Secondary voice assistant pipeline (Slot 2). |
-| `select.wake_word_2` | `select` | `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model mapped to secondary Assistant (Slot 2). |
-| `select.wake_word_sensitivity` | `select` | *Slightly*, *Moderately*, *Very sensitive* | Probability cutoff sensitivity for on-device wake detection. |
-| `text.cancellation_words` | `text` | Comma-separated strings | Phrases that immediately abort active listening (*stop, nevermind, cancel*). |
-| `select.wake_chime_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played immediately upon wake word detection. |
-| `switch.wake_chime` | `switch` | `on` / `off` | Master toggle for wake acknowledgement chime playback. |
-| `number.wake_chime_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for wake chimes. |
-| `select.processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played while speech is processing. |
-| `number.processing_sound_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for intermediate processing loop. |
-| `select.cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Audible resolve played when speech recognition is cancelled or times out. |
-| `switch.cancel_sound_switch` | `switch` | `on` / `off` | Master toggle for cancel sound playback. |
-| `number.cancel_sound_volume` | `number` | `0%` – `100%` (step `5%`) | Volume level for cancel sounds. |
-| `select.led_idle_pattern` | `select` | `Off`, `Breathe`, `Rainbow`, `Spinner` | Ambient idle animation mode for the 12-LED addressable ring. |
-| `number.led_brightness` | `number` | `5%` – `100%` (step `5%`) | Brightness scaling for all LED animations. |
+| `select.speech_slot_1_wake_word` | `select` | `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model assigned to Assistant 1 (Slot 1). |
+| `select.speech_slot_2_wake_word` | `select` | `Disabled`, `Mr. Clemens`, `Okay Nabu`, Custom | Wake word model assigned to Assistant 2 (Slot 2). |
+| `select.speech_slot_1_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Probability cutoff sensitivity for Slot 1 detection. |
+| `select.speech_slot_2_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Probability cutoff sensitivity for Slot 2 detection. |
+| `number.speech_wake_window_size` | `number` | `2` – `5` frames (default `3`) | Detection window length; lower values catch fast female syllables. |
+| `number.speech_mic_pre_gain_boost` | `number` | `0 dB` – `+12 dB` (step `1 dB`, default `3 dB`) | Digital pre-gain applied to raw microphone samples before DSP inference. |
+| `text.speech_cancellation_words` | `text` | Comma-separated strings | Phrases that immediately abort active listening (*stop, nevermind, cancel*). |
+| `button.speech_reset_conversation_history` | `button` | Action | Clears conversational memory context on Home Assistant. |
+| `select.audio_slot_1_wake_chime` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played for Slot 1 wake word. |
+| `switch.audio_slot_1_wake_chime_enabled` | `switch` | `on` / `off` | Master toggle for Slot 1 wake chime playback. |
+| `number.audio_slot_1_volume` | `number` | `0%` – `100%` (step `5%`) | Master playback and chime volume level for Slot 1. |
+| `select.audio_slot_1_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 1 cloud processing. |
+| `select.audio_slot_1_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 1 interaction is cancelled. |
+| `switch.audio_slot_1_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 1 cancel sound playback. |
+| `select.audio_slot_2_wake_chime` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played for Slot 2 wake word. |
+| `switch.audio_slot_2_wake_chime_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 wake chime playback. |
+| `number.audio_slot_2_volume` | `number` | `0%` – `100%` (step `5%`) | Master playback and chime volume level for Slot 2. |
+| `select.audio_slot_2_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 2 cloud processing. |
+| `select.audio_slot_2_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 2 interaction is cancelled. |
+| `switch.audio_slot_2_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 cancel sound playback. |
+| `select.hardware_led_idle_pattern` | `select` | `Off`, `Breathe`, `Rainbow`, `Spinner` | Ambient idle animation mode for the 12-LED addressable ring. |
+| `number.hardware_led_brightness` | `number` | `5%` – `100%` (step `5%`) | Brightness scaling for all LED animations. |
 | `switch.privacy_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |
-| `sensor.satellite_state` | `sensor` | 14 Typestates | Real-time state machine telemetry (*Idle*, *Woken*, *Listening*, *Thinking*, *Replying*). |
-| `button.reset_audio_hardware` | `button` | Action | Hardware codec re-initialization and XMOS SoC reboot pulse. |
+| `sensor.status_satellite_state` | `sensor` | 14 Typestates | Real-time state machine telemetry (*Idle*, *Woken*, *Listening*, *Thinking*, *Replying*). |
+| `button.hardware_reset_audio_hardware` | `button` | Action | Hardware codec re-initialization and XMOS SoC reboot pulse. |
 
 All control settings are saved to on-device NVS flash memory and persist across power cycles and firmware updates.
 
@@ -576,6 +736,7 @@ esphome-satellite/
 ├── scripts/
 │   ├── build_factory_binary.sh   # Automated factory flashing binary builder
 │   ├── bump_version.sh           # Synchronized semver bumper
+│   ├── generate_wakeword_corpus.py # Synthetic speech corpus generator & trainer
 │   ├── generate_web.nim          # Web installer HTML generator
 │   ├── process_audio.py          # Audio normalization & ADPCM sound bank pipeline
 │   ├── test.sh                   # Invariant test execution runner

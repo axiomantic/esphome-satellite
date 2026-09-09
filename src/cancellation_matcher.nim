@@ -104,3 +104,41 @@ proc nim_satellite_is_cancellation*(text: cstring, config: cstring = nil): bool 
   let t = $text
   let c = if config != nil: $config else: ""
   return isCancellationPhrase(t, c)
+
+const DefaultResetPhrases*: seq[string] = @[
+  "forget our conversation",
+  "forget my conversation",
+  "forget this conversation",
+  "clear history",
+  "clear the history",
+  "clear conversation",
+  "clear conversation history",
+  "reset conversation",
+  "reset the conversation",
+  "new conversation",
+  "start a new conversation",
+  "start new conversation",
+  "forget everything"
+]
+
+proc isConversationResetPhrase*(text: string): bool =
+  let cleanText = normalizeText(text)
+  if cleanText.len == 0:
+    return false
+
+  for target in DefaultResetPhrases:
+    if cleanText == target:
+      return true
+    if startsWith(cleanText, target & " "):
+      return true
+    if endsWith(cleanText, " " & target):
+      return true
+    if containsSub(cleanText, " " & target & " "):
+      return true
+
+  return false
+
+proc nim_satellite_is_reset_phrase*(text: cstring): bool {.exportc, cdecl.} =
+  if text == nil:
+    return false
+  return isConversationResetPhrase($text)
