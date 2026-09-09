@@ -45,6 +45,17 @@ import tempfile
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Union, Any
 
+try:
+    import questionary
+    from questionary import Choice, Separator
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
+    HAVE_TUI = True
+except ImportError:
+    HAVE_TUI = False
+
 CACHE_DIR = Path(".cache/mww_corpus")
 
 # ---------------------------------------------------------------------------
@@ -113,32 +124,32 @@ def get_pipeline_signature(backend_name: str) -> str:
 # ---------------------------------------------------------------------------
 ELEVENLABS_VOICES = {
     "female": [
-        {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "accent": "American", "desc": "Calm, standard female"},
-        {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "accent": "American", "desc": "Warm, professional female"},
-        {"id": "piTKgcLEGmPE4e6mEKli", "name": "Nicole", "accent": "American", "desc": "Soft, whisper female"},
-        {"id": "jsCqWAovK2LkecY7zXl4", "name": "Freya", "accent": "American", "desc": "Expressive female"},
-        {"id": "ThT5KcBeYPX3keUQqHPh", "name": "Dorothy", "accent": "British", "desc": "Pleasant British female"},
-        {"id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "accent": "Swedish-English", "desc": "Accented female"},
-        {"id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "accent": "British", "desc": "Clear British female"},
+        {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "accent": "American", "desc": "Calm, standard female", "default": True},
+        {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "accent": "American", "desc": "Warm, professional female", "default": True},
+        {"id": "piTKgcLEGmPE4e6mEKli", "name": "Nicole", "accent": "American", "desc": "Soft, whisper female", "default": False},
+        {"id": "jsCqWAovK2LkecY7zXl4", "name": "Freya", "accent": "American", "desc": "Expressive female", "default": False},
+        {"id": "ThT5KcBeYPX3keUQqHPh", "name": "Dorothy", "accent": "British", "desc": "Pleasant British female", "default": False},
+        {"id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "accent": "Swedish-English", "desc": "Accented female", "default": False},
+        {"id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "accent": "British", "desc": "Clear British female", "default": False},
     ],
     "male": [
-        {"id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "accent": "American", "desc": "Deep American male"},
-        {"id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "accent": "American", "desc": "Energetic American male"},
-        {"id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh", "accent": "American", "desc": "Youthful American male"},
-        {"id": "VR6AewLTigWG4xSOukaG", "name": "Arnold", "accent": "American", "desc": "Crisp American male"},
-        {"id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "accent": "American", "desc": "Raspy American male"},
-        {"id": "JBFqnCBsd6RMkjVDRZzb", "name": "George", "accent": "British", "desc": "Warm British male"},
-        {"id": "nPczCjzI2devNBz1zQrb", "name": "Brian", "accent": "American", "desc": "Deep narrator male"},
-        {"id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum", "accent": "Transatlantic", "desc": "Irish/Transatlantic male"},
+        {"id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "accent": "American", "desc": "Deep American male", "default": True},
+        {"id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "accent": "American", "desc": "Energetic American male", "default": False},
+        {"id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh", "accent": "American", "desc": "Youthful American male", "default": False},
+        {"id": "VR6AewLTigWG4xSOukaG", "name": "Arnold", "accent": "American", "desc": "Crisp American male", "default": False},
+        {"id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam", "accent": "American", "desc": "Raspy American male", "default": False},
+        {"id": "JBFqnCBsd6RMkjVDRZzb", "name": "George", "accent": "British", "desc": "Warm British male", "default": True},
+        {"id": "nPczCjzI2devNBz1zQrb", "name": "Brian", "accent": "American", "desc": "Deep narrator male", "default": False},
+        {"id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum", "accent": "Transatlantic", "desc": "Irish/Transatlantic male", "default": False},
     ],
     "kids": [
-        {"id": "zrHiDhphv9ZnVXBqCLjz", "name": "Mimi", "accent": "American", "desc": "Teen female, animated"},
-        {"id": "D38z5RcWu1voky8WS1ja", "name": "Fin", "accent": "Irish", "desc": "Youth Irish male, energetic"},
-        {"id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam", "accent": "American", "desc": "Young American male"},
+        {"id": "zrHiDhphv9ZnVXBqCLjz", "name": "Mimi", "accent": "American", "desc": "Teen female, animated", "default": True},
+        {"id": "D38z5RcWu1voky8WS1ja", "name": "Fin", "accent": "Irish", "desc": "Youth Irish male, energetic", "default": False},
+        {"id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam", "accent": "American", "desc": "Young American male", "default": False},
     ],
     "accents": [
-        {"id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "accent": "Australian", "desc": "Australian female"},
-        {"id": "IKne3meq5aSn9X8L4xzE", "name": "Charlie", "accent": "Australian", "desc": "Australian male"},
+        {"id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "accent": "Australian", "desc": "Australian female", "default": True},
+        {"id": "IKne3meq5aSn9X8L4xzE", "name": "Charlie", "accent": "Australian", "desc": "Australian male", "default": False},
     ],
 }
 
@@ -148,6 +159,8 @@ MACOS_SAY_VOICES = {
     "kids": ["Junior", "Kathy"],
     "accents": ["Lee", "Yuri", "Milena"],
 }
+
+DEFAULT_REFERENCE_VOICES_DIR = Path("assets/reference_voices")
 
 def get_available_macos_voices() -> Dict[str, List[str]]:
     try:
@@ -167,6 +180,66 @@ def get_available_macos_voices() -> Dict[str, List[str]]:
         return filtered if filtered else MACOS_SAY_VOICES
     except Exception:
         return MACOS_SAY_VOICES
+
+def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Returns curated list of default/built-in voices for the specified backend.
+    Each item contains:
+      - name: str
+      - id: str
+      - desc: str
+      - category: str
+      - default: bool (whether pre-selected by default)
+      - reference_audio: Optional[Path] (for F5-TTS zero-shot cloning)
+      - reference_transcript: Optional[str] (for F5-TTS)
+    """
+    voices: List[Dict[str, Any]] = []
+
+    if backend_name == "elevenlabs":
+        for cat, vlist in ELEVENLABS_VOICES.items():
+            for v in vlist:
+                voices.append({
+                    "id": v["id"],
+                    "name": v["name"],
+                    "desc": f"{v.get('desc', '')} [{v.get('accent', '')}]",
+                    "category": cat,
+                    "default": v.get("default", False),
+                    "reference_audio": None,
+                    "reference_transcript": None
+                })
+    elif backend_name == "f5_tts":
+        ref_dir = DEFAULT_REFERENCE_VOICES_DIR
+        if ref_dir.is_dir():
+            for wav_file in sorted(ref_dir.glob("*.wav")):
+                txt_file = wav_file.with_suffix(".txt")
+                transcript = txt_file.read_text(encoding="utf-8").strip() if txt_file.is_file() else ""
+                vname = wav_file.stem.replace("_", " ").title()
+                cat = "female" if vname.lower() in ("samantha", "victoria") else "male"
+                voices.append({
+                    "id": f"builtin_{wav_file.stem}",
+                    "name": vname,
+                    "desc": f"Bundled reference clip ({wav_file.name})",
+                    "category": cat,
+                    "default": True,
+                    "reference_audio": wav_file,
+                    "reference_transcript": transcript
+                })
+    elif backend_name == "macos_say":
+        voice_pool = get_available_macos_voices()
+        default_names = {"Samantha", "Alex", "Victoria", "Fred"}
+        for cat, vlist in voice_pool.items():
+            for vname in vlist:
+                voices.append({
+                    "id": vname,
+                    "name": vname,
+                    "desc": f"macOS system voice ({cat})",
+                    "category": cat,
+                    "default": vname in default_names,
+                    "reference_audio": None,
+                    "reference_transcript": None
+                })
+
+    return voices
 
 # ---------------------------------------------------------------------------
 # Phonetic Variation Generators
@@ -773,11 +846,12 @@ def sample_voices(
     total_count: int,
     voice_pool: dict,
     household_voices: Optional[List[HouseholdVoice]] = None,
-    household_ratio: float = 0.50
+    household_ratio: float = 0.50,
+    selected_builtin_voices: Optional[List[VoiceSpec]] = None
 ) -> List[VoiceSpec]:
     """
-    Returns a list of VoiceSpec instances sampled according to demographic distribution
-    and household voice ratio.
+    Returns a list of VoiceSpec instances sampled according to demographic distribution,
+    household voice ratio, and explicit built-in voice selection.
     Default distribution: 40% female, 40% male, 10% kids, 10% accents.
     """
     selected: List[VoiceSpec] = []
@@ -792,29 +866,34 @@ def sample_voices(
     else:
         generic_count = total_count
 
-    if generic_count > 0 and voice_pool:
-        generic_selected: List[VoiceSpec] = []
-        for cat, ratio in category_distribution.items():
-            count = int(round(generic_count * ratio))
-            pool = voice_pool.get(cat, [])
-            if not pool:
-                continue
-            for _ in range(count):
-                item = random.choice(pool)
-                if isinstance(item, dict):
-                    generic_selected.append(VoiceSpec(voice_id=item["id"], voice_name=item["name"], category=cat))
-                else:
-                    generic_selected.append(VoiceSpec(voice_id=item, voice_name=item, category=cat))
-        while len(generic_selected) < generic_count:
-            cat = random.choice(list(category_distribution.keys()))
-            pool = voice_pool.get(cat, [])
-            if pool:
-                item = random.choice(pool)
-                if isinstance(item, dict):
-                    generic_selected.append(VoiceSpec(voice_id=item["id"], voice_name=item["name"], category=cat))
-                else:
-                    generic_selected.append(VoiceSpec(voice_id=item, voice_name=item, category=cat))
-        selected.extend(generic_selected[:generic_count])
+    if generic_count > 0:
+        if selected_builtin_voices and len(selected_builtin_voices) > 0:
+            for i in range(generic_count):
+                bv = selected_builtin_voices[i % len(selected_builtin_voices)]
+                selected.append(bv)
+        elif voice_pool:
+            generic_selected: List[VoiceSpec] = []
+            for cat, ratio in category_distribution.items():
+                count = int(round(generic_count * ratio))
+                pool = voice_pool.get(cat, [])
+                if not pool:
+                    continue
+                for _ in range(count):
+                    item = random.choice(pool)
+                    if isinstance(item, dict):
+                        generic_selected.append(VoiceSpec(voice_id=item["id"], voice_name=item["name"], category=cat))
+                    else:
+                        generic_selected.append(VoiceSpec(voice_id=item, voice_name=item, category=cat))
+            while len(generic_selected) < generic_count:
+                cat = random.choice(list(category_distribution.keys()))
+                pool = voice_pool.get(cat, [])
+                if pool:
+                    item = random.choice(pool)
+                    if isinstance(item, dict):
+                        generic_selected.append(VoiceSpec(voice_id=item["id"], voice_name=item["name"], category=cat))
+                    else:
+                        generic_selected.append(VoiceSpec(voice_id=item, voice_name=item, category=cat))
+            selected.extend(generic_selected[:generic_count])
 
     if len(selected) < total_count and household_voices:
         while len(selected) < total_count:
@@ -858,11 +937,13 @@ def is_corpus_complete(
     expected_count: int,
     model_name: str,
     backend_name: str,
-    active_household: List[HouseholdVoice]
+    active_household: List[HouseholdVoice],
+    builtin_voices: Optional[List[str]] = None
 ) -> bool:
     """
     Validates if an output directory already contains a complete, valid corpus
-    matching the exact pipeline signature and household voice audio hashes.
+    matching the exact pipeline signature, household voice audio hashes, and
+    selected built-in voices.
     """
     manifest_file = output_dir / "manifest.json"
     if not manifest_file.is_file():
@@ -883,6 +964,13 @@ def is_corpus_complete(
         cached_hashes = data.get("household_voice_hashes", {})
         for hv in active_household:
             if cached_hashes.get(hv.name) != hv.audio_hash:
+                return False
+
+        if builtin_voices is not None:
+            cached_builtin = data.get("builtin_voices", [])
+            c_set = set(v.lower().split()[0] for v in cached_builtin)
+            b_set = set(v.lower().split()[0] for v in builtin_voices)
+            if c_set != b_set:
                 return False
 
         samples = data.get("samples", [])
@@ -907,6 +995,7 @@ def generate_corpus(
     distribution: Optional[Dict[str, float]] = None,
     household_voices: Optional[List[HouseholdVoice]] = None,
     household_ratio: float = 0.50,
+    builtin_voices: Optional[List[str]] = None,
     force: bool = False
 ) -> int:
     """
@@ -922,8 +1011,55 @@ def generate_corpus(
     backend = None
     voice_pool = {}
     active_household: List[HouseholdVoice] = []
+    selected_builtin_vspecs: List[VoiceSpec] = []
     voice_cache = VoiceCacheManager()
     pipeline_sig = get_pipeline_signature(backend_name)
+
+    # 1. Resolve selected built-in voices if requested
+    if builtin_voices:
+        all_builtin = get_available_builtin_voices(backend_name, api_key)
+        name_map = {v["name"].lower(): v for v in all_builtin}
+        id_map = {v["id"].lower(): v for v in all_builtin}
+
+        for bv_name in builtin_voices:
+            clean_name = bv_name.strip().lower()
+            item = name_map.get(clean_name) or id_map.get(clean_name)
+            if not item:
+                for k, candidate in name_map.items():
+                    if clean_name in k:
+                        item = candidate
+                        break
+            if item:
+                if item["reference_audio"]:
+                    ref_hv = HouseholdVoice(
+                        name=f"{item['name']} (Built-in)",
+                        audio_path=item["reference_audio"],
+                        transcript=item["reference_transcript"],
+                        voice_id=item["id"]
+                    )
+                    selected_builtin_vspecs.append(VoiceSpec(
+                        voice_id=item["id"],
+                        voice_name=ref_hv.name,
+                        category=item["category"],
+                        household=ref_hv
+                    ))
+                else:
+                    selected_builtin_vspecs.append(VoiceSpec(
+                        voice_id=item["id"],
+                        voice_name=item["name"],
+                        category=item["category"]
+                    ))
+
+    # Adjust household ratio based on presence of voices
+    has_household = bool(household_voices and len(household_voices) > 0)
+    has_builtin = bool(selected_builtin_vspecs and len(selected_builtin_vspecs) > 0)
+
+    if has_household and not has_builtin:
+        effective_ratio = 1.0
+    elif not has_household and has_builtin:
+        effective_ratio = 0.0
+    else:
+        effective_ratio = household_ratio
 
     if backend_name == "elevenlabs":
         if not api_key:
@@ -965,25 +1101,31 @@ def generate_corpus(
             print("To use local zero-shot voice cloning with F5-TTS, install via:", file=sys.stderr)
             print("  pip install f5-tts torch torchaudio", file=sys.stderr)
             return 0
-        if not household_voices:
+        if not household_voices and not selected_builtin_vspecs:
             print("Error: F5-TTS is a zero-shot voice cloning model and requires reference audio.", file=sys.stderr)
-            print("Provide at least one reference voice using --voice-sample or --household-dir.", file=sys.stderr)
+            print("Provide at least one reference voice using --voice-sample or select built-in reference voices.", file=sys.stderr)
             return 0
 
-        for hv in household_voices:
-            if not hv.audio_hash and hv.audio_path.is_file():
-                hv.audio_hash = compute_file_hash(hv.audio_path)
-            cached = voice_cache.get_trained_voice("f5_tts", hv.name, hv.audio_hash, hv.transcript)
-            vid = hv.voice_id or (cached.get("voice_id") if cached else None) or hv.name.lower().replace(" ", "_")
-            hv.voice_id = vid
-            if not cached or force:
-                voice_cache.register_trained_voice("f5_tts", hv.name, hv.audio_hash, hv.transcript, vid)
-                print(f"Registered voice model specification for '{hv.name}' (hash: {hv.audio_hash[:10]})")
-            else:
-                print(f"Reusing verified trained voice model for '{hv.name}' (hash: {hv.audio_hash[:10]})")
-            active_household.append(hv)
+        if household_voices:
+            for hv in household_voices:
+                if not hv.audio_hash and hv.audio_path.is_file():
+                    hv.audio_hash = compute_file_hash(hv.audio_path)
+                cached = voice_cache.get_trained_voice("f5_tts", hv.name, hv.audio_hash, hv.transcript)
+                vid = hv.voice_id or (cached.get("voice_id") if cached else None) or hv.name.lower().replace(" ", "_")
+                hv.voice_id = vid
+                if not cached or force:
+                    voice_cache.register_trained_voice("f5_tts", hv.name, hv.audio_hash, hv.transcript, vid)
+                    print(f"Registered voice model specification for '{hv.name}' (hash: {hv.audio_hash[:10]})")
+                else:
+                    print(f"Reusing verified trained voice model for '{hv.name}' (hash: {hv.audio_hash[:10]})")
+                active_household.append(hv)
 
-        household_ratio = 1.0  # F5-TTS synthesizes against reference clips
+        # Register built-in reference voices in voice_cache for F5-TTS
+        for bv in selected_builtin_vspecs:
+            if bv.household:
+                if not bv.household.audio_hash and bv.household.audio_path.is_file():
+                    bv.household.audio_hash = compute_file_hash(bv.household.audio_path)
+                voice_cache.register_trained_voice("f5_tts", bv.household.name, bv.household.audio_hash, bv.household.transcript, bv.voice_id)
 
     elif backend_name == "macos_say":
         backend = MacOSSayBackend()
@@ -994,13 +1136,20 @@ def generate_corpus(
         print(f"Error: Unknown backend '{backend_name}'.", file=sys.stderr)
         return 0
 
-    if not force and is_corpus_complete(output_dir, count, model_name, backend_name, active_household):
+    if not force and is_corpus_complete(output_dir, count, model_name, backend_name, active_household, builtin_voices):
         print(f"\n[Reentrant Cache Hit] Output directory '{output_dir}' already contains {count} trained samples.")
         print(f"Verified against pipeline signature {pipeline_sig} and matching reference audio file hashes.")
         print("Dataset is complete and up to date. Use --force to re-synthesize.")
         return count
 
-    voices = sample_voices(distribution, count, voice_pool, active_household, household_ratio)
+    voices = sample_voices(
+        distribution,
+        count,
+        voice_pool,
+        active_household,
+        effective_ratio,
+        selected_builtin_voices=selected_builtin_vspecs
+    )
     if not voices:
         print("Error: No voices available for generation.", file=sys.stderr)
         return 0
@@ -1014,49 +1163,76 @@ def generate_corpus(
     print(f"Variations Pool:    {len(phrases)} unique phonetic forms")
     print(f"Target Count:       {count} audio files")
     if active_household:
-        print(f"Household Voices:   {len(active_household)} ({household_ratio*100:.0f}% allocation)")
+        print(f"Household Voices:   {len(active_household)} ({effective_ratio*100:.0f}% allocation)")
+    if selected_builtin_vspecs:
+        print(f"Built-in Voices:    {len(selected_builtin_vspecs)} ({', '.join(v.voice_name for v in selected_builtin_vspecs)})")
     print(f"Output Directory:   {output_dir}")
     print("-" * 65)
 
-    for i, vspec in enumerate(voices):
-        phrase = random.choice(phrases)
+    use_progress = HAVE_TUI and sys.stdout.isatty()
+    progress_bar = None
+    task_id = None
 
-        # Content-addressed cache key encoding deterministic parameters
-        cache_key = get_sample_cache_key(backend_name, vspec, phrase)
-        cached_file = CACHE_DIR / f"{cache_key}.wav"
+    if use_progress:
+        progress_bar = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold cyan]{task.description}[/bold cyan]"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
+            TimeRemainingColumn(),
+            console=Console()
+        )
+        progress_bar.start()
+        task_id = progress_bar.add_task("Synthesizing training audio...", total=count)
 
-        if not force and cached_file.exists() and cached_file.stat().st_size > 44:
-            hit = True
-        else:
-            hit = False
-            if backend_name == "f5_tts" and vspec.household:
-                ok = backend.synthesize(phrase, vspec.household.audio_path, vspec.household.transcript, cached_file)
+    try:
+        for i, vspec in enumerate(voices):
+            phrase = random.choice(phrases)
+
+            # Content-addressed cache key encoding deterministic parameters
+            cache_key = get_sample_cache_key(backend_name, vspec, phrase)
+            cached_file = CACHE_DIR / f"{cache_key}.wav"
+
+            if not force and cached_file.exists() and cached_file.stat().st_size > 44:
+                hit = True
             else:
-                ok = backend.synthesize(phrase, vspec.voice_id, cached_file)
-            if not ok:
-                print(f"[{i+1}/{count}] FAILED: '{phrase}' (voice: {vspec.voice_name})")
-                continue
+                hit = False
+                if backend_name == "f5_tts" and vspec.household:
+                    ok = backend.synthesize(phrase, vspec.household.audio_path, vspec.household.transcript, cached_file)
+                else:
+                    ok = backend.synthesize(phrase, vspec.voice_id, cached_file)
+                if not ok:
+                    if not use_progress:
+                        print(f"[{i+1}/{count}] FAILED: '{phrase}' (voice: {vspec.voice_name})")
+                    continue
 
-        clean_vname = vspec.voice_name.lower().replace(" ", "_")
-        out_name = f"{cache_key[:12]}_{clean_vname}_{hashlib.md5(phrase.encode()).hexdigest()[:6]}.wav"
-        dest_file = output_dir / out_name
+            clean_vname = vspec.voice_name.lower().replace(" ", "_")
+            out_name = f"{cache_key[:12]}_{clean_vname}_{hashlib.md5(phrase.encode()).hexdigest()[:6]}.wav"
+            dest_file = output_dir / out_name
 
-        dest_file.write_bytes(cached_file.read_bytes())
-        generated += 1
+            dest_file.write_bytes(cached_file.read_bytes())
+            generated += 1
 
-        manifest.append({
-            "filename": out_name,
-            "phrase": phrase,
-            "voice": vspec.voice_name,
-            "voice_id": vspec.voice_id,
-            "category": vspec.category,
-            "backend": backend_name,
-            "cache_hit": hit,
-            "sha256": cache_key
-        })
+            manifest.append({
+                "filename": out_name,
+                "phrase": phrase,
+                "voice": vspec.voice_name,
+                "voice_id": vspec.voice_id,
+                "category": vspec.category,
+                "backend": backend_name,
+                "cache_hit": hit,
+                "sha256": cache_key
+            })
 
-        status = "CACHE" if hit else "SYNTH"
-        print(f"[{i+1:4d}/{count:4d}] [{status:5s}] '{phrase}' ({vspec.voice_name}) -> {out_name}")
+            status = "CACHE" if hit else "SYNTH"
+            if progress_bar and task_id is not None:
+                progress_bar.update(task_id, completed=i + 1, description=f"[{status}] {vspec.voice_name}: '{phrase}'")
+            else:
+                print(f"[{i+1:4d}/{count:4d}] [{status:5s}] '{phrase}' ({vspec.voice_name}) -> {out_name}")
+    finally:
+        if progress_bar:
+            progress_bar.stop()
 
     manifest_path = output_dir / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
@@ -1070,7 +1246,8 @@ def generate_corpus(
             "distribution": distribution,
             "household_voices": [hv.name for hv in active_household],
             "household_voice_hashes": {hv.name: hv.audio_hash for hv in active_household},
-            "household_ratio": household_ratio if active_household else 0.0,
+            "household_ratio": effective_ratio if active_household else 0.0,
+            "builtin_voices": [bv.voice_name for bv in selected_builtin_vspecs],
             "samples": manifest
         }, f, indent=2)
 
@@ -1081,11 +1258,285 @@ def generate_corpus(
 
 
 # ---------------------------------------------------------------------------
-# Interactive TUI Wizard
+# Interactive TUI Wizard (using questionary & rich)
 # ---------------------------------------------------------------------------
 def run_tui_wizard():
+    if not HAVE_TUI:
+        _run_fallback_wizard()
+        return
+
+    console = Console()
+    console.print()
+    console.print(Panel(
+        "[bold cyan]microWakeWord Synthetic Dataset Generator[/bold cyan]\n"
+        "[dim]Multi-Voice Neural Synthesis, Built-in Voice Registry & Deterministic Pipeline[/dim]",
+        border_style="cyan"
+    ))
+
+    # 1. Target Wake Word Model
+    model_choice = questionary.select(
+        "1. Select Target Wake Word Model:",
+        choices=[
+            Choice("Mr. Clemens  (30+ phonetic variations: 'mister clemens', 'hey clemens', etc.)", value="mister_clemens"),
+            Choice("Okay Nabu    (variations: 'okay nabu', 'ok nabu', 'hey nabu', etc.)", value="okay_nabu"),
+            Choice("Custom Phrase...", value="custom"),
+        ]
+    ).ask()
+    if model_choice is None:
+        console.print("[dim]Aborted.[/dim]")
+        return
+
+    if model_choice == "okay_nabu":
+        model_name = "okay_nabu"
+        phrases = generate_nabu_variations()
+    elif model_choice == "mister_clemens":
+        model_name = "mister_clemens"
+        phrases = generate_clemens_variations()
+    else:
+        custom_input = questionary.text("Enter custom wake word phrase:").ask()
+        if not custom_input:
+            console.print("[dim]Aborted.[/dim]")
+            return
+        model_name = custom_input.lower().replace(" ", "_")
+        phrases = [custom_input]
+
+    console.print(f"[dim]Loaded {len(phrases)} phonetic variations for '{model_name}'.[/dim]\n")
+
+    # 2. Synthesis Backend
+    backend_choice = questionary.select(
+        "2. Select Speech Synthesis Backend:",
+        choices=[
+            Choice("ElevenLabs API (High-fidelity neural TTS, diverse voice registry, Instant Voice Cloning)", value="elevenlabs"),
+            Choice("F5-TTS (Local zero-shot neural voice cloning via diffusion - offline)", value="f5_tts"),
+            Choice("macOS 'say' (Fast local offline system voices - zero API key required)", value="macos_say"),
+        ]
+    ).ask()
+    if backend_choice is None:
+        console.print("[dim]Aborted.[/dim]")
+        return
+
+    api_key = None
+    if backend_choice == "elevenlabs":
+        env_key = os.environ.get("ELEVENLABS_API_KEY", "")
+        if env_key:
+            use_env = questionary.confirm(f"Use existing ELEVENLABS_API_KEY from environment ({env_key[:6]}...)?", default=True).ask()
+            if use_env is None:
+                return
+            if use_env:
+                api_key = env_key
+        if not api_key:
+            api_key = questionary.password("Enter ElevenLabs API Key:").ask()
+            if not api_key:
+                console.print("[yellow]No ElevenLabs API key provided. Falling back to local macOS 'say' backend.[/yellow]")
+                backend_choice = "macos_say"
+
+    # 3. Household Voices
+    household_voices: List[HouseholdVoice] = []
+    household_ratio = 0.50
+
+    hv_mode = questionary.select(
+        "3. Household Member Voice Samples (Zero-Shot Cloning):",
+        choices=[
+            Choice("Add household member voices interactively (recordings of you, partner, children)", value="interactive"),
+            Choice("Point to a directory of voice samples (e.g. data/household_voices/)", value="directory"),
+            Choice("Skip household voices (use built-in / library voices only)", value="skip"),
+        ]
+    ).ask()
+    if hv_mode is None:
+        return
+
+    if hv_mode == "directory":
+        h_dir = questionary.text("Enter directory path containing voice samples:").ask()
+        clean_hdir = clean_path(h_dir)
+        if clean_hdir:
+            household_voices = load_household_voices(household_dir=clean_hdir)
+    elif hv_mode == "interactive":
+        while True:
+            idx = len(household_voices) + 1
+            console.print(f"\n[bold]--- Household Voice Sample #{idx} ---[/bold]")
+            s_file_input = questionary.text("Path to audio sample (.wav, .mp3, .m4a):").ask()
+            s_file = clean_path(s_file_input)
+            if not s_file or not s_file.exists():
+                console.print(f"[yellow]File '{s_file_input}' not found.[/yellow]")
+                if not household_voices:
+                    retry = questionary.confirm("Try again?", default=True).ask()
+                    if retry:
+                        continue
+                break
+
+            default_name = s_file.stem.replace("_", " ").title()
+            s_name = questionary.text("Person's name:", default=default_name).ask() or default_name
+            s_trans = get_interactive_transcript(s_file)
+            new_voices = load_household_voices(
+                single_sample=s_file,
+                single_name=s_name,
+                single_transcript=s_trans
+            )
+            if new_voices:
+                household_voices.extend(new_voices)
+                console.print(f"[green]Successfully loaded voice profile for '{new_voices[0].name}'.[/green]")
+
+            more = questionary.confirm("Add another household member's voice (e.g. partner, child)?", default=False).ask()
+            if not more:
+                break
+
+    if household_voices:
+        console.print(f"\n[bold green]Loaded {len(household_voices)} household voice(s):[/bold green] {', '.join(v.name for v in household_voices)}\n")
+
+    # 4. Built-in Voice Checkbox Chooser
+    available_builtin = get_available_builtin_voices(backend_choice, api_key)
+    selected_builtin: List[str] = []
+
+    if available_builtin:
+        choices = []
+        category_titles = {
+            "female": "Curated Female Voices",
+            "male": "Curated Male Voices",
+            "kids": "Youth & Teen Voices",
+            "accents": "Regional Accents",
+        }
+        for cat in ["female", "male", "kids", "accents"]:
+            cat_voices = [v for v in available_builtin if v["category"] == cat]
+            if cat_voices:
+                title = category_titles.get(cat, cat.title())
+                choices.append(Separator(f"=== {title} ==="))
+                for v in cat_voices:
+                    suffix = " (Default)" if v.get("default") else ""
+                    label = f"{v['name']:<12} - {v['desc']}{suffix}"
+                    choices.append(Choice(label, value=v["name"], checked=v.get("default", False)))
+
+        for v in available_builtin:
+            if v["category"] not in ["female", "male", "kids", "accents"]:
+                suffix = " (Default)" if v.get("default") else ""
+                label = f"{v['name']:<12} - {v['desc']}{suffix}"
+                choices.append(Choice(label, value=v["name"], checked=v.get("default", False)))
+
+        selected_builtin = questionary.checkbox(
+            "4. Select Built-in Voices to Include in Dataset:",
+            choices=choices,
+            instruction="(Space to toggle, 'a' to toggle all, Enter to confirm)"
+        ).ask()
+        if selected_builtin is None:
+            return
+
+    # 5. Dataset Balance / Allocation Ratio
+    if household_voices and selected_builtin:
+        ratio_choice = questionary.select(
+            "5. Dataset Allocation Balance:",
+            choices=[
+                Choice("50% Household / 50% Built-in (Balanced accuracy & generalizability - Recommended)", value=0.50),
+                Choice("70% Household / 30% Built-in (Prioritize household member accuracy)", value=0.70),
+                Choice("30% Household / 70% Built-in (Prioritize general population diversity)", value=0.30),
+                Choice("100% Household Voices only", value=1.00),
+                Choice("Custom ratio...", value=-1.0),
+            ]
+        ).ask()
+        if ratio_choice is None:
+            return
+        if ratio_choice < 0.0:
+            custom_ratio_str = questionary.text("Enter household ratio [0.0 - 1.0, default=0.50]:", default="0.50").ask()
+            try:
+                household_ratio = float(custom_ratio_str)
+            except ValueError:
+                household_ratio = 0.50
+        else:
+            household_ratio = ratio_choice
+    elif household_voices:
+        household_ratio = 1.0
+    else:
+        household_ratio = 0.0
+
+    # 6. Sample Count
+    count_choice = questionary.select(
+        "6. Positive Training Samples to Generate:",
+        choices=[
+            Choice("100 samples (Recommended for household satellite deployment: balanced speed & coverage)", value=100),
+            Choice("50 samples (Quick smoke test)", value=50),
+            Choice("200 samples (High-fidelity household deployment)", value=200),
+            Choice("500 samples (Large-scale production dataset)", value=500),
+            Choice("Custom sample count...", value=-1),
+        ]
+    ).ask()
+    if count_choice is None:
+        return
+
+    if count_choice == -1:
+        count_str = questionary.text("Enter positive sample count [default=100]:", default="100").ask()
+        try:
+            count = int(count_str)
+        except ValueError:
+            count = 100
+    else:
+        count = count_choice
+
+    # 7. Output Directory & Cache Check
+    default_out = Path(f"data/{model_name}/positive")
+    out_str = questionary.text("7. Output Directory:", default=str(default_out)).ask()
+    if out_str is None:
+        return
+    out_dir = clean_path(out_str) or default_out
+
+    force = False
+    if is_corpus_complete(out_dir, count, model_name, backend_choice, household_voices, selected_builtin):
+        console.print(f"\n[yellow][Notice] A complete cached corpus already exists in '{out_dir}'.[/yellow]")
+        force = questionary.confirm("Re-synthesize and overwrite existing dataset?", default=False).ask()
+        if force is None:
+            return
+
+    # 8. Summary & Confirmation Table
+    console.print()
+    table = Table(title="Corpus Generation Configuration Summary", show_header=True, header_style="bold magenta")
+    table.add_column("Parameter", style="cyan", no_wrap=True)
+    table.add_column("Configured Value", style="green")
+
+    table.add_row("Model Name", model_name)
+    table.add_row("Backend", backend_choice)
+    table.add_row("Phonetic Variations", f"{len(phrases)} unique forms")
+
+    if household_voices:
+        table.add_row("Household Voices", f"{len(household_voices)} ({', '.join(v.name for v in household_voices)})")
+    else:
+        table.add_row("Household Voices", "None (built-in voices only)")
+
+    if selected_builtin:
+        table.add_row("Built-in Voices", f"{len(selected_builtin)} ({', '.join(selected_builtin)})")
+    else:
+        table.add_row("Built-in Voices", "None (household voices only)")
+
+    table.add_row("Total Samples", str(count))
+    if household_voices and selected_builtin:
+        h_cnt = int(round(count * household_ratio))
+        b_cnt = count - h_cnt
+        table.add_row("Sample Allocation", f"{h_cnt} Household ({household_ratio*100:.0f}%), {b_cnt} Built-in ({(1-household_ratio)*100:.0f}%)")
+
+    table.add_row("Output Directory", str(out_dir))
+    table.add_row("Bypass Cache (Force)", "Yes" if force else "No")
+    console.print(table)
+    console.print()
+
+    proceed = questionary.confirm("Proceed with corpus generation?", default=True).ask()
+    if not proceed:
+        console.print("[dim]Aborted by user.[/dim]")
+        return
+
+    generate_corpus(
+        model_name=model_name,
+        phrases=phrases,
+        backend_name=backend_choice,
+        count=count,
+        output_dir=out_dir,
+        api_key=api_key,
+        household_voices=household_voices,
+        household_ratio=household_ratio,
+        builtin_voices=selected_builtin,
+        force=force
+    )
+
+
+def _run_fallback_wizard():
+    """Minimal text fallback when questionary/rich are not installed."""
     print("=" * 65)
-    print(" microWakeWord Synthetic Corpus Generator & Dataset Wizard")
+    print(" microWakeWord Synthetic Corpus Generator (CLI Fallback)")
     print("=" * 65)
 
     print("\n1. Select Target Wake Word Model:")
@@ -1105,20 +1556,12 @@ def run_tui_wizard():
         model_name = custom_input.lower().replace(" ", "_")
         phrases = [custom_input]
 
-    print(f"\nLoaded {len(phrases)} phonetic variations for '{model_name}'.")
-
     print("\n2. Select Synthesis Backend:")
-    print("   [1] ElevenLabs API (Neural Cloud Voices + Instant Voice Cloning)")
-    print("   [2] macOS 'say'   (Local system voices - zero API key required)")
-    print("   [3] F5-TTS        (Local zero-shot flow-matching voice cloning)")
+    print("   [1] ElevenLabs API")
+    print("   [2] macOS 'say'")
+    print("   [3] F5-TTS")
     backend_choice = input("Select [1-3, default=1]: ").strip() or "1"
-
-    if backend_choice == "1":
-        backend_name = "elevenlabs"
-    elif backend_choice == "2":
-        backend_name = "macos_say"
-    else:
-        backend_name = "f5_tts"
+    backend_name = "elevenlabs" if backend_choice == "1" else ("macos_say" if backend_choice == "2" else "f5_tts")
 
     api_key = None
     if backend_name == "elevenlabs":
@@ -1126,85 +1569,19 @@ def run_tui_wizard():
         prompt = f"Enter ElevenLabs API Key [{env_key[:6]}...]: " if env_key else "Enter ElevenLabs API Key: "
         key_input = input(prompt).strip()
         api_key = key_input if key_input else env_key
-        if not api_key:
-            print("No ElevenLabs API key provided. Falling back to local macOS 'say' backend.")
-            backend_name = "macos_say"
 
     household_voices: List[HouseholdVoice] = []
-    household_ratio = 0.50
+    h_dir = input("Enter directory containing voice samples (or press enter to skip): ").strip()
+    clean_hdir = clean_path(h_dir)
+    if clean_hdir:
+        household_voices = load_household_voices(household_dir=clean_hdir)
 
-    if backend_name in ("elevenlabs", "f5_tts"):
-        print("\n3. Household Member Voice Samples (Zero-Shot Voice Cloning):")
-        print("   Adding samples of household members trains the wake word on their unique")
-        print("   vocal timbre while maintaining generic demographic diversity to prevent overfitting.")
-        hv_prompt = "Do you want to include household voice samples? [y/N]: "
-        if backend_name == "f5_tts":
-            hv_prompt = "F5-TTS requires reference voice sample(s). Ingest voice sample now? [Y/n]: "
-        hv_resp = input(hv_prompt).strip().lower()
-
-        if (backend_name == "f5_tts" and hv_resp not in ("n", "no")) or hv_resp in ("y", "yes"):
-            print("   [1] Point to a directory containing voice samples (e.g. data/household_voices/)")
-            print("   [2] Specify individual voice samples (e.g. you and your partner)")
-            src_choice = input("   Select [1-2, default=1]: ").strip() or "1"
-            if src_choice == "1":
-                h_dir = input("   Enter directory path: ").strip()
-                clean_hdir = clean_path(h_dir)
-                if clean_hdir:
-                    household_voices = load_household_voices(household_dir=clean_hdir)
-            else:
-                while True:
-                    idx = len(household_voices) + 1
-                    print(f"\n   --- Household Member Voice #{idx} ---")
-                    s_file_input = input("   Enter path to audio sample (.wav, .mp3, .m4a): ").strip()
-                    s_file = clean_path(s_file_input)
-                    if not s_file:
-                        if not household_voices:
-                            print("   No audio file entered.")
-                        break
-                    if not s_file.exists():
-                        print(f"   Warning: File '{s_file_input}' not found (resolved: {s_file}).")
-                        retry = input("   Try again? [Y/n]: ").strip().lower()
-                        if retry in ("", "y", "yes"):
-                            continue
-                        elif not household_voices:
-                            break
-                        else:
-                            pass
-
-                    default_name = s_file.stem.replace("_", " ").title()
-                    s_name = input(f"   Enter person's name [default={default_name}]: ").strip() or default_name
-                    s_trans = get_interactive_transcript(s_file)
-                    new_voices = load_household_voices(
-                        single_sample=s_file,
-                        single_name=s_name,
-                        single_transcript=s_trans
-                    )
-                    if new_voices:
-                        household_voices.extend(new_voices)
-                        print(f"   Successfully added '{new_voices[0].name}'.")
-
-                    more = input("\n   Add another household member's voice (e.g. partner, child)? [y/N]: ").strip().lower()
-                    if more not in ("y", "yes"):
-                        break
-
-            if household_voices:
-                print(f"\n   Loaded {len(household_voices)} household voice(s): {', '.join(v.name for v in household_voices)}")
-                if backend_name == "elevenlabs":
-                    ratio_str = input("   Ratio of dataset for household voices [0.0 - 1.0, default=0.50]: ").strip() or "0.50"
-                    try:
-                        household_ratio = float(ratio_str)
-                    except ValueError:
-                        household_ratio = 0.50
-            else:
-                print("   No valid household voices found.")
-
-    print("\n4. Sample Count to Generate:")
-    count_str = input("Enter count [default=50]: ").strip() or "50"
+    count_str = input("Enter positive sample count [default=50]: ").strip() or "50"
     count = int(count_str)
 
     default_out = Path(f"data/{model_name}/positive")
     out_str = input(f"Output directory [default={default_out}]: ").strip()
-    out_dir = clean_path(out_str) if out_str else default_out
+    out_dir = clean_path(out_str) or default_out
 
     force = False
     if is_corpus_complete(out_dir, count, model_name, backend_name, household_voices):
@@ -1213,7 +1590,6 @@ def run_tui_wizard():
         if re_synth in ("y", "yes"):
             force = True
 
-    print("\nReady to generate corpus.")
     confirm = input("Proceed? [Y/n]: ").strip().lower()
     if confirm in ("", "y", "yes"):
         generate_corpus(
@@ -1224,11 +1600,9 @@ def run_tui_wizard():
             output_dir=out_dir,
             api_key=api_key,
             household_voices=household_voices,
-            household_ratio=household_ratio,
+            household_ratio=0.50 if household_voices else 0.0,
             force=force
         )
-    else:
-        print("Aborted.")
 
 
 # ---------------------------------------------------------------------------
@@ -1260,14 +1634,26 @@ def main():
                         help="Transcript for --voice-sample (text or path to .txt file, can specify multiple times)")
     parser.add_argument("--voice-transcript-file", type=str, action="append", default=None,
                         help="Path to file containing transcript for --voice-sample (can specify multiple times)")
+    parser.add_argument("--builtin-voices", type=str, action="append", default=None,
+                        help="Name of built-in voice to include (can specify multiple times or comma-separated)")
     parser.add_argument("--household-ratio", type=float, default=0.50,
                         help="Ratio of generated corpus allocated to household voices (default: 0.50)")
+    parser.add_argument("--list-voices", action="store_true",
+                        help="List available built-in / library voices for the chosen backend and exit")
     parser.add_argument("--force", action="store_true",
                         help="Force regeneration of audio samples, bypassing cache")
     parser.add_argument("--wizard", action="store_true",
                         help="Run interactive TUI setup wizard")
 
     args = parser.parse_args()
+
+    if args.list_voices:
+        voices = get_available_builtin_voices(args.backend, args.api_key)
+        print(f"Available built-in voices for backend '{args.backend}':")
+        for v in voices:
+            def_marker = " [default]" if v.get("default") else ""
+            print(f"  - {v['name']:<12} ({v['category']}): {v['desc']}{def_marker}")
+        return
 
     if args.wizard or args.model is None:
         run_tui_wizard()
@@ -1292,6 +1678,16 @@ def main():
         single_transcript_file=args.voice_transcript_file
     )
 
+    # Flatten comma-separated builtin-voices if provided
+    builtin_list: Optional[List[str]] = None
+    if args.builtin_voices:
+        builtin_list = []
+        for bv in args.builtin_voices:
+            for item in bv.split(","):
+                clean_item = item.strip()
+                if clean_item:
+                    builtin_list.append(clean_item)
+
     out_dir = clean_path(args.output) or Path(f"data/{args.model}/positive")
     generate_corpus(
         model_name=args.model,
@@ -1302,9 +1698,17 @@ def main():
         api_key=args.api_key,
         household_voices=household_voices,
         household_ratio=args.household_ratio,
+        builtin_voices=builtin_list,
         force=args.force
     )
 
 
 if __name__ == "__main__":
+    # Auto re-exec into local repo .venv if running outside it and .venv exists
+    if "VIRTUAL_ENV" not in os.environ and sys.prefix == sys.base_prefix:
+        _repo_venv_py = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "python"
+        if _repo_venv_py.is_file() and os.access(_repo_venv_py, os.X_OK):
+            if Path(sys.executable).resolve() != _repo_venv_py.resolve():
+                os.environ["VIRTUAL_ENV"] = str(_repo_venv_py.parent.parent)
+                os.execv(str(_repo_venv_py), [str(_repo_venv_py)] + sys.argv)
     main()

@@ -31,6 +31,7 @@ from generate_wakeword_corpus import (
     get_pipeline_signature,
     get_sample_cache_key,
     is_corpus_complete,
+    get_available_builtin_voices,
     PIPELINE_VERSION,
     AUDIO_PIPELINE_PARAMS,
 )
@@ -389,6 +390,77 @@ class TestWakewordCorpus(unittest.TestCase):
 
             # If count expectation is higher, must not be complete
             self.assertFalse(is_corpus_complete(out_dir, 2, "mister_clemens", "f5_tts", [hv]))
+
+    def test_get_available_builtin_voices(self):
+        # ElevenLabs built-in voice registry
+        el_voices = get_available_builtin_voices("elevenlabs")
+        self.assertGreaterEqual(len(el_voices), 15)
+        defaults = [v["name"] for v in el_voices if v.get("default")]
+        self.assertIn("Rachel", defaults)
+        self.assertIn("Adam", defaults)
+        self.assertIn("Sarah", defaults)
+        self.assertIn("George", defaults)
+        self.assertIn("Mimi", defaults)
+        self.assertIn("Matilda", defaults)
+
+        # F5-TTS built-in reference voices
+        f5_voices = get_available_builtin_voices("f5_tts")
+        self.assertGreaterEqual(len(f5_voices), 4)
+        f5_names = [v["name"] for v in f5_voices]
+        self.assertIn("Samantha", f5_names)
+        self.assertIn("Alex", f5_names)
+        self.assertIn("Victoria", f5_names)
+        self.assertIn("Fred", f5_names)
+        for v in f5_voices:
+            self.assertTrue(v["default"])
+            self.assertTrue(v["reference_audio"].is_file())
+
+    def test_sample_voices_selected_builtin_voices(self):
+        dist = {"female": 0.50, "male": 0.50}
+        h_voices = [HouseholdVoice(name="Lijah", audio_path=Path("/tmp/l.wav"), voice_id="custom_l")]
+        builtin_specs = [
+            VoiceSpec(voice_id="v_rachel", voice_name="Rachel", category="female"),
+            VoiceSpec(voice_id="v_adam", voice_name="Adam", category="male"),
+        ]
+
+        # 50% household, 50% built-in
+        specs = sample_voices(dist, 10, voice_pool={}, household_voices=h_voices, household_ratio=0.50, selected_builtin_voices=builtin_specs)
+        self.assertEqual(len(specs), 10)
+
+        h_count = sum(1 for s in specs if s.category == "household")
+        b_count = sum(1 for s in specs if s.category in ("female", "male"))
+        self.assertEqual(h_count, 5)
+        self.assertEqual(b_count, 5)
+
+        # Generic voices must be exclusively Rachel and Adam
+        generic_names = set(s.voice_name for s in specs if s.category != "household")
+        self.assertEqual(generic_names, {"Rachel", "Adam"})
+
+    def test_is_corpus_complete_with_builtin_voices(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            (out_dir / "sample_001.wav").write_bytes(b"RIFF" + b"\x00" * 50)
+
+            pipeline_sig = get_pipeline_signature("elevenlabs")
+            manifest_data = {
+                "model": "mister_clemens",
+                "backend": "elevenlabs",
+                "pipeline_version": PIPELINE_VERSION,
+                "pipeline_signature": pipeline_sig,
+                "total_samples": 1,
+                "household_voice_hashes": {},
+                "builtin_voices": ["Rachel", "Adam"],
+                "samples": [{"filename": "sample_001.wav"}]
+            }
+            (out_dir / "manifest.json").write_text(json.dumps(manifest_data), encoding="utf-8")
+
+            # Matches exactly
+            self.assertTrue(is_corpus_complete(out_dir, 1, "mister_clemens", "elevenlabs", [], builtin_voices=["Rachel", "Adam"]))
+            # Case/order insensitive match
+            self.assertTrue(is_corpus_complete(out_dir, 1, "mister_clemens", "elevenlabs", [], builtin_voices=["adam", "rachel"]))
+            # Mismatched voices must invalidate cache
+            self.assertFalse(is_corpus_complete(out_dir, 1, "mister_clemens", "elevenlabs", [], builtin_voices=["Rachel", "George"]))
 
 
 if __name__ == "__main__":
