@@ -5,6 +5,9 @@
 #include "esphome/components/micro_wake_word/micro_wake_word.h"
 #include "esphome/components/select/select.h"
 #include <esp_partition.h>
+#include <esp_http_client.h>
+#include <esp_heap_caps.h>
+#include <esp_system.h>
 #include <string>
 #include <vector>
 #include <cstring>
@@ -42,6 +45,20 @@ bool nim_wake_loader_validate_header(
 ) __attribute__((weak));
 
 uint8_t nim_wake_loader_scale_cutoff(uint8_t base_cutoff, const char *level) __attribute__((weak));
+
+bool nim_wake_installer_pack_header(
+    uint8_t *out_buf,
+    size_t max_len,
+    const char *name,
+    uint32_t model_size,
+    uint8_t cutoff,
+    uint8_t window,
+    uint16_t arena_kb
+) __attribute__((weak));
+
+bool nim_wake_installer_validate_tflite(const uint8_t *data, size_t len) __attribute__((weak));
+
+bool nim_wake_installer_get_partition_name(int slot, char *out_buf, size_t max_len) __attribute__((weak));
 }
 
 struct CustomWakeSlot {
@@ -309,6 +326,210 @@ class WakePartitionLoader {
 
   void handle_sensitivity_change(const std::string &level, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
     this->set_slot_sensitivity(1, level, clemens, nabu);
+  }
+
+  bool install_custom_wake_word_from_url(
+      const std::string &url,
+      int slot,
+      const std::string &wake_word_name,
+      int cutoff_input = 102,
+      int window_input = 5
+  ) {
+    if (slot < 1 || slot > 3) {
+      ESP_LOGE(TAG, "Invalid wake word slot %d (must be 1, 2, or 3)", slot);
+      return false;
+    }
+    if (url.empty()) {
+      ESP_LOGE(TAG, "Empty URL provided for custom wake word installation");
+      return false;
+    }
+
+    uint8_t cutoff = (cutoff_input > 0 && cutoff_input <= 255) ? static_cast<uint8_t>(cutoff_input) : 102;
+    uint8_t window = (window_input >= 2 && window_input <= 10) ? static_cast<uint8_t>(window_input) : 5;
+
+    char part_name[16] = {0};
+    if (nim_wake_installer_get_partition_name != nullptr) {
+      if (!nim_wake_installer_get_partition_name(slot, part_name, sizeof(part_name))) {
+        ESP_LOGE(TAG, "Failed to resolve partition name for slot %d", slot);
+        return false;
+      }
+    } else {
+      snprintf(part_name, sizeof(part_name), slot == 1 ? "wake_model" : (slot == 2 ? "wake_model_2" : "wake_model_3"));
+    }
+
+    const esp_partition_t *part = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
+    if (part == nullptr) {
+      ESP_LOGE(TAG, "Target partition '%s' not found on flash", part_name);
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Connecting to %s to download wake word model for slot %d ('%s')...",
+             url.c_str(), slot, part_name);
+
+    esp_http_client_config_t config = {};
+    config.url = url.c_str();
+    config.timeout_ms = 15000;
+    config.buffer_size = 2048;
+    config.skip_cert_common_name_check = true;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == nullptr) {
+      ESP_LOGE(TAG, "Failed to initialize HTTP client");
+      return false;
+    }
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
+      esp_http_client_cleanup(client);
+      return false;
+    }
+
+    esp_http_client_fetch_headers(client);
+    int status_code = esp_http_client_get_status_code(client);
+    if (status_code != 200) {
+      ESP_LOGE(TAG, "HTTP server returned error status code: %d", status_code);
+      esp_http_client_close(client);
+      esp_http_client_cleanup(client);
+      return false;
+    }
+
+    const size_t max_model_size = part->size - sizeof(WakeModelHeader);
+    uint8_t *model_buf = static_cast<uint8_t *>(heap_caps_malloc(max_model_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (model_buf == nullptr) {
+      model_buf = static_cast<uint8_t *>(malloc(max_model_size));
+    }
+    if (model_buf == nullptr) {
+      ESP_LOGE(TAG, "Failed to allocate memory buffer (%zu bytes) for wake word download", max_model_size);
+      esp_http_client_close(client);
+      esp_http_client_cleanup(client);
+      return false;
+    }
+
+    size_t total_read = 0;
+    while (total_read < max_model_size) {
+      int read_bytes = esp_http_client_read(client, reinterpret_cast<char *>(model_buf + total_read), max_model_size - total_read);
+      if (read_bytes < 0) {
+        ESP_LOGE(TAG, "Error reading HTTP stream: read_bytes=%d", read_bytes);
+        free(model_buf);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return false;
+      }
+      if (read_bytes == 0) {
+        break; // EOF reached
+      }
+      total_read += read_bytes;
+    }
+
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    ESP_LOGI(TAG, "Downloaded %zu bytes. Validating TFLite model...", total_read);
+
+    if (total_read < 1000) {
+      ESP_LOGE(TAG, "Downloaded model too small (%zu bytes), minimum is 1000 bytes", total_read);
+      free(model_buf);
+      return false;
+    }
+
+    if (nim_wake_installer_validate_tflite != nullptr) {
+      if (!nim_wake_installer_validate_tflite(model_buf, total_read)) {
+        ESP_LOGE(TAG, "Model validation failed (invalid TFL3 flatbuffer header)");
+        free(model_buf);
+        return false;
+      }
+    }
+
+    uint8_t header_buf[64] = {0};
+    if (nim_wake_installer_pack_header != nullptr) {
+      bool packed = nim_wake_installer_pack_header(
+          header_buf,
+          sizeof(header_buf),
+          wake_word_name.c_str(),
+          static_cast<uint32_t>(total_read),
+          cutoff,
+          window,
+          40 // 40KB arena
+      );
+      if (!packed) {
+        ESP_LOGE(TAG, "Failed to pack WakeModelHeader");
+        free(model_buf);
+        return false;
+      }
+    } else {
+      WakeModelHeader *hdr = reinterpret_cast<WakeModelHeader *>(header_buf);
+      hdr->magic = WAKE_MAGIC;
+      hdr->header_version = 1;
+      hdr->flags = 0;
+      hdr->model_size = static_cast<uint32_t>(total_read);
+      hdr->probability_cutoff = cutoff;
+      hdr->sliding_window_size = window;
+      hdr->tensor_arena_kb = 40;
+      strncpy(hdr->wake_word, wake_word_name.c_str(), sizeof(hdr->wake_word) - 1);
+    }
+
+    ESP_LOGI(TAG, "Erasing flash partition '%s' (0x%06X, %u KB)...",
+             part_name, (unsigned int)part->address, (unsigned int)(part->size / 1024));
+    err = esp_partition_erase_range(part, 0, part->size);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to erase partition: %s", esp_err_to_name(err));
+      free(model_buf);
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Writing 64-byte WakeModelHeader to offset 0x0...");
+    err = esp_partition_write(part, 0, header_buf, sizeof(header_buf));
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to write header to partition: %s", esp_err_to_name(err));
+      free(model_buf);
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Writing %zu bytes of TFLite model data to offset 0x%02X...",
+             total_read, (unsigned int)sizeof(header_buf));
+    err = esp_partition_write(part, sizeof(header_buf), model_buf, total_read);
+    free(model_buf);
+
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to write model data to partition: %s", esp_err_to_name(err));
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Custom wake word '%s' successfully installed into slot %d ('%s')!",
+             wake_word_name.c_str(), slot, part_name);
+    return true;
+  }
+
+  bool remove_custom_wake_word(int slot) {
+    if (slot < 1 || slot > 3) {
+      ESP_LOGE(TAG, "Invalid wake word slot %d (must be 1, 2, or 3)", slot);
+      return false;
+    }
+    char part_name[16] = {0};
+    if (nim_wake_installer_get_partition_name != nullptr) {
+      nim_wake_installer_get_partition_name(slot, part_name, sizeof(part_name));
+    } else {
+      snprintf(part_name, sizeof(part_name), slot == 1 ? "wake_model" : (slot == 2 ? "wake_model_2" : "wake_model_3"));
+    }
+
+    const esp_partition_t *part = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
+    if (part == nullptr) {
+      ESP_LOGE(TAG, "Target partition '%s' not found on flash", part_name);
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Clearing custom wake word slot %d ('%s')...", slot, part_name);
+    esp_err_t err = esp_partition_erase_range(part, 0, 4096);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to erase partition sector: %s", esp_err_to_name(err));
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Custom wake word slot %d cleared successfully", slot);
+    return true;
   }
 
  protected:

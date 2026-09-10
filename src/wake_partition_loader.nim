@@ -116,3 +116,79 @@ proc nim_wake_loader_scale_cutoff*(baseCutoff: uint8, levelCStr: cstring): uint8
   if levelCStr == nil: return baseCutoff
   calculateCutoffForSensitivity(baseCutoff, $levelCStr)
 
+proc packWakeModelHeader*(
+    name: string,
+    modelSize: uint32,
+    cutoff: uint8 = 102'u8,
+    window: uint8 = 5'u8,
+    arenaKb: uint16 = 40'u16
+): array[64, uint8] =
+  ## Packs a 64-byte WakeModelHeader matching the binary layout expected by wake_partition_loader.
+  var hdr: WakeModelHeader
+  hdr.magic = WAKE_MAGIC
+  hdr.headerVersion = 1'u16
+  hdr.flags = 0'u16
+  hdr.modelSize = modelSize
+  hdr.probabilityCutoff = if cutoff > 0'u8: cutoff else: 102'u8
+  hdr.slidingWindowSize = if window > 0'u8: window else: 5'u8
+  hdr.tensorArenaKb = if arenaKb > 0'u16: arenaKb else: 40'u16
+
+  let nameLen = min(name.len, 31)
+  for i in 0 ..< nameLen:
+    hdr.wakeWord[i] = name[i]
+  hdr.wakeWord[nameLen] = '\0'
+
+  copyMem(addr result[0], addr hdr, sizeof(WakeModelHeader))
+
+proc validateTfliteBuffer*(data: openArray[uint8]): bool =
+  ## Validates that data starts with valid TFLite flatbuffer signature 'TFL3' at offset 4..7
+  ## and has a reasonable size (>= 1000 bytes).
+  if data.len < 1000:
+    return false
+  if data.len < 8:
+    return false
+  result = (data[4] == uint8('T') and
+            data[5] == uint8('F') and
+            data[6] == uint8('L') and
+            data[7] == uint8('3'))
+
+proc getSlotPartitionName*(slot: int): string =
+  case slot
+  of 1: "wake_model"
+  of 2: "wake_model_2"
+  of 3: "wake_model_3"
+  else: ""
+
+# C ABI bridge exports for installer
+proc nim_wake_installer_pack_header*(
+    outBuf: ptr uint8,
+    maxLen: csize_t,
+    name: cstring,
+    modelSize: uint32,
+    cutoff: uint8,
+    window: uint8,
+    arenaKb: uint16
+): bool {.exportc, cdecl.} =
+  if outBuf == nil or maxLen < csize_t(sizeof(WakeModelHeader)):
+    return false
+  let nameStr = if name != nil: $name else: "Custom Wake Word"
+  let hdrBytes = packWakeModelHeader(nameStr, modelSize, cutoff, window, arenaKb)
+  copyMem(outBuf, unsafeAddr hdrBytes[0], sizeof(WakeModelHeader))
+  return true
+
+proc nim_wake_installer_validate_tflite*(data: ptr uint8, len: csize_t): bool {.exportc, cdecl.} =
+  if data == nil or len < 1000:
+    return false
+  let arr = cast[ptr UncheckedArray[uint8]](data)
+  validateTfliteBuffer(toOpenArray(arr, 0, int(len) - 1))
+
+proc nim_wake_installer_get_partition_name*(slot: cint, outBuf: cstring, maxLen: csize_t): bool {.exportc, cdecl.} =
+  if outBuf == nil or maxLen == 0:
+    return false
+  let name = getSlotPartitionName(int(slot))
+  if name.len == 0 or name.len >= int(maxLen):
+    return false
+  copyMem(outBuf, cstring(name), name.len)
+  cast[ptr UncheckedArray[char]](outBuf)[name.len] = '\0'
+  return true
+

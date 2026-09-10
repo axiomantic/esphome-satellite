@@ -76,3 +76,64 @@ suite "Wake Partition Loader Suite (TDD)":
     check calculateCutoffForSensitivity(baseCutoff, "Moderately sensitive") == 100'u8
     check calculateCutoffForSensitivity(baseCutoff, "Slightly sensitive") == 135'u8
     check calculateCutoffForSensitivity(baseCutoff, "Unknown") == 100'u8
+
+  test "packWakeModelHeader generates valid roundtrip header":
+    let packed = packWakeModelHeader(
+      name = "Custom Wake",
+      modelSize = 62304'u32,
+      cutoff = 102'u8,
+      window = 5'u8,
+      arenaKb = 40'u16
+    )
+    check packed.len == 64
+    let parsed = parseWakeModelHeader(packed, 262144'u32, slotIndex = 1)
+    check parsed.valid
+    check parsed.wakeWord == "Custom Wake"
+    check parsed.modelSize == 62304'u32
+    check parsed.probabilityCutoff == 102'u8
+    check parsed.slidingWindowSize == 5
+    check parsed.tensorArenaBytes == 40 * 1024
+
+  test "packWakeModelHeader truncates long names to 31 chars plus null":
+    let longName = "A Very Long Wake Word Name That Exceeds Thirty One Characters Completely"
+    let packed = packWakeModelHeader(
+      name = longName,
+      modelSize = 50000'u32
+    )
+    let parsed = parseWakeModelHeader(packed, 262144'u32, slotIndex = 2)
+    check parsed.valid
+    check parsed.wakeWord.len <= 31
+    check parsed.wakeWord == longName[0 ..< 31]
+
+  test "validateTfliteBuffer verifies TFL3 magic and length":
+    var validTflite = newSeq[uint8](1500)
+    # TFL3 at offset 4
+    validTflite[4] = uint8('T')
+    validTflite[5] = uint8('F')
+    validTflite[6] = uint8('L')
+    validTflite[7] = uint8('3')
+    check validateTfliteBuffer(validTflite)
+
+    # Too short (< 1000 bytes)
+    var shortTflite = newSeq[uint8](500)
+    shortTflite[4] = uint8('T')
+    shortTflite[5] = uint8('F')
+    shortTflite[6] = uint8('L')
+    shortTflite[7] = uint8('3')
+    check not validateTfliteBuffer(shortTflite)
+
+    # Invalid magic
+    var invalidMagic = newSeq[uint8](1500)
+    invalidMagic[4] = uint8('E')
+    invalidMagic[5] = uint8('L')
+    invalidMagic[6] = uint8('F')
+    invalidMagic[7] = uint8('0')
+    check not validateTfliteBuffer(invalidMagic)
+
+  test "getSlotPartitionName maps valid slots and rejects invalid":
+    check getSlotPartitionName(1) == "wake_model"
+    check getSlotPartitionName(2) == "wake_model_2"
+    check getSlotPartitionName(3) == "wake_model_3"
+    check getSlotPartitionName(0) == ""
+    check getSlotPartitionName(4) == ""
+    check getSlotPartitionName(-1) == ""
