@@ -375,12 +375,13 @@ def get_available_builtin_voices(backend_name: str, api_key: Optional[str] = Non
 def generate_clemens_variations() -> List[str]:
     return [
         "mister clemens", "hey mister clemens", "ok mister clemens", "okay mister clemens", "hi mister clemens",
-        "mr clemens", "mistah clemens", "mistuh clemens", "mister clemons", "misterclemens",
-        "mistr clemens", "meester clemens", "missed her clemens", "miss tur cleh muns", "mis ter clem ens",
-        "hay mister clemmons", "ey mistuh clem ins", "hey mistah clemens", "ok mistr clemons", "hi missed her clem ens",
-        "heymisterclemens", "missturclemuns", "mstr clemens", "mist ur clem uns", "mister klemens",
-        "a mister clemens", "hey miss ter clem mens", "mrclemens", "mister clem ins", "meahster clemens",
-        "mistuh clemons", "ok mistah clemmens", "hi misterclemens", "hay mistur klemens", "ey mister clemens"
+        "mistah clemens", "mistuh clemens", "mister clemons", "misterclemens", "mistur clemens",
+        "meester clemens", "missed her clemens", "miss tur cleh muns", "mis ter clem ens",
+        "hay mister clemmons", "ey mistuh clem ins", "hey mistah clemens", "ok mistur clemons", "hi missed her clem ens",
+        "heymisterclemens", "missturclemuns", "mist ur clem uns", "mister klemens",
+        "a mister clemens", "hey miss ter clem mens", "mister clem ins", "meahster clemens",
+        "mistuh clemons", "ok mistah clemmens", "hi misterclemens", "hay mistur klemens", "ey mister clemens",
+        "aye mister clemens", "mkay mister clemens", "oh mister clemens"
     ]
 
 
@@ -830,18 +831,43 @@ def review_phrases_interactive(phrases: List[str], model_name: str, console: Opt
 def postprocess_audio(raw_input: Path, target_wav: Path) -> bool:
     """
     Standardizes audio to microWakeWord requirements:
-    16,000 Hz mono 16-bit PCM, silence trimmed, normalized to -1.0 dBFS.
+    16,000 Hz mono 16-bit PCM, silence trimmed with safe padding, normalized to -1.0 dBFS.
+    Preserves trailing fricatives (-s, -ce) and avoids loudnorm distortion.
     """
-    cmd = [
-        "ffmpeg", "-y", "-i", str(raw_input),
-        "-ar", "16000",
-        "-ac", "1",
-        "-c:a", "pcm_s16le",
-        "-af", "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-45dB:detection=peak,areverse,silenceremove=start_periods=1:start_duration=0.05:start_threshold=-45dB:detection=peak,areverse,loudnorm=I=-16:TP=-1.0:LRA=7",
-        str(target_wav)
-    ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return res.returncode == 0 and target_wav.exists() and target_wav.stat().st_size > 44
+    try:
+        from pydub import AudioSegment, silence
+        aseg = AudioSegment.from_file(raw_input)
+
+        # Gentle silence trimming: threshold -48dBFS, keep 200ms lead and 300ms tail padding
+        lead_silence = silence.detect_leading_silence(aseg, silence_threshold=-48.0)
+        lead_trim = max(0, lead_silence - 200)
+        aseg = aseg[lead_trim:]
+
+        trail_silence = silence.detect_leading_silence(aseg.reverse(), silence_threshold=-48.0)
+        trail_trim = max(0, trail_silence - 300)
+        aseg = aseg.reverse()[trail_trim:].reverse()
+
+        # Resample to 16kHz mono 16-bit PCM
+        aseg = aseg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+
+        # Linear peak normalize to -1.0 dBFS
+        if aseg.max_dBFS > -100.0:
+            gain = -1.0 - aseg.max_dBFS
+            aseg = aseg.apply_gain(gain)
+
+        target_wav.parent.mkdir(parents=True, exist_ok=True)
+        aseg.export(str(target_wav), format="wav")
+        return target_wav.exists() and target_wav.stat().st_size > 44
+    except Exception as e:
+        cmd = [
+            "ffmpeg", "-y", "-i", str(raw_input),
+            "-ar", "16000",
+            "-ac", "1",
+            "-c:a", "pcm_s16le",
+            str(target_wav)
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return res.returncode == 0 and target_wav.exists() and target_wav.stat().st_size > 44
 
 
 def encode_multipart_formdata(fields: Dict[str, str], files: List[Tuple[str, Path]]) -> Tuple[bytes, str]:
@@ -1338,20 +1364,65 @@ def install_f5_tts_dependencies(console: Optional[Any] = None) -> bool:
             print(err_msg, file=sys.stderr)
         return False
 
-
 class F5TTSBackend:
     def __init__(self):
         self.cli_binary = self._find_cli()
         self._api_model = None
+        self._prepared_refs: Dict[str, Tuple[Path, str]] = {}
+
+    def _prepare_reference(self, ref_audio: Path, ref_text: str) -> Tuple[Path, str]:
+        """
+        Ensures reference audio is a clean 5-8 second single sentence clip,
+        and ref_text is ONLY the exact matching words of that sentence.
+        Prevents the 10x compression bug where F5-TTS squeezes speech into 0.1s.
+        """
+        cache_key = hashlib.md5(f"{ref_audio.resolve()}_{ref_text}".encode()).hexdigest()
+        if cache_key in self._prepared_refs:
+            return self._prepared_refs[cache_key]
+
+        ref_prep_dir = CACHE_DIR / "prepared_refs"
+        ref_prep_dir.mkdir(parents=True, exist_ok=True)
+        cached_clip = ref_prep_dir / f"{ref_audio.stem}_{cache_key[:8]}.wav"
+
+        clean_text = ref_text.strip()
+        first_sent_text = clean_text.split(".")[0].strip() + "." if "." in clean_text else clean_text[:80].strip()
+
+        try:
+            from pydub import AudioSegment, silence
+            aseg = AudioSegment.from_file(ref_audio)
+
+            # If audio is longer than 10s, extract the first clean sentence
+            if len(aseg) > 10000:
+                if cached_clip.is_file() and cached_clip.stat().st_size > 44:
+                    self._prepared_refs[cache_key] = (cached_clip, first_sent_text)
+                    return cached_clip, first_sent_text
+
+                # Split on silence to get the first sentence audio segment
+                segs = silence.split_on_silence(aseg, min_silence_len=400, silence_thresh=-35, keep_silence=200)
+                if segs and len(segs[0]) >= 4000:
+                    slice_audio = segs[0]
+                elif len(segs) >= 2 and len(segs[0] + segs[1]) <= 10000:
+                    slice_audio = segs[0] + AudioSegment.silent(duration=150) + segs[1]
+                else:
+                    slice_audio = aseg[:8000]
+
+                slice_audio.export(str(cached_clip), format="wav")
+                self._prepared_refs[cache_key] = (cached_clip, first_sent_text)
+                return cached_clip, first_sent_text
+        except Exception as e:
+            print(f"[Warning] Failed to slice reference audio: {e}", file=sys.stderr)
+
+        self._prepared_refs[cache_key] = (ref_audio, clean_text)
+        return ref_audio, clean_text
 
     def _find_cli(self) -> Optional[str]:
-        for bin_name in ["f5-tts_infer-cli", "f5-tts"]:
-            found = shutil.which(bin_name)
-            if found:
-                return found
-            venv_bin = Path(sys.executable).parent
-            cand = venv_bin / bin_name
-            if cand.is_file() and os.access(cand, os.X_OK):
+        candidates = [
+            shutil.which("f5-tts_infer-cli"),
+            Path(sys.executable).parent / "f5-tts_infer-cli",
+            Path(__file__).resolve().parent.parent / ".venv" / "bin" / "f5-tts_infer-cli"
+        ]
+        for cand in candidates:
+            if cand and Path(cand).is_file() and os.access(cand, os.X_OK):
                 return str(cand)
         return None
 
@@ -1377,17 +1448,19 @@ class F5TTSBackend:
             return False
 
         temp_out = out_path.with_suffix(".temp.wav")
+        prepared_audio, prepared_text = self._prepare_reference(ref_audio, ref_text)
 
         # 1. High-speed in-process API (persistent model in memory, zero restart overhead)
         api_model = self._get_api_model()
         if api_model is not None:
             try:
-                clean_ref_text = ref_text.strip() if ref_text else ""
                 api_model.infer(
-                    ref_file=str(ref_audio),
-                    ref_text=clean_ref_text,
+                    ref_file=str(prepared_audio),
+                    ref_text=prepared_text,
                     gen_text=text,
                     file_wave=str(temp_out),
+                    speed=0.75,
+                    seed=42,
                     show_info=lambda *args, **kwargs: None,
                     progress=None
                 )
@@ -1404,9 +1477,10 @@ class F5TTSBackend:
             cmd = [
                 self.cli_binary,
                 "--model", "F5TTS_v1_Base",
-                "--ref_audio", str(ref_audio),
-                "--ref_text", ref_text if ref_text else "",
+                "--ref_audio", str(prepared_audio),
+                "--ref_text", prepared_text,
                 "--gen_text", text,
+                "--speed", "0.75",
                 "--output_dir", str(temp_out.parent),
                 "--output_file", temp_out.name
             ]
