@@ -1403,7 +1403,7 @@ class F5TTSBackend:
         if self.cli_binary:
             cmd = [
                 self.cli_binary,
-                "--model", "F5TTS_Base",
+                "--model", "F5TTS_v1_Base",
                 "--ref_audio", str(ref_audio),
                 "--ref_text", ref_text if ref_text else "",
                 "--gen_text", text,
@@ -2575,9 +2575,25 @@ def main():
         run_tui_wizard()
         return
 
-    if args.model in BUILTIN_WAKE_WORDS:
-        phrases = BUILTIN_WAKE_WORDS[args.model]["generator"]()
+    model_key = args.model.lower().strip().replace("-", "_").replace(" ", "_")
+    alias_map = {
+        "clemens": "mister_clemens",
+        "mr_clemens": "mister_clemens",
+        "mrclemens": "mister_clemens",
+        "gizmo": "hey_gizmo",
+        "chief": "hey_chief",
+        "captain": "oh_captain",
+        "computer": "ok_computer",
+        "okay_computer": "ok_computer",
+        "wizard": "little_wizard",
+    }
+    canonical_model = alias_map.get(model_key, model_key)
+
+    if canonical_model in BUILTIN_WAKE_WORDS:
+        phrases = BUILTIN_WAKE_WORDS[canonical_model]["generator"]()
+        model_name = canonical_model
     else:
+        model_name = args.model
         if args.phrase_file:
             p_file = clean_path(args.phrase_file)
             if p_file and p_file.is_file():
@@ -2591,11 +2607,10 @@ def main():
         else:
             parser.error("--phrase or --phrase-file is required for custom wake word models")
 
-
     if args.review_phrases:
-        phrases = review_phrases_interactive(phrases, args.model)
+        phrases = review_phrases_interactive(phrases, model_name)
         if not phrases:
-            phrases = [args.model.replace("_", " ")]
+            phrases = [model_name.replace("_", " ")]
 
     household_voices = load_household_voices(
         household_dir=args.household_dir,
@@ -2615,9 +2630,9 @@ def main():
                 if clean_item:
                     builtin_list.append(clean_item)
 
-    out_dir = clean_path(args.output) or Path(f"data/{args.model}/positive")
+    out_dir = clean_path(args.output) or Path(f"data/{model_name}/positive")
     generate_corpus(
-        model_name=args.model,
+        model_name=model_name,
         phrases=phrases,
         backend_name=args.backend,
         count=args.count,
