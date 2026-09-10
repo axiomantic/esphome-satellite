@@ -199,9 +199,45 @@ api:
         - delay: 1s
         - lambda: |-
             esp_restart();
+    - service: update_firmware_from_url
+      variables:
+        url: string
+      then:
+        - lambda: |-
+            extern void nim_satellite_ota_start() __attribute__((weak));
+            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+            ESP_LOGI("satellite", "Starting firmware OTA update from URL: %s", url.c_str());
+        - ota.http_request.flash:
+            url: !lambda 'return url;'
+    - service: update_firmware_to_latest
+      then:
+        - lambda: |-
+            extern void nim_satellite_ota_start() __attribute__((weak));
+            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+            ESP_LOGI("satellite", "Updating firmware to latest official build from GitHub...");
+        - ota.http_request.flash:
+            url: "https://github.com/axiomantic/esphome-satellite/raw/main/web/firmware-ota.bin"
+
+http_request:
+  id: http_client_id
+  timeout: 30s
 
 ota:
   - platform: esphome
+    on_begin:
+      - lambda: |-
+          extern void nim_satellite_ota_start() __attribute__((weak));
+          if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+    on_end:
+      - lambda: |-
+          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+    on_error:
+      - lambda: |-
+          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+  - platform: http_request
+    id: ota_http
 
 i2c:
   - id: bus_a
@@ -1087,6 +1123,19 @@ button:
           id(bus_a).write(0x18, rst, 2);
           delay(10);
           esphome::xvf3800::XVF3800Hardware::instance().reboot_xmos();
+
+  - platform: template
+    id: update_firmware_btn
+    name: "System: Update Firmware to Latest"
+    icon: "mdi:cloud-download"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          extern void nim_satellite_ota_start() __attribute__((weak));
+          if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+          ESP_LOGI("satellite", "Button pressed: updating firmware to latest from GitHub...");
+      - ota.http_request.flash:
+          url: "https://github.com/axiomantic/esphome-satellite/raw/main/web/firmware-ota.bin"
 
 interval:
   - interval: 50ms
