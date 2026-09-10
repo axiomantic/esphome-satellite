@@ -166,6 +166,39 @@ api:
       then:
         - lambda: |-
             call_nim_action_set_mute(muted);
+    - service: install_custom_wake_word
+      variables:
+        url: string
+        slot: int
+        wake_word: string
+        cutoff: int
+        sliding_window: int
+      then:
+        - lambda: |-
+            bool ok = esphome::wake_loader::get_wake_partition_loader().install_custom_wake_word_from_url(
+                url, slot, wake_word, cutoff, sliding_window);
+            if (!ok) {
+              ESP_LOGE("satellite", "Failed to install custom wake word from %s", url.c_str());
+              return;
+            }
+            ESP_LOGI("satellite", "Custom wake word '%s' installed. Restarting in 1s...", wake_word.c_str());
+        - delay: 1s
+        - lambda: |-
+            esp_restart();
+    - service: remove_custom_wake_word
+      variables:
+        slot: int
+      then:
+        - lambda: |-
+            bool ok = esphome::wake_loader::get_wake_partition_loader().remove_custom_wake_word(slot);
+            if (!ok) {
+              ESP_LOGE("satellite", "Failed to remove custom wake word from slot %d", slot);
+              return;
+            }
+            ESP_LOGI("satellite", "Custom wake word removed from slot %d. Restarting in 1s...", slot);
+        - delay: 1s
+        - lambda: |-
+            esp_restart();
 
 ota:
   - platform: esphome
