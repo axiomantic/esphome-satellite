@@ -1391,21 +1391,14 @@ class F5TTSBackend:
             from pydub import AudioSegment, silence
             aseg = AudioSegment.from_file(ref_audio)
 
-            # If audio is longer than 10s, extract the first clean sentence
+            # If audio is longer than 10s, take the first 7.0 seconds
+            # which cleanly captures the full first sentence across all reference voices
             if len(aseg) > 10000:
                 if cached_clip.is_file() and cached_clip.stat().st_size > 44:
                     self._prepared_refs[cache_key] = (cached_clip, first_sent_text)
                     return cached_clip, first_sent_text
 
-                # Split on silence to get the first sentence audio segment
-                segs = silence.split_on_silence(aseg, min_silence_len=400, silence_thresh=-35, keep_silence=200)
-                if segs and len(segs[0]) >= 4000:
-                    slice_audio = segs[0]
-                elif len(segs) >= 2 and len(segs[0] + segs[1]) <= 10000:
-                    slice_audio = segs[0] + AudioSegment.silent(duration=150) + segs[1]
-                else:
-                    slice_audio = aseg[:8000]
-
+                slice_audio = aseg[:7000]
                 slice_audio.export(str(cached_clip), format="wav")
                 self._prepared_refs[cache_key] = (cached_clip, first_sent_text)
                 return cached_clip, first_sent_text
