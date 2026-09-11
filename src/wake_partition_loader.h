@@ -4,6 +4,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/components/micro_wake_word/micro_wake_word.h"
 #include "esphome/components/select/select.h"
+#include "esphome/components/ota/ota_backend.h"
 #include <esp_partition.h>
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
@@ -123,6 +124,7 @@ class WakePartitionLoader {
       return;
     }
     this->mww_ = mww;
+    this->attach_ota_listener();
 
     const char *part_names[3] = {"wake_model", "wake_model_2", "wake_model_3"};
 
@@ -832,6 +834,30 @@ class WakePartitionLoader {
     return true;
   }
 
+  micro_wake_word::MicroWakeWord *get_mww() { return this->mww_; }
+
+  void attach_ota_listener();
+
+  void suspend_inference_for_flash() {
+    if (this->mww_ != nullptr) {
+      ESP_LOGI(TAG, "Stopping microWakeWord inference before flash...");
+      this->mww_->stop();
+    }
+    TaskHandle_t mww_task = xTaskGetHandle("mww");
+    if (mww_task != nullptr) {
+      ESP_LOGI(TAG, "Suspending FreeRTOS 'mww' task to prevent flash cache conflicts...");
+      vTaskSuspend(mww_task);
+    }
+  }
+
+  void resume_inference_after_flash() {
+    TaskHandle_t mww_task = xTaskGetHandle("mww");
+    if (mww_task != nullptr) {
+      ESP_LOGI(TAG, "Resuming FreeRTOS 'mww' task...");
+      vTaskResume(mww_task);
+    }
+  }
+
  protected:
   micro_wake_word::MicroWakeWord *mww_{nullptr};
   std::vector<CustomWakeSlot> slots_;
@@ -848,6 +874,45 @@ class WakePartitionLoader {
 
 inline WakePartitionLoader &get_wake_partition_loader() {
   return WakePartitionLoader::instance();
+}
+
+#ifdef USE_OTA_STATE_LISTENER
+class SatelliteOtaGlobalListener : public ota::OTAGlobalStateListener {
+ public:
+  void on_ota_global_state(ota::OTAState state, float progress, uint8_t error, ota::OTAComponent *component) override {
+    if (state == ota::OTA_STARTED) {
+      ESP_LOGI("satellite_ota", "Global OTA started, stopping inference and setting updating typestate");
+      extern void nim_satellite_ota_start() __attribute__((weak));
+      if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+      get_wake_partition_loader().suspend_inference_for_flash();
+    } else if (state == ota::OTA_COMPLETED) {
+      ESP_LOGI("satellite_ota", "Global OTA completed successfully");
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+    } else if (state == ota::OTA_ERROR || state == ota::OTA_ABORT) {
+      ESP_LOGW("satellite_ota", "Global OTA finished with error or abort (error %u), resuming inference", error);
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      get_wake_partition_loader().resume_inference_after_flash();
+    }
+  }
+};
+
+inline void register_global_ota_listener() {
+  static SatelliteOtaGlobalListener s_global_ota_listener;
+  static bool s_listener_registered = false;
+  if (!s_listener_registered) {
+    ota::get_global_ota_callback()->add_global_state_listener(&s_global_ota_listener);
+    s_listener_registered = true;
+    ESP_LOGI("satellite_ota", "Registered global OTA state listener for microWakeWord suspension");
+  }
+}
+#endif
+
+inline void WakePartitionLoader::attach_ota_listener() {
+#ifdef USE_OTA_STATE_LISTENER
+  register_global_ota_listener();
+#endif
 }
 
 } // namespace wake_loader

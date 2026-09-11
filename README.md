@@ -764,7 +764,7 @@ packages:
 substitutions:
   name: "esphome-satellite-<board_name>"
   friendly_name: "Voice Satellite (<Board Name>)"
-  version: "0.6.0"
+  version: "0.6.1"
 
 esp32:
   board: <board_identifier>
@@ -800,7 +800,7 @@ Run the invariant test suite and validate configuration syntax:
 ./scripts/test.sh
 
 # Validate ESPHome YAML configuration
-uv run --python 3.11 --with esphome esphome -s version "0.6.0" config packages/<board_name>.yaml
+uv run --python 3.11 --with esphome esphome -s version "0.6.1" config packages/<board_name>.yaml
 ```
 
 ### Development Guidelines & Architecture Invariants
