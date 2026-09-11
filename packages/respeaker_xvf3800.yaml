@@ -175,10 +175,16 @@ api:
         sliding_window: int
       then:
         - lambda: |-
+            extern void nim_satellite_ota_start() __attribute__((weak));
+            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+        - micro_wake_word.stop:
+        - lambda: |-
             bool ok = esphome::wake_loader::get_wake_partition_loader().install_custom_wake_word_from_url(
                 url, slot, wake_word, cutoff, sliding_window);
             if (!ok) {
               ESP_LOGE("satellite", "Failed to install custom wake word from %s", url.c_str());
+              extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+              if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
               return;
             }
             ESP_LOGI("satellite", "Custom wake word '%s' installed. Restarting in 1s...", wake_word.c_str());
@@ -190,9 +196,15 @@ api:
         slot: int
       then:
         - lambda: |-
+            extern void nim_satellite_ota_start() __attribute__((weak));
+            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+        - micro_wake_word.stop:
+        - lambda: |-
             bool ok = esphome::wake_loader::get_wake_partition_loader().remove_custom_wake_word(slot);
             if (!ok) {
               ESP_LOGE("satellite", "Failed to remove custom wake word from slot %d", slot);
+              extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+              if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
               return;
             }
             ESP_LOGI("satellite", "Custom wake word removed from slot %d. Restarting in 1s...", slot);
@@ -216,7 +228,7 @@ api:
             if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
             ESP_LOGI("satellite", "Updating firmware to latest official build from GitHub...");
         - ota.http_request.flash:
-            url: "https://github.com/axiomantic/esphome-satellite/raw/main/web/firmware-ota.bin"
+            url: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin"
 
 http_request:
   id: http_client_id
@@ -1135,7 +1147,7 @@ button:
           if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
           ESP_LOGI("satellite", "Button pressed: updating firmware to latest from GitHub...");
       - ota.http_request.flash:
-          url: "https://github.com/axiomantic/esphome-satellite/raw/main/web/firmware-ota.bin"
+          url: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin"
 
 interval:
   - interval: 50ms

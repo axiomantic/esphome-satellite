@@ -53,6 +53,8 @@ from generate_wakeword_corpus import (
     load_wizard_state,
     save_wizard_field,
     get_valid_default,
+    extract_first_sentence,
+    postprocess_audio,
 )
 from unittest.mock import patch, MagicMock
 
@@ -786,6 +788,65 @@ class TestWakewordCorpus(unittest.TestCase):
 
         # None desired and None fallback returns None
         self.assertIsNone(get_valid_default(choices, None, fallback=None))
+
+    def test_extract_first_sentence(self):
+        # Sentences with honorifics and abbreviations must not be truncated to just the abbreviation
+        t1 = "Mr. Clemens was an American writer. He wrote Adventures of Huckleberry Finn."
+        self.assertEqual(extract_first_sentence(t1), "Mr. Clemens was an American writer.")
+
+        t2 = "Dr. Watson, the game is afoot! Come quickly."
+        self.assertEqual(extract_first_sentence(t2), "Dr. Watson, the game is afoot!")
+
+        t3 = "Mrs. Hudson prepared breakfast."
+        self.assertEqual(extract_first_sentence(t3), "Mrs. Hudson prepared breakfast.")
+
+        t4 = "Prof. Moriarty is Sherlock Holmes's nemesis. Be careful."
+        self.assertEqual(extract_first_sentence(t4), "Prof. Moriarty is Sherlock Holmes's nemesis.")
+
+        t5 = "Hello world! How are you?"
+        self.assertEqual(extract_first_sentence(t5), "Hello world!")
+
+        t6 = "Single unpunctuated phrase"
+        self.assertEqual(extract_first_sentence(t6), "Single unpunctuated phrase")
+
+    def test_postprocess_audio_silence_guard(self):
+        import wave
+        import struct
+        import math
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            silent_wav = tmp_path / "silent.wav"
+            target_silent = tmp_path / "out_silent.wav"
+
+            # Create 1 second of near-zero silence (amplitude = 2 out of 32767 -> -84 dBFS)
+            with wave.open(str(silent_wav), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                samples = [2] * 16000
+                wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+            # Silent audio must be rejected by postprocess_audio
+            res = postprocess_audio(silent_wav, target_silent)
+            self.assertFalse(res)
+            self.assertFalse(target_silent.exists())
+
+            # Create 1 second of normal audio (sine wave at -6 dBFS)
+            normal_wav = tmp_path / "normal.wav"
+            target_normal = tmp_path / "out_normal.wav"
+            with wave.open(str(normal_wav), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                # 440 Hz tone at 50% amplitude (~16000 peak -> ~ -6 dBFS)
+                samples = [int(16000 * math.sin(2 * math.pi * 440 * i / 16000)) for i in range(16000)]
+                wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+            res_normal = postprocess_audio(normal_wav, target_normal)
+            self.assertTrue(res_normal)
+            self.assertTrue(target_normal.exists())
+            self.assertGreater(target_normal.stat().st_size, 44)
 
 
 if __name__ == "__main__":
