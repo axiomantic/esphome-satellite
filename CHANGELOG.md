@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-09-11
+
+### Added
+- Remote OTA Update Architecture: Onboard web server and Home Assistant update entity integration enabling one-click OTA flashing from remote GitHub binaries.
+- Dynamic Web Server Update Banner: Embedded interactive banner on the device web page showing remote update status, current version, and an Install OTA Update trigger with countdown and auto-reconnect.
+- Global OTA State Listener: Attached listener to ESPHome OTA global callback ensuring microWakeWord inference task suspension and state machine transitions to rsUpdating during all OTA operations, preventing Core 1 flash cache panics.
+- Live Clemens Probability Monitor: 250ms diagnostic telemetry logging peak and rolling average probability scores alongside active cutoffs.
+- Diagnostic Firmware Sensors: Added System: Firmware Update Available binary sensor and System: Installed Firmware Version and System: Latest Firmware Version text sensors.
+
+### Changed
+- Slot 2 audio previews (wake chime, processing sound, cancel sound) play through the onboard speaker with independent volume controls without requiring Slot 2 to be active.
+- Home Assistant entity categories and friendly names organized with standardized prefixes (Slot 1, Slot 2, Voice, Hardware, System).
+- Reordered boot initialization ensuring custom models, probability cutoffs, and sliding window sizes are configured before microWakeWord start.
+
 ## [0.6.0] - 2026-09-09
 
 ### Added
