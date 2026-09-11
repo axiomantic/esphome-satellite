@@ -42,6 +42,16 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
       check (c and 0x000000FF'u32) > 0'u32          # Blue channel active
       check (c and 0x0000FF00'u32) > 0'u32          # Green channel active
 
+  test "LED animation states - Follow Up produces conversational listening emerald-teal wave":
+    let colors = computeAnimationColors("Follow Up", "Off", 1.0'f32, 1000'u32)
+    for c in colors:
+      let r = (c shr 16) and 0xFF'u32
+      let g = (c shr 8) and 0xFF'u32
+      let b = c and 0xFF'u32
+      check g > 0'u32 # Green active
+      check b > 0'u32 # Blue active
+      check g > r     # Green dominant over red (emerald-teal tone)
+
   test "LED animation states - Thinking produces 12-LED rotating spinner with decay":
     let colors = computeAnimationColors("Thinking", "Off", 1.0'f32, 0'u32)
     # Head at 0 has highest brightness

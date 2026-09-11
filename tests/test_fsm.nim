@@ -91,6 +91,13 @@ suite "Satellite Typestate FSM - Extended Lifecycle States":
     var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
     var followUp = replying.onFollowUpRequested()
     check followUp is FollowUp
+    # Direct speech ended while in follow-up listening
+    var thinkingDirect = followUp.onFollowUpSpeechEnded()
+    check thinkingDirect is Thinking
+    # Stop phrase while in follow-up listening
+    var cancellingDirect = followUp.onStopDuringFollowUp()
+    check cancellingDirect is Cancelling
+    # Or transition via ready to listen
     var listening = followUp.onFollowUpReadyToListen()
     check listening is Listening
     var thinking = listening.onSpeechEnded()
@@ -183,6 +190,28 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     check nim_satellite_get_state() == 3 # Thinking
     nim_satellite_tts_start()
     nim_satellite_tts_end()
+    check nim_satellite_get_state() == 0 # Idle
+
+  test "Follow-up speech ended and cancellation directly from FollowUp state":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_speech_ended()
+    nim_satellite_tts_start()
+    check nim_satellite_get_state() == 4 # Replying
+    nim_satellite_follow_up()
+    check nim_satellite_get_state() == 9 # FollowUp
+
+    # Direct speech ended while in FollowUp state
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 3 # Thinking
+    nim_satellite_tts_start()
+    nim_satellite_follow_up()
+    check nim_satellite_get_state() == 9 # FollowUp
+
+    # Direct stop command while in FollowUp state
+    nim_satellite_stop_word()
+    check nim_satellite_get_state() == 14 # Cancelling
+    nim_satellite_cancel_done(true)
     check nim_satellite_get_state() == 0 # Idle
 
   test "Media playback and ducking cycle":

@@ -55,6 +55,17 @@ proc computeAnimationColors*(
     let cyan = g or b
     for i in 0 ..< 12:
       result[i] = cyan
+  of "Follow Up":
+    # Conversational mode active listening: distinctive breathing emerald-teal wave
+    let pulse = 0.55'f32 + 0.45'f32 * sin(now * 0.007'f32)
+    let head = int((nowMs div 120'u32) mod 12'u32)
+    for i in 0 ..< 12:
+      let dist = (head - i + 12) mod 12
+      let accent = if dist == 0: 1.35'f32 elif dist == 1 or dist == 11: 1.15'f32 else: 1.0'f32
+      let g = uint32(uint8(clamp(220.0'f32 * pulse * accent * brightness, 0.0'f32, 255.0'f32))) shl 8
+      let b = uint32(uint8(clamp(150.0'f32 * pulse * accent * brightness, 0.0'f32, 255.0'f32)))
+      let r = uint32(uint8(clamp(15.0'f32 * pulse * accent * brightness, 0.0'f32, 255.0'f32))) shl 16
+      result[i] = r or g or b
   of "Thinking":
     let head = int((nowMs div 70'u32) mod 12'u32)
     for i in 0 ..< 12:

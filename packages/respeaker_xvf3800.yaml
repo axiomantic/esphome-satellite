@@ -21,7 +21,7 @@ globals:
     initial_value: '1'
 
 preferences:
-  flash_write_interval: 10s
+  flash_write_interval: 2s
 
 esphome:
   name: ${name}
@@ -261,6 +261,7 @@ ota:
   - platform: esphome
     on_begin:
       - lambda: |-
+          if (global_preferences != nullptr) global_preferences->sync();
           extern void nim_satellite_ota_start() __attribute__((weak));
           if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
           esphome::wake_loader::get_wake_partition_loader().suspend_inference_for_flash();
@@ -282,6 +283,7 @@ ota:
     id: ota_http
     on_begin:
       - lambda: |-
+          if (global_preferences != nullptr) global_preferences->sync();
           extern void nim_satellite_ota_start() __attribute__((weak));
           if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
           esphome::wake_loader::get_wake_partition_loader().suspend_inference_for_flash();
@@ -303,6 +305,7 @@ ota:
     id: ota_web
     on_begin:
       - lambda: |-
+          if (global_preferences != nullptr) global_preferences->sync();
           extern void nim_satellite_ota_start() __attribute__((weak));
           if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
           esphome::wake_loader::get_wake_partition_loader().suspend_inference_for_flash();
@@ -454,7 +457,12 @@ voice_assistant:
   conversation_timeout: 300s
   on_start:
     - lambda: |-
-        call_nim_chime_done(true);
+        std::string st = get_satellite_state_name();
+        if (st == "Follow Up") {
+          ESP_LOGI("satellite", "Continuous dialogue start: active listening in Follow Up state.");
+        } else {
+          call_nim_chime_done(true);
+        }
   on_stt_vad_end:
     - lambda: |-
         call_nim_speech_ended();
@@ -525,21 +533,28 @@ voice_assistant:
         call_nim_tts_start();
   on_tts_end:
     - lambda: |-
-        call_nim_tts_end();
+        if (esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
+          ESP_LOGI("satellite", "Continuous dialogue active. Transitioning to Follow Up.");
+          call_nim_follow_up();
+        } else {
+          call_nim_tts_end();
+        }
   on_end:
     - lambda: |-
-        if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
-          esphome::get_pcm_sound_player().stop();
-          float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-          id(board_speaker).set_volume(vol);
-        }
-        if (!call_nim_is_cancelling()) {
-          call_nim_stop_word();
+        if (!esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
+          if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
+            esphome::get_pcm_sound_player().stop();
+            float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
+            id(board_speaker).set_volume(vol);
+          }
+          if (!call_nim_is_cancelling()) {
+            call_nim_stop_word();
+          }
         }
     - if:
         condition:
           lambda: |-
-            return !call_nim_is_cancelling() && !id(mic_mute_switch).state;
+            return !esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va)) && !call_nim_is_cancelling() && !id(mic_mute_switch).state;
         then:
           - micro_wake_word.start:
   on_error:
@@ -1401,7 +1416,7 @@ interval:
                 id(mww).start();
               }
             }
-          } else if (s == "Thinking" || s == "Listening" || s == "Woken") {
+          } else if (s == "Thinking" || s == "Listening" || s == "Woken" || s == "Follow Up") {
             if (active_start_ms == 0) {
               active_start_ms = millis();
             } else {

@@ -24,6 +24,8 @@ static const uint8_t PIN_MIC_MUTE = 30; // 1 = muted, 0 = unmuted
 static const uint8_t PIN_AMP_ENABLE = 31; // 0 = enabled (active low), 1 = disabled
 static const uint8_t PIN_LED_POWER = 33; // 1 = power on, 0 = power off
 
+extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf) __attribute__((weak));
+
 class XVF3800Hardware {
  public:
   static XVF3800Hardware &instance() {
@@ -94,7 +96,6 @@ class XVF3800Hardware {
   void reboot_xmos() {
     if (!this->bus_) return;
     uint8_t reboot_req[4] = {240, 89, 1, 0};
-    extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf) __attribute__((weak));
     if (nim_xvf3800_get_reboot_payload != nullptr) {
       nim_xvf3800_get_reboot_payload(reboot_req);
     }

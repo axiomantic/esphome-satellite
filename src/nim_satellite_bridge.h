@@ -140,6 +140,11 @@ inline void call_nim_ota_start(void) {
 inline void call_nim_ota_end(bool ok) {
   if (nim_satellite_ota_end) nim_satellite_ota_end(ok);
 }
+inline void call_nim_sync_preferences(void) {
+  if (global_preferences != nullptr) {
+    global_preferences->sync();
+  }
+}
 
 // Home Assistant Actions Bridge
 void nim_action_test_audio(const char *style, float volume) __attribute__((weak));
@@ -192,6 +197,25 @@ inline const char* get_satellite_state_name() {
 
 #ifdef __cplusplus
 } // extern "C"
+
+#ifdef USE_VOICE_ASSISTANT
+#include "esphome/components/voice_assistant/voice_assistant.h"
+
+namespace esphome {
+namespace voice_assistant {
+
+class VoiceAssistantAccessor : public VoiceAssistant {
+ public:
+  static bool is_continuing(const VoiceAssistant *va) {
+    if (!va) return false;
+    const auto *acc = static_cast<const VoiceAssistantAccessor*>(va);
+    return acc->continue_conversation_ || acc->continuous_;
+  }
+};
+
+} // namespace voice_assistant
+} // namespace esphome
+#endif
 
 #include <string>
 #include <cstring>

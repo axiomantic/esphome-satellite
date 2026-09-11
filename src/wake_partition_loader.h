@@ -8,6 +8,10 @@
 #include <esp_partition.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
+#if defined(USE_ESP32) || defined(ESP32)
+#include <esp_crt_bundle.h>
+#include <esp_http_client.h>
+#endif
 #include <string>
 #include <vector>
 #include <cstring>
