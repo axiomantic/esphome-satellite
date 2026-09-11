@@ -158,9 +158,9 @@ In modern Home Assistant voice environments, a single satellite device often nee
 
 ### Dual-Assistant Profiles & Independent Feedback
 Each assistant slot operates as a fully independent profile with its own acoustic identity:
-- **Dedicated Volume Levels**: Set independent volume controls for Slot 1 (`Audio: Slot 1 Volume`) and Slot 2 (`Audio: Slot 2 Volume`), enabling quiet, unobtrusive volume for administrative commands while preserving full fidelity for literary or conversational assistants.
+- **Dedicated Volume Levels**: Set independent volume controls for Slot 1 (`Slot 1: Volume`) and Slot 2 (`Slot 2: Volume`), enabling quiet, unobtrusive volume for administrative commands while preserving full fidelity for literary or conversational assistants.
 - **Independent Acoustic Themes**: Select distinct Wake Chimes, Processing Loops, and Cancel Sounds per slot. For instance, Slot 1 can play a warm acoustic kalimba chime with a vintage typewriter processing loop, while Slot 2 plays a crisp digital bell ping with a subtle spinner loop.
-- **Per-Slot Wake Word Selectors**: Home Assistant device configuration panels restrict wake word selection to a single active wake word per device. `esphome-satellite` bypasses this limitation with native on-device template selectors (`Speech: Slot 1 Wake Word` and `Speech: Slot 2 Wake Word`), allowing you to assign any built-in or custom partition model to either slot independently.
+- **Per-Slot Wake Word Selectors**: Home Assistant device configuration panels restrict wake word selection to a single active wake word per device. `esphome-satellite` bypasses this limitation with native on-device template selectors (`Slot 1: Wake Word` and `Slot 2: Wake Word`), allowing you to assign any built-in or custom partition model to either slot independently.
 - **Slot 2 Disable Option**: Setting Slot 2's wake word to `Disabled` safely reverts the satellite to dedicated single-assistant mode with zero overhead.
 
 ### 5-Minute Conversation Memory & Context Isolation
@@ -168,7 +168,7 @@ Voice interactions often span multi-turn dialogue where context should persist a
 1. **Extended Conversation Memory (300 Seconds)**: `conversation_timeout` is set to `300s` (5 minutes), perfectly aligning with Home Assistant Core's `chat_session.py` garbage collection window. You can issue a command, pause for several minutes, trigger the wake word again, and ask contextual follow-up questions (such as *"repeat what you just did and undo it"*).
 2. **Slot-Level Context Isolation**: To prevent personas from bleeding context into each other, the satellite tracks the active assistant slot. When a wake word activates a different slot than the preceding turn, the satellite immediately invokes `id(va).reset_conversation_id()`. This forces Home Assistant to spin up a clean conversation context for the new assistant.
 3. **Spoken Conversation Reset**: Saying *"forget our conversation"*, *"clear history"*, *"reset conversation"*, *"new conversation"*, or *"forget everything"* is intercepted directly in `on_stt_end`. The satellite wipes the Home Assistant conversation ID, dismisses the turn, and plays the cancel sound as an audible confirmation cue without sending unnecessary LLM prompts.
-4. **Manual Reset Button**: The dashboard exposes `Speech: Reset Conversation History` for one-tap memory clearing.
+4. **Manual Reset Button**: The dashboard exposes `Voice: Reset Conversation History` for one-tap memory clearing.
 
 ### Dynamic Partition Loader for Custom Models
 Using [`src/wake_partition_loader.nim`](src/wake_partition_loader.nim), users can flash up to 3 custom microWakeWord `.tflite` models into dedicated flash partitions (`wake_model`, `wake_model_2`, `wake_model_3` at `0x510000`, `0x550000`, `0x590000`). At boot time, the partition loader validates 64-byte `WAKE` headers, extracts tensor arena sizes and probability cutoffs, memory-maps the weights directly from SPI flash (avoiding heap allocation), and dynamically registers them into the active detection pool.
@@ -185,19 +185,19 @@ Far-field microWakeWord neural networks frequently exhibit acoustic bias toward 
 `esphome-satellite` provides three runtime acoustic equalization controls to eliminate gender bias and maximize detection reliability across all household members:
 
 ### Microphone Pre-Gain Boost
-- **Entity**: `Speech: Mic Pre-Gain Boost` (`number.speech_mic_pre_gain_boost`)
+- **Entity**: `Voice: Mic Pre-Gain Boost` (`number.voice_mic_pre_gain_boost`)
 - **Range**: `0 dB` to `+12 dB` (step `1 dB`, default `3 dB`)
 - **Implementation**: Written in Nim ([`src/audio_dsp.nim`](src/audio_dsp.nim)), applying 64-bit precision linear gain scaling directly to 32-bit microphone samples in the I2S capture loop before microWakeWord 40-band Mel-frequency spectrogram extraction.
 - **Tuning**: A `+3 dB` to `+6 dB` boost brings female vocal energy up to parity with male speech without clipping the XVF3800 beamformed microphone stream.
 
 ### Sliding Window Size Tuning
-- **Entity**: `Speech: Wake Window Size` (`number.speech_wake_window_size`)
+- **Entity**: `Voice: Wake Window Size` (`number.voice_wake_window_size`)
 - **Range**: `2` to `5` frames (default `3` frames, where 1 frame = ~100 ms)
 - **Implementation**: Dynamically resizes the sliding probability window in the microWakeWord `StreamingModel` neural network runtime.
 - **Tuning**: Standard wake word engines require 4 to 5 consecutive frames above threshold to trigger. Because female speech often articulates syllables more briskly, a 5-frame window can reject valid wake words during fast cadence. Lowering the window to `2` or `3` frames captures shorter syllable bursts cleanly.
 
 ### Extreme Sensitivity Tier
-- **Entities**: `Speech: Slot 1 Sensitivity` and `Speech: Slot 2 Sensitivity`
+- **Entities**: `Slot 1: Sensitivity` and `Slot 2: Sensitivity`
 - **Options**: `Slightly sensitive` (1.35x cutoff), `Moderately sensitive` (1.0x cutoff), `Very sensitive` (0.70x cutoff), `Extreme sensitivity` (0.45x cutoff).
 - **Implementation**: Scales the neural network's activation threshold cutoff dynamically in SPI flash memory structures. Selecting `Extreme sensitivity` drops the required activation barrier by 55%, enabling effortless far-field triggers across quiet voices, soft accents, or high ambient noise environments.
 
@@ -685,26 +685,28 @@ Every synthesized audio file is automatically normalized, trimmed of leading/tra
 
 | Entity ID | Domain | Type / Options | Description |
 |---|---|---|---|
-| `select.speech_slot_1_wake_word` | `select` | Built-in (`Mr. Clemens`, `Bumblebee`, `Hey Gizmo`, `Hey Chief`, `Oh Captain`, `OK Computer`, `Little Wizard`), Custom | Wake word model assigned to Assistant 1 (Slot 1). |
-| `select.speech_slot_2_wake_word` | `select` | `Disabled`, Built-in (`Mr. Clemens`, `Bumblebee`, `Hey Gizmo`, `Hey Chief`, `Oh Captain`, `OK Computer`, `Little Wizard`), Custom | Wake word model assigned to Assistant 2 (Slot 2). |
-| `select.speech_slot_1_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Probability cutoff sensitivity for Slot 1 detection. |
-| `select.speech_slot_2_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Probability cutoff sensitivity for Slot 2 detection. |
-| `number.speech_wake_window_size` | `number` | `2` – `5` frames (default `3`) | Detection window length; lower values catch fast female syllables. |
-| `number.speech_mic_pre_gain_boost` | `number` | `0 dB` – `+12 dB` (step `1 dB`, default `3 dB`) | Digital pre-gain applied to raw microphone samples before DSP inference. |
-| `text.speech_cancellation_words` | `text` | Comma-separated strings | Phrases that immediately abort active listening (*stop, nevermind, cancel*). |
-| `button.speech_reset_conversation_history` | `button` | Action | Clears conversational memory context on Home Assistant. |
-| `select.audio_slot_1_wake_chime` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played for Slot 1 wake word. |
-| `switch.audio_slot_1_wake_chime_enabled` | `switch` | `on` / `off` | Master toggle for Slot 1 wake chime playback. |
-| `number.audio_slot_1_volume` | `number` | `0%` – `100%` (step `5%`) | Master playback and chime volume level for Slot 1. |
-| `select.audio_slot_1_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 1 cloud processing. |
-| `select.audio_slot_1_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 1 interaction is cancelled. |
-| `switch.audio_slot_1_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 1 cancel sound playback. |
-| `select.audio_slot_2_wake_chime` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played for Slot 2 wake word. |
-| `switch.audio_slot_2_wake_chime_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 wake chime playback. |
-| `number.audio_slot_2_volume` | `number` | `0%` – `100%` (step `5%`) | Master playback and chime volume level for Slot 2. |
-| `select.audio_slot_2_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 2 cloud processing. |
-| `select.audio_slot_2_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 2 interaction is cancelled. |
-| `switch.audio_slot_2_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 cancel sound playback. |
+| `select.slot_1_wake_word` | `select` | Built-in (`Mr. Clemens`, `Bumblebee`, `Hey Gizmo`, `Hey Chief`, `Oh Captain`, `OK Computer`, `Little Wizard`), Custom | Wake word model assigned to Assistant 1 (Slot 1). |
+| `select.slot_2_wake_word` | `select` | `Disabled`, Built-in (`Mr. Clemens`, `Bumblebee`, `Hey Gizmo`, `Hey Chief`, `Oh Captain`, `OK Computer`, `Little Wizard`), Custom | Wake word model assigned to Assistant 2 (Slot 2). |
+| `select.slot_1_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Sensitivity preset for Slot 1 detection. |
+| `select.slot_2_sensitivity` | `select` | *Slightly*, *Moderately*, *Very*, *Extreme sensitivity* | Sensitivity preset for Slot 2 detection. |
+| `number.slot_1_probability_cutoff` | `number` | `0.01` – `0.99` (step `0.01`, default `0.50`) | Precise numeric probability cutoff threshold for Slot 1 detection. |
+| `number.slot_2_probability_cutoff` | `number` | `0.01` – `0.99` (step `0.01`, default `0.50`) | Precise numeric probability cutoff threshold for Slot 2 detection. |
+| `number.voice_wake_window_size` | `number` | `2` – `5` frames (default `3`) | Detection window length; lower values catch fast female syllables. |
+| `number.voice_mic_pre_gain_boost` | `number` | `0 dB` – `+12 dB` (step `1 dB`, default `3 dB`) | Digital pre-gain applied to raw microphone samples before DSP inference. |
+| `text.voice_cancellation_words` | `text` | Comma-separated strings | Phrases that immediately abort active listening (*stop, nevermind, cancel*). |
+| `button.voice_reset_conversation_history` | `button` | Action | Clears conversational memory context on Home Assistant. |
+| `select.slot_1_wake_chime` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played for Slot 1 wake word. |
+| `switch.slot_1_wake_chime_enabled` | `switch` | `on` / `off` | Master toggle for Slot 1 wake chime playback. |
+| `number.slot_1_volume` | `number` | `0%` – `100%` (step `5%`) | Master playback and chime volume level for Slot 1. |
+| `select.slot_1_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 1 cloud processing. |
+| `select.slot_1_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 1 interaction is cancelled. |
+| `switch.slot_1_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 1 cancel sound playback. |
+| `select.slot_2_wake_chime` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Acknowledgement chime played for Slot 2 wake word. |
+| `switch.slot_2_wake_chime_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 wake chime playback. |
+| `number.slot_2_volume` | `number` | `0%` – `100%` (step `5%`) | Master playback and chime volume level for Slot 2. |
+| `select.slot_2_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 2 cloud processing. |
+| `select.slot_2_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 2 interaction is cancelled. |
+| `switch.slot_2_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 cancel sound playback. |
 | `select.hardware_led_idle_pattern` | `select` | `Off`, `Breathe`, `Rainbow`, `Spinner` | Ambient idle animation mode for the 12-LED addressable ring. |
 | `number.hardware_led_brightness` | `number` | `5%` – `100%` (step `5%`) | Brightness scaling for all LED animations. |
 | `switch.privacy_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |

@@ -538,7 +538,7 @@ voice_assistant:
 text:
   - platform: template
     id: stop_words_config
-    name: "Speech: Cancellation Words"
+    name: "Voice: Cancellation Words"
     icon: "mdi:close-circle-outline"
     entity_category: config
     initial_value: "stop, nevermind, never mind, cancel, abort, dismiss, quit, silence, quiet, shut up"
@@ -594,7 +594,7 @@ select:
 
   - platform: template
     id: slot1_wake_word
-    name: "Speech: Slot 1 Wake Word"
+    name: "Slot 1: Wake Word"
     icon: "mdi:microphone"
     entity_category: config
     optimistic: true
@@ -611,7 +611,7 @@ select:
 
   - platform: template
     id: slot2_wake_word
-    name: "Speech: Slot 2 Wake Word"
+    name: "Slot 2: Wake Word"
     icon: "mdi:microphone-outline"
     entity_category: config
     optimistic: true
@@ -629,7 +629,7 @@ select:
 
   - platform: template
     id: slot1_sensitivity
-    name: "Speech: Slot 1 Sensitivity"
+    name: "Slot 1: Sensitivity"
     icon: "mdi:tune"
     entity_category: config
     optimistic: true
@@ -650,7 +650,7 @@ select:
 
   - platform: template
     id: slot2_sensitivity
-    name: "Speech: Slot 2 Sensitivity"
+    name: "Slot 2: Sensitivity"
     icon: "mdi:tune-vertical"
     entity_category: config
     optimistic: true
@@ -671,7 +671,7 @@ select:
 
   - platform: template
     id: slot1_processing_sound
-    name: "Audio: Slot 1 Processing Sound"
+    name: "Slot 1: Processing Sound"
     icon: "mdi:waveform"
     entity_category: config
     optimistic: true
@@ -701,14 +701,14 @@ select:
       - lambda: |-
           if (id(active_assistant_slot) == 1) {
             call_nim_action_set_processing_sound(x.c_str());
-            float vol = id(slot1_volume).state / 100.0f;
-            esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
           }
+          float vol = id(slot1_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
           global_preferences->sync();
 
   - platform: template
     id: slot2_processing_sound
-    name: "Audio: Slot 2 Processing Sound"
+    name: "Slot 2: Processing Sound"
     icon: "mdi:waveform"
     entity_category: config
     optimistic: true
@@ -738,14 +738,14 @@ select:
       - lambda: |-
           if (id(active_assistant_slot) == 2) {
             call_nim_action_set_processing_sound(x.c_str());
-            float vol = id(slot2_volume).state / 100.0f;
-            esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
           }
+          float vol = id(slot2_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
           global_preferences->sync();
 
   - platform: template
     id: slot1_wake_chime_sound
-    name: "Audio: Slot 1 Wake Chime"
+    name: "Slot 1: Wake Chime"
     icon: "mdi:music-note"
     entity_category: config
     optimistic: true
@@ -775,14 +775,14 @@ select:
       - lambda: |-
           if (id(active_assistant_slot) == 1) {
             call_nim_action_set_chime_sound(x.c_str());
-            float vol = id(slot1_volume).state / 100.0f;
-            esphome::get_pcm_sound_player().play_chime(x, false, vol);
           }
+          float vol = id(slot1_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_chime(x, false, vol);
           global_preferences->sync();
 
   - platform: template
     id: slot2_wake_chime_sound
-    name: "Audio: Slot 2 Wake Chime"
+    name: "Slot 2: Wake Chime"
     icon: "mdi:music-note-outline"
     entity_category: config
     optimistic: true
@@ -812,14 +812,14 @@ select:
       - lambda: |-
           if (id(active_assistant_slot) == 2) {
             call_nim_action_set_chime_sound(x.c_str());
-            float vol = id(slot2_volume).state / 100.0f;
-            esphome::get_pcm_sound_player().play_chime(x, false, vol);
           }
+          float vol = id(slot2_volume).state / 100.0f;
+          esphome::get_pcm_sound_player().play_chime(x, false, vol);
           global_preferences->sync();
 
   - platform: template
     id: slot1_cancel_sound
-    name: "Audio: Slot 1 Cancel Sound"
+    name: "Slot 1: Cancel Sound"
     icon: "mdi:music-note-off"
     entity_category: config
     optimistic: true
@@ -848,7 +848,7 @@ select:
       - "Custom"
     set_action:
       - lambda: |-
-          if (id(active_assistant_slot) == 1 && x != "Silent") {
+          if (x != "Silent") {
             std::string opt = (x == "Match Wake Chime") ? id(slot1_wake_chime_sound).current_option() : x;
             float vol = id(slot1_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
@@ -857,7 +857,7 @@ select:
 
   - platform: template
     id: slot2_cancel_sound
-    name: "Audio: Slot 2 Cancel Sound"
+    name: "Slot 2: Cancel Sound"
     icon: "mdi:music-note-off-outline"
     entity_category: config
     optimistic: true
@@ -886,7 +886,7 @@ select:
       - "Custom"
     set_action:
       - lambda: |-
-          if (id(active_assistant_slot) == 2 && x != "Silent") {
+          if (x != "Silent") {
             std::string opt = (x == "Match Wake Chime") ? id(slot2_wake_chime_sound).current_option() : x;
             float vol = id(slot2_volume).state / 100.0f;
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
@@ -913,7 +913,7 @@ select:
 number:
   - platform: template
     id: slot1_volume
-    name: "Audio: Slot 1 Volume"
+    name: "Slot 1: Volume"
     icon: "mdi:volume-high"
     entity_category: config
     min_value: 0
@@ -931,7 +931,7 @@ number:
 
   - platform: template
     id: slot2_volume
-    name: "Audio: Slot 2 Volume"
+    name: "Slot 2: Volume"
     icon: "mdi:volume-medium"
     entity_category: config
     min_value: 0
@@ -949,7 +949,7 @@ number:
 
   - platform: template
     id: wake_window_size
-    name: "Speech: Wake Window Size"
+    name: "Voice: Wake Window Size"
     icon: "mdi:timer-sand"
     entity_category: config
     min_value: 2
@@ -967,7 +967,7 @@ number:
 
   - platform: template
     id: mic_pre_gain_boost
-    name: "Speech: Mic Pre-Gain Boost"
+    name: "Voice: Mic Pre-Gain Boost"
     icon: "mdi:amplifier"
     entity_category: config
     unit_of_measurement: "dB"
@@ -985,7 +985,7 @@ number:
 
   - platform: template
     id: slot1_cutoff
-    name: "Speech: Slot 1 Probability Cutoff"
+    name: "Slot 1: Probability Cutoff"
     icon: "mdi:tune"
     entity_category: config
     min_value: 0.05
@@ -1003,7 +1003,7 @@ number:
 
   - platform: template
     id: slot2_cutoff
-    name: "Speech: Slot 2 Probability Cutoff"
+    name: "Slot 2: Probability Cutoff"
     icon: "mdi:tune-vertical"
     entity_category: config
     min_value: 0.05
@@ -1058,7 +1058,7 @@ switch:
 
   - platform: template
     id: slot1_wake_chime
-    name: "Audio: Slot 1 Wake Chime Enabled"
+    name: "Slot 1: Wake Chime Enabled"
     icon: "mdi:bell"
     entity_category: config
     optimistic: true
@@ -1072,7 +1072,7 @@ switch:
 
   - platform: template
     id: slot2_wake_chime
-    name: "Audio: Slot 2 Wake Chime Enabled"
+    name: "Slot 2: Wake Chime Enabled"
     icon: "mdi:bell-outline"
     entity_category: config
     optimistic: true
@@ -1086,7 +1086,7 @@ switch:
 
   - platform: template
     id: slot1_cancel_sound_switch
-    name: "Audio: Slot 1 Cancel Sound Enabled"
+    name: "Slot 1: Cancel Sound Enabled"
     icon: "mdi:bell-cancel"
     entity_category: config
     optimistic: true
@@ -1100,7 +1100,7 @@ switch:
 
   - platform: template
     id: slot2_cancel_sound_switch
-    name: "Audio: Slot 2 Cancel Sound Enabled"
+    name: "Slot 2: Cancel Sound Enabled"
     icon: "mdi:bell-cancel-outline"
     entity_category: config
     optimistic: true
@@ -1183,7 +1183,7 @@ script:
 button:
   - platform: template
     id: reset_conversation_history_btn
-    name: "Speech: Reset Conversation History"
+    name: "Voice: Reset Conversation History"
     icon: "mdi:comment-remove-outline"
     entity_category: config
     on_press:

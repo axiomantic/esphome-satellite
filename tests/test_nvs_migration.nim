@@ -17,18 +17,18 @@ suite "NVS Preference Migration & Hash Integrity Suite":
     check fnv1aHash("Audio: Cancel Sound Enabled") == 483196759'u32
 
   test "New v0.6.0 Slot 1 FNV-1a preference hashes are distinct and reproducible":
-    check fnv1aHash("Audio: Slot 1 Volume") == 828500550'u32
-    check fnv1aHash("Audio: Slot 1 Cancel Sound") == 716895017'u32
-    check fnv1aHash("Audio: Slot 1 Wake Chime") == 1794554120'u32
-    check fnv1aHash("Audio: Slot 1 Processing Sound") == 936488196'u32
-    check fnv1aHash("Speech: Slot 1 Sensitivity") == 2436161497'u32
-    check fnv1aHash("Audio: Slot 1 Wake Chime Enabled") == 436416649'u32
-    check fnv1aHash("Audio: Slot 1 Cancel Sound Enabled") == 1032233936'u32
+    check fnv1aHash("Slot 1: Volume") == 2638310478'u32
+    check fnv1aHash("Slot 1: Cancel Sound") == 2237309249'u32
+    check fnv1aHash("Slot 1: Wake Chime") == 3715757824'u32
+    check fnv1aHash("Slot 1: Processing Sound") == 3151753516'u32
+    check fnv1aHash("Slot 1: Sensitivity") == 511532015'u32
+    check fnv1aHash("Slot 1: Wake Chime Enabled") == 1457734337'u32
+    check fnv1aHash("Slot 1: Cancel Sound Enabled") == 33816744'u32
 
     # Verify that slot 1 hashes never collide with legacy hashes
-    check fnv1aHash("Audio: Slot 1 Volume") != fnv1aHash("Audio: Voice Volume")
-    check fnv1aHash("Audio: Slot 1 Cancel Sound") != fnv1aHash("Audio: Cancel Sound Sound")
-    check fnv1aHash("Speech: Slot 1 Sensitivity") != fnv1aHash("Speech: Wake Word Sensitivity")
+    check fnv1aHash("Slot 1: Volume") != fnv1aHash("Audio: Voice Volume")
+    check fnv1aHash("Slot 1: Cancel Sound") != fnv1aHash("Audio: Cancel Sound Sound")
+    check fnv1aHash("Slot 1: Sensitivity") != fnv1aHash("Speech: Wake Word Sensitivity")
 
   test "Legacy sensitivity index-to-option mapping preserves semantic levels":
     const legacySensitivity = ["Slightly sensitive", "Moderately sensitive", "Very sensitive"]
