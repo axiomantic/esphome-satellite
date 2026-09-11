@@ -729,6 +729,8 @@ proc nim_satellite_ota_end*(ok: bool) {.exportc, cdecl.} =
     ctxIdle = onOtaComplete(ctxUpdating)
     currentState = rsIdle
 
+include satellite_system
+
 proc nim_satellite_disconnected*() {.exportc, cdecl.} =
   case currentState
   of rsIdle:
