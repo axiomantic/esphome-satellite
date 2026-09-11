@@ -40,6 +40,10 @@ echo "=== Running 9. NVS preference migration and hash integrity tests ==="
 nim c -r tests/test_nvs_migration.nim
 rm -f tests/test_nvs_migration
 
+echo "=== Running 10. Satellite system control and OTA update tests ==="
+nim c -r tests/test_satellite_system.nim
+rm -f tests/test_satellite_system
+
 echo "=== Testing embedded C++ transpilation (ESP32 target) ==="
 nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome --cpu:esp --os:any --exceptions:goto --panics:on src/nim_esphome_satellite.nim
 

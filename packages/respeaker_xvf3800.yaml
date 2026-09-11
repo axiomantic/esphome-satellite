@@ -201,9 +201,10 @@ api:
               return;
             }
             ESP_LOGI("satellite", "Custom wake word '%s' installed. Restarting in 1s...", wake_word.c_str());
-        - delay: 1s
         - lambda: |-
-            esp_restart();
+            extern void nim_satellite_restart(void) __attribute__((weak));
+            if (nim_satellite_restart != nullptr) nim_satellite_restart();
+            else esp_restart();
     - service: remove_custom_wake_word
       variables:
         slot: int
@@ -221,36 +222,21 @@ api:
               return;
             }
             ESP_LOGI("satellite", "Custom wake word removed from slot %d. Restarting in 1s...", slot);
-        - delay: 1s
         - lambda: |-
-            esp_restart();
+            extern void nim_satellite_restart(void) __attribute__((weak));
+            if (nim_satellite_restart != nullptr) nim_satellite_restart();
+            else esp_restart();
     - service: update_firmware_from_url
       variables:
         url: string
       then:
         - lambda: |-
-            bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(url);
-            if (!ok) {
-              ESP_LOGE("satellite", "Firmware OTA update failed from %s", url.c_str());
-              return;
-            }
-            ESP_LOGI("satellite", "Firmware OTA updated successfully. Restarting in 1s...");
-        - delay: 1s
-        - lambda: |-
-            esp_restart();
+            esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(url);
     - service: update_firmware_to_latest
       then:
         - lambda: |-
-            bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
+            esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
                 "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin");
-            if (!ok) {
-              ESP_LOGE("satellite", "Firmware OTA update to latest failed");
-              return;
-            }
-            ESP_LOGI("satellite", "Firmware OTA updated to latest successfully. Restarting in 1s...");
-        - delay: 1s
-        - lambda: |-
-            esp_restart();
 
 http_request:
   id: http_client_id
@@ -1317,12 +1303,8 @@ button:
             id(satellite_firmware_update).perform(false);
           } else {
             ESP_LOGI("satellite", "Initiating direct OTA update from main branch...");
-            bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
+            esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
                 "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin");
-            if (ok) {
-              delay(1000);
-              esp_restart();
-            }
           }
 
   - platform: template
@@ -1340,11 +1322,7 @@ button:
             url = id(custom_firmware_url).state;
           }
           ESP_LOGI("satellite", "Flashing firmware from channel '%s': %s", channel.c_str(), url.c_str());
-          bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(url);
-          if (ok) {
-            delay(1000);
-            esp_restart();
-          }
+          esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(url);
 
   - platform: template
     id: clear_custom_wake_models_btn
@@ -1356,8 +1334,9 @@ button:
           for (int s = 1; s <= 3; s++) {
             esphome::wake_loader::get_wake_partition_loader().remove_custom_wake_word(s);
           }
-          delay(1000);
-          esp_restart();
+          extern void nim_satellite_restart(void) __attribute__((weak));
+          if (nim_satellite_restart != nullptr) nim_satellite_restart();
+          else esp_restart();
 
   - platform: restart
     id: restart_satellite_btn
