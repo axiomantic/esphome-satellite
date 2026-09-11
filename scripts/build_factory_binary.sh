@@ -29,6 +29,8 @@ fi
 echo "Refreshing external components cache..."
 rm -rf packages/.esphome/external_components
 rm -rf packages/.esphome/build/*/src/esphome/components/nim
+rm -rf packages/.esphome/build/*/src/nim_gen
+rm -rf packages/.esphome/build/*/.pioenvs/*/src/nim_gen
 
 if [ "${PROCESS_AUDIO:-0}" = "1" ] || [ ! -f "$ROOT_DIR/src/sound_data.h" ]; then
     echo "Processing, compressing, and normalizing audio assets..."
