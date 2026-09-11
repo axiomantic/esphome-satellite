@@ -1,6 +1,6 @@
 {
   "name": "esphome-satellite",
-  "version": "0.6.1+a22abf6",
+  "version": "0.6.1+414a207",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": false,
   "builds": [
@@ -26,11 +26,11 @@
       ],
       "ota": {
         "path": "firmware-ota.bin",
-        "md5": "b63f711ec35142bb5edaab5908b295b3",
+        "md5": "626a1e8b31e7e5c982e1b7bd8f167018",
         "summary": "Official Seeed ReSpeaker XVF3800 firmware release."
       }
     }
   ],
-  "commit": "a22abf6",
-  "built_at": "2026-09-11T05:59:39Z"
+  "commit": "414a207",
+  "built_at": "2026-09-11T23:15:36Z"
 }
