@@ -65,8 +65,6 @@ esphome:
         - lambda: |-
             esphome::wake_loader::get_wake_partition_loader().init(
                 id(mww), id(slot1_wake_word), id(slot2_wake_word));
-        - micro_wake_word.start:
-        - lambda: |-
             esphome::wake_loader::get_wake_partition_loader().update_slot_models(
                 id(slot1_wake_word).current_option(),
                 id(slot2_wake_word).current_option(),
@@ -84,6 +82,7 @@ esphome:
                 static_cast<size_t>(id(wake_window_size).state), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_mic_pre_gain(
                 id(mic_pre_gain_boost).state);
+        - micro_wake_word.start:
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -1257,6 +1256,19 @@ button:
             esp_restart();
           }
 
+  - platform: template
+    id: clear_custom_wake_models_btn
+    name: "System: Clear Custom Wake Models"
+    icon: "mdi:delete-sweep"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          for (int s = 1; s <= 3; s++) {
+            esphome::wake_loader::get_wake_partition_loader().remove_custom_wake_word(s);
+          }
+          delay(1000);
+          esp_restart();
+
 interval:
   - interval: 50ms
     then:
@@ -1265,6 +1277,20 @@ interval:
           std::string pattern_str = id(led_pattern).current_option();
           float brightness = id(led_brightness).state;
           esphome::xvf3800::XVF3800Hardware::instance().update_animation(state_str, pattern_str, brightness);
+
+  # Live microWakeWord inference monitor for Mr. Clemens
+  - interval: 250ms
+    then:
+      - lambda: |-
+          if (id(mww).is_running()) {
+            uint8_t cur = esphome::wake_loader::get_wake_partition_loader().get_model_max_prob(id(clemens_model));
+            float avg = esphome::wake_loader::get_wake_partition_loader().get_model_avg_prob(id(clemens_model));
+            if (cur > 15) {
+              ESP_LOGI("clemens_prob", "Live inference -> max: %.2f, avg: %.2f (cutoff: %.2f)",
+                       cur / 255.0f, avg,
+                       esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(1) / 255.0f);
+            }
+          }
 
   # Self-healing watchdog: monitors active state duration and guarantees wake word listening
   - interval: 2s

@@ -82,6 +82,27 @@ class StreamingModelWindowAccessor : public micro_wake_word::StreamingModel {
     accessor->recent_streaming_probabilities_.assign(window_size, 0);
     accessor->last_n_index_ = 0;
   }
+
+  static uint8_t get_max_recent_prob(micro_wake_word::StreamingModel *model) {
+    if (model == nullptr) return 0;
+    auto *accessor = static_cast<StreamingModelWindowAccessor *>(model);
+    uint8_t m = 0;
+    for (auto p : accessor->recent_streaming_probabilities_) {
+      if (p > m) m = p;
+    }
+    return m;
+  }
+
+  static float get_sliding_avg_prob(micro_wake_word::StreamingModel *model) {
+    if (model == nullptr) return 0.0f;
+    auto *accessor = static_cast<StreamingModelWindowAccessor *>(model);
+    if (accessor->sliding_window_size_ == 0) return 0.0f;
+    uint32_t sum = 0;
+    for (auto p : accessor->recent_streaming_probabilities_) {
+      sum += p;
+    }
+    return (float)sum / (float)(accessor->sliding_window_size_ * 255.0f);
+  }
 };
 
 
@@ -353,14 +374,29 @@ class WakePartitionLoader {
     return 1;
   }
 
+  uint8_t get_model_max_prob(micro_wake_word::WakeWordModel *model) {
+    return StreamingModelWindowAccessor::get_max_recent_prob(model);
+  }
+
+  float get_model_avg_prob(micro_wake_word::WakeWordModel *model) {
+    return StreamingModelWindowAccessor::get_sliding_avg_prob(model);
+  }
+
   void set_sliding_window(size_t window, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
     ESP_LOGI(TAG, "Updating microWakeWord sliding window size to %zu frames", window);
     this->sliding_window_size_ = window;
 
+    TaskHandle_t mww_task = xTaskGetHandle("mww");
+    if (mww_task != nullptr) {
+      vTaskSuspend(mww_task);
+    }
     StreamingModelWindowAccessor::set_window(clemens, window);
     StreamingModelWindowAccessor::set_window(nabu, window);
     for (auto &s : this->slots_) {
       StreamingModelWindowAccessor::set_window(s.model, window);
+    }
+    if (mww_task != nullptr) {
+      vTaskResume(mww_task);
     }
   }
 
@@ -604,6 +640,11 @@ class WakePartitionLoader {
       ESP_LOGI(TAG, "Stopping microWakeWord inference before partition update...");
       this->mww_->stop();
     }
+    TaskHandle_t mww_task = xTaskGetHandle("mww");
+    if (mww_task != nullptr) {
+      ESP_LOGI(TAG, "Suspending FreeRTOS 'mww' task to prevent flash cache conflicts...");
+      vTaskSuspend(mww_task);
+    }
 
     // Release any active MMAP handle on the target partition before erase
     if (slot >= 1 && slot <= static_cast<int>(this->slots_.size())) {
@@ -620,10 +661,12 @@ class WakePartitionLoader {
     esp_err_t err = esp_partition_erase_range(part, 0, 4096);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Failed to erase partition sector: %s", esp_err_to_name(err));
+      if (mww_task != nullptr) vTaskResume(mww_task);
       return false;
     }
 
     ESP_LOGI(TAG, "Custom wake word slot %d cleared successfully", slot);
+    if (mww_task != nullptr) vTaskResume(mww_task);
     return true;
   }
 
