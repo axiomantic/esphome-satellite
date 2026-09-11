@@ -3,7 +3,7 @@
 [![CI](https://github.com/axiomantic/esphome-satellite/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomantic/esphome-satellite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**`esphome-satellite`** is an on-device state supervisor for [ESPHome](https://esphome.io) and [Home Assistant](https://www.home-assistant.io/) voice satellites (including Seeed ReSpeaker XVF3800 and Home Assistant Voice PE), built with [`nim-esphome`](https://github.com/axiomantic/nim-esphome) and [`nim-typestates`](https://github.com/elijahr/nim-typestates).
+**`esphome-satellite`** is an on-device state supervisor for [ESPHome](https://esphome.io) and [Home Assistant](https://www.home-assistant.io/) voice satellites, built with [`nim-esphome`](https://github.com/axiomantic/nim-esphome) and [`nim-typestates`](https://github.com/elijahr/nim-typestates). It provides production firmware and dedicated hardware drivers for the **Seeed Studio ReSpeaker Lite XVF3800**, alongside a modular, hardware-agnostic core architecture designed for porting across ESP32 and ESP32-S3 voice satellite hardware.
 
 Standard ESPHome voice setups rely on loose asynchronous network events and C++ callbacks that frequently fall out of sync—causing wake chimes to clip microphones, ambient TV noise to trigger false "stop" commands while idle, volume ducking to get orphaned, or satellites to freeze when the server drops connection.
 
@@ -717,10 +717,99 @@ All control settings are saved to on-device NVS flash memory and persist across 
 
 ## Supported Hardware
 
-- **Seeed Studio ReSpeaker XVF3800** (ESP32-S3 + XMOS XVF3800 DSP)
-- **Home Assistant Voice PE** (ESP32-S3)
-- **ESP32-S3-BOX / BOX-3**
-- Any ESP32 / ESP32-S3 device running ESPHome Voice Assistant with `micro_wake_word`.
+| Hardware Platform | Support Status | Package / Target | Notes |
+|---|---|---|---|
+| **Seeed Studio ReSpeaker Lite XVF3800** | Full Support (Primary Target) | `packages/respeaker_xvf3800.yaml` | Dedicated XMOS XVF3800 DSP driver, TI AIC3104 codec, 12-LED ring animations, factory web installer binaries, and custom wake word partition loader. |
+| **Home Assistant Voice PE** | Architecture Compatible | Community Contribution Welcome | Core Nim FSM, DSP compression, and sound player ready; needs dedicated board GPIO mapping and audio codec package. |
+| **ESP32-S3-BOX / S3-BOX-3** | Architecture Compatible | Community Contribution Welcome | Core supervisor ready; needs ES8311/ES7210 codec package, 16MB partition map, and display/LED integration. |
+| **M5Stack CoreS3 / Atom Echo** | Architecture Compatible | Community Contribution Welcome | Core supervisor ready; needs board pinouts, audio codec/DAC drivers, and flash memory layout. |
+| **Generic ESP32-S3 + I2S Audio** | Architecture Compatible | `packages/satellite_nim_fsm.yaml` (Base Package) | Integrates directly with standard ESPHome `i2s_audio` components and the reusable Nim state supervisor. |
+
+---
+
+## Contributing & Porting to New Boards
+
+Contributions of any kind are welcome, especially adding support for additional voice satellite hardware boards!
+
+The architecture of `esphome-satellite` is cleanly separated into two distinct layers:
+
+1. **Hardware-Agnostic Core Supervisor (Nim)**:
+   - 14-state verified typestate state machine (`packages/satellite_nim_fsm.yaml`, `src/nim_esphome_satellite.nim`)
+   - Real-time audio DSP compression, dialogue boost, and soft limiting (`src/audio_dsp.nim`)
+   - Zero-heap IMA-ADPCM sound playback across 17 acoustic themes (`src/pcm_sound_player.nim`)
+   - Mid-utterance cancellation and stop phrase matching (`src/cancellation_matcher.nim`)
+   - Dynamic microWakeWord partition loader and header validator (`src/wake_partition_loader.nim`)
+
+   *This entire layer runs identically on any ESP32 or ESP32-S3 microcontroller.*
+
+2. **Board-Specific Hardware Integration (ESPHome YAML + C ABI Bridges)**:
+   - Physical pinout definitions (I2S, I2C, SPI, GPIO)
+   - Audio DAC, ADC, and codec initialization (e.g. AIC3104, ES8311, ES7210, ES8388, MAX98357A)
+   - Visual indicators (addressable NeoPixels, onboard displays via LVGL, or co-processor LEDs)
+   - Flash partition table (`partitions_<board>.csv`) sized for the board's flash chip (4MB, 8MB, or 16MB)
+
+### Step-by-Step Guide: Adding Support for a New Board
+
+To add support for a new hardware platform (for example, `esp32_s3_box_3` or `atom_echo`):
+
+#### 1. Create the Board Package
+Create a new YAML package in `packages/<board_name>.yaml` that imports the core supervisor:
+
+```yaml
+packages:
+  fsm: !include satellite_nim_fsm.yaml
+
+substitutions:
+  name: "esphome-satellite-<board_name>"
+  friendly_name: "Voice Satellite (<Board Name>)"
+  version: "0.6.0"
+
+esp32:
+  board: <board_identifier>
+  framework:
+    type: esp-idf
+  partitions: ../partitions_<board_name>.csv
+
+# Define board-specific I2S/I2C audio hardware
+...
+```
+
+#### 2. Configure Audio Peripherals
+Map the onboard microphone (ADC) and speaker (DAC/amplifier) components:
+- For boards with integrated codecs (such as Everest ES8388 or ES8311/ES7210), configure standard ESPHome audio codec platforms.
+- Wire the speaker output to `id(board_speaker)` so the core PCM sound player and real-time DSP hooks attach automatically.
+
+#### 3. Implement Visual Feedback
+Connect visual states (LEDs or display) to the satellite state machine:
+- Query the current typestate using `get_satellite_state_name()`.
+- Map the states (`Idle`, `Listening`, `Thinking`, `Replying`, `Muted`, `Error`) to your board's hardware (e.g. onboard RGB LEDs via ESPHome's `light` component, or display graphics).
+
+#### 4. Define Flash Partitions
+Create `partitions_<board_name>.csv` tailored to your board's flash size:
+- Allocate dual OTA partitions (`ota_0`, `ota_1`) sized to accommodate the compiled binary.
+- Allocate `wake_model` data partitions (e.g. 224 KB each) for microWakeWord models.
+- Preserve standard NVS and PHY calibration storage.
+
+#### 5. Verify Locally
+Run the invariant test suite and validate configuration syntax:
+
+```bash
+# Run local host invariant tests
+./scripts/test.sh
+
+# Validate ESPHome YAML configuration
+uv run --python 3.11 --with esphome esphome -s version "0.6.0" config packages/<board_name>.yaml
+```
+
+### Development Guidelines & Architecture Invariants
+
+When submitting PRs or contributing code:
+
+1. **Strict Nim-First Architecture**: All state machines, peripheral drivers, DSP algorithms, and business logic must be authored in Nim. C++ is strictly reserved for thin C ABI adapter bridges and upstream ESPHome component shims.
+2. **Automated Header Bindings**: When wrapping third-party C or ESP-IDF libraries, generate Nim FFI bindings using `headerkit` rather than hand-writing raw externs.
+3. **Single Translation Unit via Include**: All Nim submodules integrated into the firmware build must be included via `include <module>` inside `src/nim_esphome_satellite.nim` to guarantee clean symbol resolution during PlatformIO link steps.
+4. **Strict Test-Driven Development (TDD)**: Every Nim module and Python script must have accompanying unit tests in `tests/`. Always perform anti-green-mirage verification before code changes.
+5. **Zero Emojis**: Keep all documentation, commit messages, code comments, and PR descriptions clear, technical, human, and completely free of emojis.
 
 ---
 
