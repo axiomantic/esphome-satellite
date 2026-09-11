@@ -1,10 +1,10 @@
 {
   "name": "esphome-satellite",
   "version": "0.6.0",
-  "commit": "be620f0",
-  "built_at": "2026-09-11T02:04:00Z",
-  "factory_sha256": "8eec7e0916be9f3bedcd29b43f44f3f15a7d696eb2835f13b1c1890d9e22b345",
-  "ota_sha256": "51d9061b07a18b621acbd75374cb6038bbbffeb3ce2e8e0278ef3a651cbd8781",
+  "commit": "a2a52c5",
+  "built_at": "2026-09-11T02:24:11Z",
+  "factory_sha256": "1df551b5b3cda49be7adbab42cb4728389b3b2987f68d01d679d25cd0c3ee0a0",
+  "ota_sha256": "e561f197509cc771f99ac73cc9c2ef6b8ccad2fcb356e8dc3074da3c413be034",
   "bootloader_sha256": "812adff9c37bd1c2863aefa3f10e945612274b3bb84ce3144399c88bac26437c",
   "partitions_sha256": "58558252974ea8b7f2d84a982b7fb75187520a3546f2864a86a984288a486c54",
   "ota_data_sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
