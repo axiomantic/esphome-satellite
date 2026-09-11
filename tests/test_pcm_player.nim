@@ -121,3 +121,36 @@ suite "PCM Sound Player & Decoder Suite (TDD)":
     check entries[0].offset == 1000'u32
     check entries[0].size == 500'u32
     check entries[1].name == "Chime Two"
+
+    # Test C ABI export wrappers
+    let cCount = nim_pcm_parse_caud_count(addr caud[0], uint32(caud.len + 2000))
+    check cCount == 2
+
+    var nameBuf: array[33, char]
+    var offset, size: uint32
+    let ok0 = nim_pcm_get_caud_entry(
+      addr caud[0], uint32(caud.len + 2000), 0.csize_t,
+      cast[cstring](addr nameBuf[0]), csize_t(sizeof(nameBuf)),
+      addr offset, addr size
+    )
+    check ok0 == true
+    check $cast[cstring](addr nameBuf[0]) == "Test Bell"
+    check offset == 1000'u32
+    check size == 500'u32
+
+    let ok1 = nim_pcm_get_caud_entry(
+      addr caud[0], uint32(caud.len + 2000), 1.csize_t,
+      cast[cstring](addr nameBuf[0]), csize_t(sizeof(nameBuf)),
+      addr offset, addr size
+    )
+    check ok1 == true
+    check $cast[cstring](addr nameBuf[0]) == "Chime Two"
+    check offset == 1500'u32
+    check size == 600'u32
+
+    let okOut = nim_pcm_get_caud_entry(
+      addr caud[0], uint32(caud.len + 2000), 99.csize_t,
+      cast[cstring](addr nameBuf[0]), csize_t(sizeof(nameBuf)),
+      addr offset, addr size
+    )
+    check okOut == false

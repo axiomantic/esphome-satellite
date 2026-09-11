@@ -144,3 +144,10 @@ proc nim_xvf3800_update_animation*(
     let pat = if patternPref != nil: $patternPref else: "Off"
     let colors = computeAnimationColors(st, pat, float32(brightness), nowMs)
     copyMem(addr outColors[0], unsafeAddr colors[0], sizeof(uint32) * 12)
+
+const XVF3800_REBOOT_PAYLOAD*: array[4, uint8] = [240'u8, 89'u8, 1'u8, 0'u8]
+
+proc nim_xvf3800_get_reboot_payload*(outBuf: ptr UncheckedArray[uint8]): csize_t {.exportc, cdecl.} =
+  if outBuf != nil:
+    copyMem(addr outBuf[0], unsafeAddr XVF3800_REBOOT_PAYLOAD[0], 4)
+  return 4

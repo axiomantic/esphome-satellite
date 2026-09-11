@@ -6,7 +6,6 @@
 ## - Firmware OTA download, validation, partition writing, and boot configuration
 
 import nim_esphome
-import std/strutils
 
 when defined(esp32) or defined(freertos):
   type

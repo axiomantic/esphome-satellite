@@ -93,7 +93,11 @@ class XVF3800Hardware {
 
   void reboot_xmos() {
     if (!this->bus_) return;
-    const uint8_t reboot_req[] = {240, 89, 1, 0};
+    uint8_t reboot_req[4] = {240, 89, 1, 0};
+    extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf) __attribute__((weak));
+    if (nim_xvf3800_get_reboot_payload != nullptr) {
+      nim_xvf3800_get_reboot_payload(reboot_req);
+    }
     this->bus_->write(XVF3800_I2C_ADDR, reboot_req, sizeof(reboot_req));
     ESP_LOGI(TAG, "Sent reboot command to XMOS SoC");
   }
