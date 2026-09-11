@@ -97,5 +97,15 @@ if fileExists("web/manifest.json"):
       manifestObj["version"] = existing["version"]
   except:
     discard
+
+let md5File = "web/firmware-ota.bin.md5"
+let md5Str = if fileExists(md5File): readFile(md5File).strip() else: "64f30bc73002db3293b4a58d172bec79"
+if manifestObj.hasKey("builds") and manifestObj["builds"].len > 0:
+  var otaObj = newJObject()
+  otaObj["path"] = %"firmware-ota.bin"
+  otaObj["md5"] = %md5Str
+  otaObj["summary"] = %"Official Seeed ReSpeaker XVF3800 firmware release."
+  manifestObj["builds"][0]["ota"] = otaObj
+
 writeFile("web/manifest.json", pretty(manifestObj, indent = 2) & "\n")
 echo "Successfully generated web/index.html and web/manifest.json (v" & currentVersion & ") via nim-esphome DSL!"

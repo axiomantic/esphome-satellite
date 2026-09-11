@@ -199,15 +199,9 @@
                 <span class="slot-badge-num">256 KB max</span>
               </div>
               <input type="file" id="slotFile_custom_wake_words_0" accept=".tflite,.json" multiple data-offset="5308416" data-maxsize="262144">
-              <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
-                <div style="flex: 2;">
-                  <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
-                  <input type="text" id="slotPhrase_custom_wake_words_0" placeholder="e.g. Jarvis">
-                </div>
-                <div style="flex: 1;">
-                  <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Cutoff</label>
-                  <input type="number" id="slotCutoff_custom_wake_words_0" min="0.05" max="0.99" step="0.01" value="0.40">
-                </div>
+              <div class="custom-wake-inputs" style="margin-top: 8px;">
+                <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
+                <input type="text" id="slotPhrase_custom_wake_words_0" placeholder="e.g. Jarvis" style="width: 100%; box-sizing: border-box;">
               </div>
               <div class="file-status" id="slotStatus_custom_wake_words_0"></div>
             </div>
@@ -217,15 +211,9 @@
                 <span class="slot-badge-num">256 KB max</span>
               </div>
               <input type="file" id="slotFile_custom_wake_words_1" accept=".tflite,.json" multiple data-offset="5570560" data-maxsize="262144">
-              <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
-                <div style="flex: 2;">
-                  <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
-                  <input type="text" id="slotPhrase_custom_wake_words_1" placeholder="e.g. Jarvis">
-                </div>
-                <div style="flex: 1;">
-                  <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Cutoff</label>
-                  <input type="number" id="slotCutoff_custom_wake_words_1" min="0.05" max="0.99" step="0.01" value="0.40">
-                </div>
+              <div class="custom-wake-inputs" style="margin-top: 8px;">
+                <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
+                <input type="text" id="slotPhrase_custom_wake_words_1" placeholder="e.g. Jarvis" style="width: 100%; box-sizing: border-box;">
               </div>
               <div class="file-status" id="slotStatus_custom_wake_words_1"></div>
             </div>
@@ -235,15 +223,9 @@
                 <span class="slot-badge-num">256 KB max</span>
               </div>
               <input type="file" id="slotFile_custom_wake_words_2" accept=".tflite,.json" multiple data-offset="5832704" data-maxsize="262144">
-              <div class="custom-wake-inputs" style="display: flex; gap: 10px; margin-top: 8px;">
-                <div style="flex: 2;">
-                  <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
-                  <input type="text" id="slotPhrase_custom_wake_words_2" placeholder="e.g. Jarvis">
-                </div>
-                <div style="flex: 1;">
-                  <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Cutoff</label>
-                  <input type="number" id="slotCutoff_custom_wake_words_2" min="0.05" max="0.99" step="0.01" value="0.40">
-                </div>
+              <div class="custom-wake-inputs" style="margin-top: 8px;">
+                <label style="font-size: 0.76rem; color: #94a3b8; display: block; margin-bottom: 4px;">Wake Word Name / Phrase</label>
+                <input type="text" id="slotPhrase_custom_wake_words_2" placeholder="e.g. Jarvis" style="width: 100%; box-sizing: border-box;">
               </div>
               <div class="file-status" id="slotStatus_custom_wake_words_2"></div>
             </div>
@@ -1006,7 +988,8 @@
     const slotPartitions_custom_wake_words = ["wake_model","wake_model_2","wake_model_3"];
     const slotBuffers_custom_wake_words = [];
     const slotFileNames_custom_wake_words = [];
-    for (let i = 0; i < 3; i++) { slotBuffers_custom_wake_words.push(null); slotFileNames_custom_wake_words.push(''); }
+    const slotCutoffs_custom_wake_words = [];
+    for (let i = 0; i < 3; i++) { slotBuffers_custom_wake_words.push(null); slotFileNames_custom_wake_words.push(''); slotCutoffs_custom_wake_words.push('0.40'); }
 
     function registerWakeSlot_custom_wake_words(slotIdx) {
       const buf = slotBuffers_custom_wake_words[slotIdx];
@@ -1014,7 +997,6 @@
       const statusEl = document.getElementById('slotStatus_custom_wake_words_' + slotIdx);
       const fileInp = document.getElementById('slotFile_custom_wake_words_' + slotIdx);
       const phraseInp = document.getElementById('slotPhrase_custom_wake_words_' + slotIdx);
-      const cutoffInp = document.getElementById('slotCutoff_custom_wake_words_' + slotIdx);
       if (!buf) {
         uploadedParts.delete(partKey);
         delete cachedFileStore[partKey];
@@ -1035,6 +1017,7 @@
             rmBtn.addEventListener('click', () => {
               slotBuffers_custom_wake_words[slotIdx] = null;
               slotFileNames_custom_wake_words[slotIdx] = '';
+              slotCutoffs_custom_wake_words[slotIdx] = '0.40';
               if (fileInp) fileInp.value = '';
               registerWakeSlot_custom_wake_words(slotIdx);
             });
@@ -1045,7 +1028,7 @@
         saveInstallerState();
         return;
       }
-      const cutoff = (cutoffInp ? cutoffInp.value : '0.40');
+      const cutoff = slotCutoffs_custom_wake_words[slotIdx] || '0.40';
       const offset = slotOffsets_custom_wake_words[slotIdx];
       const partName = slotPartitions_custom_wake_words[slotIdx];
       const combined = packWakeModelHeader(buf, phrase, cutoff);
@@ -1060,6 +1043,7 @@
           rmBtn.addEventListener('click', () => {
             slotBuffers_custom_wake_words[slotIdx] = null;
             slotFileNames_custom_wake_words[slotIdx] = '';
+            slotCutoffs_custom_wake_words[slotIdx] = '0.40';
             if (fileInp) fileInp.value = '';
             registerWakeSlot_custom_wake_words(slotIdx);
           });
@@ -1072,13 +1056,13 @@
 
     const sFile_custom_wake_words_0 = document.getElementById('slotFile_custom_wake_words_0');
     const sPhrase_custom_wake_words_0 = document.getElementById('slotPhrase_custom_wake_words_0');
-    const sCutoff_custom_wake_words_0 = document.getElementById('slotCutoff_custom_wake_words_0');
     if (sFile_custom_wake_words_0) {
       sFile_custom_wake_words_0.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
         if (!files.length) {
           slotBuffers_custom_wake_words[0] = null;
           slotFileNames_custom_wake_words[0] = '';
+          slotCutoffs_custom_wake_words[0] = '0.40';
           registerWakeSlot_custom_wake_words(0);
           return;
         }
@@ -1091,8 +1075,8 @@
             if (meta.wake_word && sPhrase_custom_wake_words_0) {
               sPhrase_custom_wake_words_0.value = meta.wake_word;
             }
-            if (meta.micro && meta.micro.probability_cutoff && sCutoff_custom_wake_words_0) {
-              sCutoff_custom_wake_words_0.value = meta.micro.probability_cutoff;
+            if (meta.micro && meta.micro.probability_cutoff) {
+              slotCutoffs_custom_wake_words[0] = String(meta.micro.probability_cutoff);
             }
           } catch (err) {
             console.warn('Error parsing wake word json:', err);
@@ -1120,16 +1104,15 @@
       });
     }
     if (sPhrase_custom_wake_words_0) sPhrase_custom_wake_words_0.addEventListener('input', () => registerWakeSlot_custom_wake_words(0));
-    if (sCutoff_custom_wake_words_0) sCutoff_custom_wake_words_0.addEventListener('input', () => registerWakeSlot_custom_wake_words(0));
     const sFile_custom_wake_words_1 = document.getElementById('slotFile_custom_wake_words_1');
     const sPhrase_custom_wake_words_1 = document.getElementById('slotPhrase_custom_wake_words_1');
-    const sCutoff_custom_wake_words_1 = document.getElementById('slotCutoff_custom_wake_words_1');
     if (sFile_custom_wake_words_1) {
       sFile_custom_wake_words_1.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
         if (!files.length) {
           slotBuffers_custom_wake_words[1] = null;
           slotFileNames_custom_wake_words[1] = '';
+          slotCutoffs_custom_wake_words[1] = '0.40';
           registerWakeSlot_custom_wake_words(1);
           return;
         }
@@ -1142,8 +1125,8 @@
             if (meta.wake_word && sPhrase_custom_wake_words_1) {
               sPhrase_custom_wake_words_1.value = meta.wake_word;
             }
-            if (meta.micro && meta.micro.probability_cutoff && sCutoff_custom_wake_words_1) {
-              sCutoff_custom_wake_words_1.value = meta.micro.probability_cutoff;
+            if (meta.micro && meta.micro.probability_cutoff) {
+              slotCutoffs_custom_wake_words[1] = String(meta.micro.probability_cutoff);
             }
           } catch (err) {
             console.warn('Error parsing wake word json:', err);
@@ -1171,16 +1154,15 @@
       });
     }
     if (sPhrase_custom_wake_words_1) sPhrase_custom_wake_words_1.addEventListener('input', () => registerWakeSlot_custom_wake_words(1));
-    if (sCutoff_custom_wake_words_1) sCutoff_custom_wake_words_1.addEventListener('input', () => registerWakeSlot_custom_wake_words(1));
     const sFile_custom_wake_words_2 = document.getElementById('slotFile_custom_wake_words_2');
     const sPhrase_custom_wake_words_2 = document.getElementById('slotPhrase_custom_wake_words_2');
-    const sCutoff_custom_wake_words_2 = document.getElementById('slotCutoff_custom_wake_words_2');
     if (sFile_custom_wake_words_2) {
       sFile_custom_wake_words_2.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
         if (!files.length) {
           slotBuffers_custom_wake_words[2] = null;
           slotFileNames_custom_wake_words[2] = '';
+          slotCutoffs_custom_wake_words[2] = '0.40';
           registerWakeSlot_custom_wake_words(2);
           return;
         }
@@ -1193,8 +1175,8 @@
             if (meta.wake_word && sPhrase_custom_wake_words_2) {
               sPhrase_custom_wake_words_2.value = meta.wake_word;
             }
-            if (meta.micro && meta.micro.probability_cutoff && sCutoff_custom_wake_words_2) {
-              sCutoff_custom_wake_words_2.value = meta.micro.probability_cutoff;
+            if (meta.micro && meta.micro.probability_cutoff) {
+              slotCutoffs_custom_wake_words[2] = String(meta.micro.probability_cutoff);
             }
           } catch (err) {
             console.warn('Error parsing wake word json:', err);
@@ -1222,7 +1204,6 @@
       });
     }
     if (sPhrase_custom_wake_words_2) sPhrase_custom_wake_words_2.addEventListener('input', () => registerWakeSlot_custom_wake_words(2));
-    if (sCutoff_custom_wake_words_2) sCutoff_custom_wake_words_2.addEventListener('input', () => registerWakeSlot_custom_wake_words(2));
     const multiAudioStore_custom_chimes = [];
     const addAudioInp_custom_chimes = document.getElementById('addAudioInput_custom_chimes');
     const listEl_custom_chimes = document.getElementById('audioList_custom_chimes');
