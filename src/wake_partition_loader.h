@@ -6,7 +6,7 @@
 #include "esphome/components/select/select.h"
 #include <esp_partition.h>
 #include <esp_http_client.h>
-#include <esp_https_ota.h>
+#include <esp_ota_ops.h>
 #include <esp_crt_bundle.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
@@ -631,14 +631,11 @@ class WakePartitionLoader {
     esp_http_client_config_t http_config = {};
     http_config.url = url.c_str();
     http_config.timeout_ms = 30000;
-    http_config.buffer_size = 2048;
+    http_config.buffer_size = 4096;
     http_config.buffer_size_tx = 1024;
     http_config.crt_bundle_attach = esp_crt_bundle_attach;
     http_config.skip_cert_common_name_check = true;
     http_config.max_redirection_count = 5;
-
-    esp_https_ota_config_t ota_config = {};
-    ota_config.http_config = &http_config;
 
     ESP_LOGI(TAG, "Starting firmware OTA flash from URL: %s", url.c_str());
     extern void nim_satellite_ota_start() __attribute__((weak));
@@ -650,18 +647,128 @@ class WakePartitionLoader {
       this->mww_->stop();
     }
 
-    esp_err_t ret = esp_https_ota(&ota_config);
-    if (ret == ESP_OK) {
-      ESP_LOGI(TAG, "Firmware OTA update successful! Rebooting in 1s...");
-      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
-      return true;
-    } else {
-      ESP_LOGE(TAG, "Firmware OTA update failed: %s", esp_err_to_name(ret));
+    const esp_partition_t *update_partition = esp_ota_get_next_update_partition(nullptr);
+    if (update_partition == nullptr) {
+      ESP_LOGE(TAG, "No OTA partition found to flash!");
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
     }
+
+    ESP_LOGI(TAG, "Writing firmware to partition '%s' at offset 0x%08X (size %u KB)",
+             update_partition->label, (unsigned int)update_partition->address,
+             (unsigned int)(update_partition->size / 1024));
+
+    esp_http_client_handle_t client = esp_http_client_init(&http_config);
+    if (client == nullptr) {
+      ESP_LOGE(TAG, "Failed to initialize HTTP client for OTA");
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to open HTTP connection for OTA: %s", esp_err_to_name(err));
+      esp_http_client_cleanup(client);
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    esp_http_client_fetch_headers(client);
+    int status_code = esp_http_client_get_status_code(client);
+    if (status_code != 200) {
+      ESP_LOGE(TAG, "HTTP server returned error status code: %d", status_code);
+      esp_http_client_close(client);
+      esp_http_client_cleanup(client);
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    esp_ota_handle_t ota_handle = 0;
+    err = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &ota_handle);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(err));
+      esp_http_client_close(client);
+      esp_http_client_cleanup(client);
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    const size_t buf_size = 4096;
+    char *ota_write_data = static_cast<char *>(malloc(buf_size));
+    if (ota_write_data == nullptr) {
+      ESP_LOGE(TAG, "Failed to allocate memory buffer for OTA download");
+      esp_ota_abort(ota_handle);
+      esp_http_client_close(client);
+      esp_http_client_cleanup(client);
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    int binary_file_len = 0;
+    bool write_failed = false;
+
+    while (true) {
+      int data_read = esp_http_client_read(client, ota_write_data, buf_size);
+      if (data_read < 0) {
+        ESP_LOGE(TAG, "Error reading HTTP stream during OTA: %d", data_read);
+        write_failed = true;
+        break;
+      } else if (data_read > 0) {
+        err = esp_ota_write(ota_handle, static_cast<const void *>(ota_write_data), data_read);
+        if (err != ESP_OK) {
+          ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(err));
+          write_failed = true;
+          break;
+        }
+        binary_file_len += data_read;
+      } else if (data_read == 0) {
+        if (esp_http_client_is_complete_data_received(client)) {
+          break;
+        }
+        break;
+      }
+    }
+
+    free(ota_write_data);
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    if (write_failed || binary_file_len < 1000) {
+      ESP_LOGE(TAG, "OTA failed or received incomplete binary (%d bytes)", binary_file_len);
+      esp_ota_abort(ota_handle);
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Total binary data written: %d bytes. Validating and finalizing OTA...", binary_file_len);
+
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "esp_ota_end failed: %s", esp_err_to_name(err));
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    err = esp_ota_set_boot_partition(update_partition);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(err));
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
+
+    ESP_LOGI(TAG, "Firmware OTA update successful! Rebooting in 1s...");
+    extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+    if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+    return true;
   }
 
  protected:
