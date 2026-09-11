@@ -44,6 +44,7 @@ import select
 import tempfile
 import shutil
 import shlex
+import re
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Union, Any
 
@@ -825,6 +826,37 @@ def review_phrases_interactive(phrases: List[str], model_name: str, console: Opt
     return current_phrases
 
 
+ABBREVIATIONS = {
+    "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "vs.", "etc.",
+    "col.", "gen.", "lt.", "capt.", "st."
+}
+
+
+def extract_first_sentence(text: str) -> str:
+    """
+    Extracts the first complete sentence from text, safely preserving common abbreviations
+    such as Mr., Mrs., Ms., Dr., Prof., Sr., Jr., vs., etc.
+    """
+    clean_text = text.strip()
+    if not clean_text:
+        return ""
+
+    tokens = clean_text.split()
+    sentence_words = []
+    for word in tokens:
+        sentence_words.append(word)
+        lower_word = word.lower().rstrip("\"'")
+        # If word ends with terminal punctuation but is not an abbreviation
+        if re.search(r'[\.!\?]$', word):
+            if lower_word not in ABBREVIATIONS:
+                return " ".join(sentence_words)
+
+    # If no terminal punctuation matched inside, return clean text if short or up to 80 chars
+    if len(clean_text) <= 80:
+        return clean_text
+    return clean_text[:80].strip()
+
+
 # ---------------------------------------------------------------------------
 # Audio Processing Utilities (via ffmpeg)
 # ---------------------------------------------------------------------------
@@ -846,6 +878,11 @@ def postprocess_audio(raw_input: Path, target_wav: Path) -> bool:
         trail_silence = silence.detect_leading_silence(aseg.reverse(), silence_threshold=-48.0)
         trail_trim = max(0, trail_silence - 300)
         aseg = aseg.reverse()[trail_trim:].reverse()
+
+        # Reject silent or near-silent clips (noise floor only) to prevent massive gain amplification
+        # Also reject clips shorter than 200ms (unlikely to contain a real wake word utterance)
+        if aseg.max_dBFS < -35.0 or len(aseg) < 200:
+            return False
 
         # Resample to 16kHz mono 16-bit PCM
         aseg = aseg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
@@ -1385,7 +1422,9 @@ class F5TTSBackend:
         cached_clip = ref_prep_dir / f"{ref_audio.stem}_{cache_key[:8]}.wav"
 
         clean_text = ref_text.strip()
-        first_sent_text = clean_text.split(".")[0].strip() + "." if "." in clean_text else clean_text[:80].strip()
+        first_sent_text = extract_first_sentence(clean_text)
+        if not first_sent_text:
+            first_sent_text = clean_text[:80].strip()
 
         try:
             from pydub import AudioSegment, silence

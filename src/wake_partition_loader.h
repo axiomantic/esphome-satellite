@@ -6,6 +6,7 @@
 #include "esphome/components/select/select.h"
 #include <esp_partition.h>
 #include <esp_http_client.h>
+#include <esp_crt_bundle.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <string>
@@ -99,6 +100,7 @@ class WakePartitionLoader {
       ESP_LOGE(TAG, "MicroWakeWord pointer is null!");
       return;
     }
+    this->mww_ = mww;
 
     const char *part_names[3] = {"wake_model", "wake_model_2", "wake_model_3"};
 
@@ -372,6 +374,8 @@ class WakePartitionLoader {
     config.timeout_ms = 15000;
     config.buffer_size = 2048;
     config.skip_cert_common_name_check = true;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.max_redirection_count = 5;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == nullptr) {
@@ -470,6 +474,23 @@ class WakePartitionLoader {
       strncpy(hdr->wake_word, wake_word_name.c_str(), sizeof(hdr->wake_word) - 1);
     }
 
+    // Stop microWakeWord inference before modifying flash to prevent Core 0 cache panics
+    if (this->mww_ != nullptr) {
+      ESP_LOGI(TAG, "Stopping microWakeWord inference before partition update...");
+      this->mww_->stop();
+    }
+
+    // Release any active MMAP handle on the target partition before erase
+    if (slot >= 1 && slot <= static_cast<int>(this->slots_.size())) {
+      auto &s = this->slots_[slot - 1];
+      if (s.map_handle != 0) {
+        ESP_LOGI(TAG, "Unmapping active partition mmap handle for slot %d...", slot);
+        esp_partition_munmap(s.map_handle);
+        s.map_handle = 0;
+        s.map_ptr = nullptr;
+      }
+    }
+
     ESP_LOGI(TAG, "Erasing flash partition '%s' (0x%06X, %u KB)...",
              part_name, (unsigned int)part->address, (unsigned int)(part->size / 1024));
     err = esp_partition_erase_range(part, 0, part->size);
@@ -521,6 +542,23 @@ class WakePartitionLoader {
       return false;
     }
 
+    // Stop microWakeWord inference before modifying flash to prevent Core 0 cache panics
+    if (this->mww_ != nullptr) {
+      ESP_LOGI(TAG, "Stopping microWakeWord inference before partition update...");
+      this->mww_->stop();
+    }
+
+    // Release any active MMAP handle on the target partition before erase
+    if (slot >= 1 && slot <= static_cast<int>(this->slots_.size())) {
+      auto &s = this->slots_[slot - 1];
+      if (s.map_handle != 0) {
+        ESP_LOGI(TAG, "Unmapping active partition mmap handle for slot %d...", slot);
+        esp_partition_munmap(s.map_handle);
+        s.map_handle = 0;
+        s.map_ptr = nullptr;
+      }
+    }
+
     ESP_LOGI(TAG, "Clearing custom wake word slot %d ('%s')...", slot, part_name);
     esp_err_t err = esp_partition_erase_range(part, 0, 4096);
     if (err != ESP_OK) {
@@ -533,6 +571,7 @@ class WakePartitionLoader {
   }
 
  protected:
+  micro_wake_word::MicroWakeWord *mww_{nullptr};
   std::vector<CustomWakeSlot> slots_;
   std::vector<std::string> custom_names_;
   std::vector<std::string> slot1_options_;
