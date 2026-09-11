@@ -6,6 +6,7 @@
 #include "esphome/components/select/select.h"
 #include <esp_partition.h>
 #include <esp_http_client.h>
+#include <esp_https_ota.h>
 #include <esp_crt_bundle.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
@@ -568,6 +569,48 @@ class WakePartitionLoader {
 
     ESP_LOGI(TAG, "Custom wake word slot %d cleared successfully", slot);
     return true;
+  }
+
+  bool flash_firmware_ota(const std::string &url) {
+    if (url.empty()) {
+      ESP_LOGE(TAG, "Firmware OTA URL is empty!");
+      return false;
+    }
+
+    esp_http_client_config_t http_config = {};
+    http_config.url = url.c_str();
+    http_config.timeout_ms = 30000;
+    http_config.buffer_size = 2048;
+    http_config.buffer_size_tx = 1024;
+    http_config.crt_bundle_attach = esp_crt_bundle_attach;
+    http_config.skip_cert_common_name_check = true;
+    http_config.max_redirection_count = 5;
+
+    esp_https_ota_config_t ota_config = {};
+    ota_config.http_config = &http_config;
+
+    ESP_LOGI(TAG, "Starting firmware OTA flash from URL: %s", url.c_str());
+    extern void nim_satellite_ota_start() __attribute__((weak));
+    if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+
+    // Stop microWakeWord inference before modifying flash to prevent Core 0 cache panics
+    if (this->mww_ != nullptr) {
+      ESP_LOGI(TAG, "Stopping microWakeWord inference before firmware update...");
+      this->mww_->stop();
+    }
+
+    esp_err_t ret = esp_https_ota(&ota_config);
+    if (ret == ESP_OK) {
+      ESP_LOGI(TAG, "Firmware OTA update successful! Rebooting in 1s...");
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+      return true;
+    } else {
+      ESP_LOGE(TAG, "Firmware OTA update failed: %s", esp_err_to_name(ret));
+      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
+      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      return false;
+    }
   }
 
  protected:
