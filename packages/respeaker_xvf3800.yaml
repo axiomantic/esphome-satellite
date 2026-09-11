@@ -216,23 +216,41 @@ api:
         url: string
       then:
         - lambda: |-
-            extern void nim_satellite_ota_start() __attribute__((weak));
-            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
-            ESP_LOGI("satellite", "Starting firmware OTA update from URL: %s", url.c_str());
-        - ota.http_request.flash:
-            url: !lambda 'return url;'
+            bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(url);
+            if (!ok) {
+              ESP_LOGE("satellite", "Firmware OTA update failed from %s", url.c_str());
+              return;
+            }
+            ESP_LOGI("satellite", "Firmware OTA updated successfully. Restarting in 1s...");
+        - delay: 1s
+        - lambda: |-
+            esp_restart();
     - service: update_firmware_to_latest
       then:
         - lambda: |-
-            extern void nim_satellite_ota_start() __attribute__((weak));
-            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
-            ESP_LOGI("satellite", "Updating firmware to latest official build from GitHub...");
-        - ota.http_request.flash:
-            url: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin"
+            bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
+                "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin");
+            if (!ok) {
+              ESP_LOGE("satellite", "Firmware OTA update to latest failed");
+              return;
+            }
+            ESP_LOGI("satellite", "Firmware OTA updated to latest successfully. Restarting in 1s...");
+        - delay: 1s
+        - lambda: |-
+            esp_restart();
 
 http_request:
   id: http_client_id
   timeout: 30s
+
+web_server:
+  port: 80
+
+update:
+  - platform: http_request
+    id: satellite_firmware_update
+    name: "Firmware"
+    source: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/manifest.json"
 
 ota:
   - platform: esphome
@@ -250,6 +268,8 @@ ota:
           if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
   - platform: http_request
     id: ota_http
+  - platform: web_server
+    id: ota_web
 
 i2c:
   - id: bus_a
@@ -529,6 +549,18 @@ text:
       - lambda: |-
           global_preferences->sync();
 
+  - platform: template
+    id: custom_firmware_url
+    name: "System: Custom Firmware URL"
+    icon: "mdi:link-variant"
+    entity_category: config
+    initial_value: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin"
+    restore_value: true
+    optimistic: true
+    min_length: 0
+    max_length: 255
+    mode: text
+
 text_sensor:
   - platform: template
     id: satellite_fsm_state
@@ -546,6 +578,18 @@ text_sensor:
     update_interval: 250ms
 
 select:
+  - platform: template
+    id: firmware_version_channel
+    name: "System: Firmware Version Channel"
+    icon: "mdi:source-branch"
+    entity_category: config
+    optimistic: true
+    initial_option: "Latest Official (main)"
+    restore_value: true
+    options:
+      - "Latest Official (main)"
+      - "Custom URL"
+
   - platform: template
     id: slot1_wake_word
     name: "Speech: Slot 1 Wake Word"
@@ -1143,11 +1187,33 @@ button:
     entity_category: config
     on_press:
       - lambda: |-
-          extern void nim_satellite_ota_start() __attribute__((weak));
-          if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
-          ESP_LOGI("satellite", "Button pressed: updating firmware to latest from GitHub...");
-      - ota.http_request.flash:
-          url: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin"
+          bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
+              "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin");
+          if (ok) {
+            delay(1000);
+            esp_restart();
+          }
+
+  - platform: template
+    id: flash_firmware_channel_btn
+    name: "System: Flash Selected Firmware"
+    icon: "mdi:flash"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          std::string channel = id(firmware_version_channel).current_option();
+          std::string url;
+          if (channel == "Latest Official (main)") {
+            url = "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin";
+          } else {
+            url = id(custom_firmware_url).state;
+          }
+          ESP_LOGI("satellite", "Flashing firmware from channel '%s': %s", channel.c_str(), url.c_str());
+          bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(url);
+          if (ok) {
+            delay(1000);
+            esp_restart();
+          }
 
 interval:
   - interval: 50ms

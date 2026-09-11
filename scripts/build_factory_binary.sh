@@ -127,6 +127,19 @@ cat << EOF > web/version.json
 EOF
 echo "Generated web/version.json (v$VERSION, commit $GIT_SHA, built $BUILD_TIME)"
 
+# Compute MD5 for HTTP OTA verification
+if command -v md5sum >/dev/null 2>&1; then
+    OTA_MD5=$(md5sum web/firmware-ota.bin | awk '{print $1}')
+elif command -v md5 >/dev/null 2>&1; then
+    OTA_MD5=$(md5 -q web/firmware-ota.bin)
+else
+    OTA_MD5=""
+fi
+if [ -n "$OTA_MD5" ]; then
+    echo "$OTA_MD5" > web/firmware-ota.bin.md5
+    echo "Generated web/firmware-ota.bin.md5 ($OTA_MD5)"
+fi
+
 # Update version in web/manifest.json
 if [ -f web/manifest.json ]; then
     python3 -c "
@@ -136,6 +149,12 @@ with open('web/manifest.json', 'r') as f:
 m['version'] = '$VERSION+$GIT_SHA'
 m['commit'] = '$GIT_SHA'
 m['built_at'] = '$BUILD_TIME'
+if 'builds' in m and len(m['builds']) > 0:
+    if 'ota' not in m['builds'][0]:
+        m['builds'][0]['ota'] = {}
+    m['builds'][0]['ota']['path'] = 'firmware-ota.bin'
+    if '$OTA_MD5':
+        m['builds'][0]['ota']['md5'] = '$OTA_MD5'
 with open('web/manifest.json', 'w') as f:
     json.dump(m, f, indent=2)
 "
