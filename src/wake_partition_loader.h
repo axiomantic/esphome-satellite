@@ -526,10 +526,15 @@ class WakePartitionLoader {
       strncpy(hdr->wake_word, wake_word_name.c_str(), sizeof(hdr->wake_word) - 1);
     }
 
-    // Stop microWakeWord inference before modifying flash to prevent Core 0 cache panics
+    // Stop microWakeWord inference and suspend its task before modifying flash to prevent Core 0/1 cache panics
     if (this->mww_ != nullptr) {
       ESP_LOGI(TAG, "Stopping microWakeWord inference before partition update...");
       this->mww_->stop();
+    }
+    TaskHandle_t mww_task = xTaskGetHandle("mww");
+    if (mww_task != nullptr) {
+      ESP_LOGI(TAG, "Suspending FreeRTOS 'mww' task to prevent flash cache conflicts...");
+      vTaskSuspend(mww_task);
     }
 
     // Release any active MMAP handle on the target partition before erase
@@ -641,15 +646,21 @@ class WakePartitionLoader {
     extern void nim_satellite_ota_start() __attribute__((weak));
     if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
 
-    // Stop microWakeWord inference before modifying flash to prevent Core 0 cache panics
+    // Stop microWakeWord inference and suspend its task before modifying flash to prevent Core 0/1 cache panics
     if (this->mww_ != nullptr) {
       ESP_LOGI(TAG, "Stopping microWakeWord inference before firmware update...");
       this->mww_->stop();
+    }
+    TaskHandle_t mww_task = xTaskGetHandle("mww");
+    if (mww_task != nullptr) {
+      ESP_LOGI(TAG, "Suspending FreeRTOS 'mww' task to prevent flash cache conflicts...");
+      vTaskSuspend(mww_task);
     }
 
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(nullptr);
     if (update_partition == nullptr) {
       ESP_LOGE(TAG, "No OTA partition found to flash!");
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
@@ -662,6 +673,7 @@ class WakePartitionLoader {
     esp_http_client_handle_t client = esp_http_client_init(&http_config);
     if (client == nullptr) {
       ESP_LOGE(TAG, "Failed to initialize HTTP client for OTA");
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
@@ -671,6 +683,7 @@ class WakePartitionLoader {
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Failed to open HTTP connection for OTA: %s", esp_err_to_name(err));
       esp_http_client_cleanup(client);
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
@@ -682,6 +695,7 @@ class WakePartitionLoader {
       ESP_LOGE(TAG, "HTTP server returned error status code: %d", status_code);
       esp_http_client_close(client);
       esp_http_client_cleanup(client);
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
@@ -693,6 +707,7 @@ class WakePartitionLoader {
       ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(err));
       esp_http_client_close(client);
       esp_http_client_cleanup(client);
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
@@ -705,6 +720,7 @@ class WakePartitionLoader {
       esp_ota_abort(ota_handle);
       esp_http_client_close(client);
       esp_http_client_cleanup(client);
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
@@ -714,6 +730,7 @@ class WakePartitionLoader {
     bool write_failed = false;
 
     while (true) {
+      vTaskDelay(pdMS_TO_TICKS(1)); // Yield to FreeRTOS scheduler, feed TWDT, and service WiFi
       int data_read = esp_http_client_read(client, ota_write_data, buf_size);
       if (data_read < 0) {
         ESP_LOGE(TAG, "Error reading HTTP stream during OTA: %d", data_read);
@@ -742,6 +759,7 @@ class WakePartitionLoader {
     if (write_failed || binary_file_len < 1000) {
       ESP_LOGE(TAG, "OTA failed or received incomplete binary (%d bytes)", binary_file_len);
       esp_ota_abort(ota_handle);
+      if (mww_task != nullptr) vTaskResume(mww_task);
       extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
       if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
       return false;
