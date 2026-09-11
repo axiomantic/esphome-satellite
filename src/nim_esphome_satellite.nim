@@ -64,7 +64,7 @@ typestate SatelliteFSM:
     Thinking -> (Replying | Cancelling | PipelineError | ConnectionError | Idle) as ThinkResult
     Replying -> (Idle | Cancelling | FollowUp | PipelineError | ConnectionError) as ReplyResult
     Cancelling -> (Idle | PlayingMedia | ConnectionError) as CancelResult
-    FollowUp -> (Listening | Idle | ConnectionError) as FollowUpResult
+    FollowUp -> (Listening | Thinking | Cancelling | Idle | ConnectionError) as FollowUpResult
     SilentDismiss -> (Idle | PlayingMedia) as DismissResult
     PipelineError -> (Idle | PlayingMedia) as PipeErrResult
     ConnectionError -> (Idle | Muted | Updating) as ConnErrResult
@@ -178,6 +178,14 @@ proc onFollowUpRequested*(s: Replying): FollowUp {.transition.} =
 proc onFollowUpReadyToListen*(s: FollowUp): Listening {.transition.} =
   info("SatelliteFSM", "State: FOLLOW_UP -> LISTENING (mic open for follow-up)")
   result = Listening(SatelliteContext(s))
+
+proc onFollowUpSpeechEnded*(s: FollowUp): Thinking {.transition.} =
+  info("SatelliteFSM", "State: FOLLOW_UP -> THINKING (speech ended in follow-up)")
+  result = Thinking(SatelliteContext(s))
+
+proc onStopDuringFollowUp*(s: FollowUp): Cancelling {.transition.} =
+  info("SatelliteFSM", "State: FOLLOW_UP -> CANCELLING (stop phrase detected in follow-up)")
+  result = Cancelling(SatelliteContext(s))
 
 proc onFollowUpTimeout*(s: FollowUp): Idle {.transition.} =
   info("SatelliteFSM", "State: FOLLOW_UP -> IDLE (dialogue timed out)")
@@ -569,6 +577,10 @@ proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
     ctxThinking = onSpeechEnded(ctxListening)
     currentState = rsThinking
     satellitePipeline.startProcessingLoop(configuredProcessingStyle)
+  elif currentState == rsFollowUp:
+    ctxThinking = onFollowUpSpeechEnded(ctxFollowUp)
+    currentState = rsThinking
+    satellitePipeline.startProcessingLoop(configuredProcessingStyle)
 
 proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
   if currentState == rsListening:
@@ -617,8 +629,8 @@ proc nim_satellite_stop_word*() {.exportc, cdecl.} =
     ctxIdle = onAlertDismiss(ctxAlerting)
     currentState = rsIdle
   of rsFollowUp:
-    ctxIdle = onFollowUpTimeout(ctxFollowUp)
-    returnFromVoiceFlow()
+    ctxCancelling = onStopDuringFollowUp(ctxFollowUp)
+    currentState = rsCancelling
   of rsCancelling:
     discard
   else:
