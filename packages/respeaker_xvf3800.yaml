@@ -1359,6 +1359,12 @@ button:
           delay(1000);
           esp_restart();
 
+  - platform: restart
+    id: restart_satellite_btn
+    name: "System: Restart Satellite"
+    icon: "mdi:restart-alert"
+    entity_category: config
+
 interval:
   - interval: 50ms
     then:
