@@ -17,23 +17,18 @@
 namespace esphome {
 
 static const char *const PCM_PLAYER_TAG = "pcm_sound_player";
-static const uint32_t CAUD_MAGIC = 0x44554143; // 'CAUD' in little-endian
-
-struct __attribute__((packed)) CustomAudioHeader {
-  uint32_t magic;         // 0x44554143 ("CAUD")
-  uint16_t version;       // 1
-  uint16_t count;         // Number of sound entries
-  uint8_t  reserved[24];  // 32 bytes total
-};
-static_assert(sizeof(CustomAudioHeader) == 32, "CustomAudioHeader must be 32 bytes");
-
-struct __attribute__((packed)) CustomAudioEntry {
-  char     name[32];      // Null-terminated sound name, e.g. "My Chime"
-  uint32_t offset;        // Byte offset from partition start
-  uint32_t size;          // Byte length of WAV file
-  uint8_t  reserved[8];   // 48 bytes total
-};
-static_assert(sizeof(CustomAudioEntry) == 48, "CustomAudioEntry must be 48 bytes");
+extern "C" {
+size_t nim_pcm_parse_caud_count(const uint8_t *data, uint32_t part_size) __attribute__((weak));
+bool nim_pcm_get_caud_entry(
+    const uint8_t *data,
+    uint32_t part_size,
+    size_t index,
+    char *out_name,
+    size_t max_name_len,
+    uint32_t *out_offset,
+    uint32_t *out_size
+) __attribute__((weak));
+}
 
 struct CustomSoundItem {
   std::string name;
@@ -173,23 +168,19 @@ class PcmSoundPlayer {
     std::vector<CustomSoundItem> items;
     if (part_data == nullptr || part_size < 32) return items;
 
-    if (*reinterpret_cast<const uint32_t *>(part_data) == CAUD_MAGIC) {
-      const CustomAudioHeader *hdr = reinterpret_cast<const CustomAudioHeader *>(part_data);
-      const CustomAudioEntry *entries = reinterpret_cast<const CustomAudioEntry *>(part_data + sizeof(CustomAudioHeader));
-      size_t max_entries = (part_size - sizeof(CustomAudioHeader)) / sizeof(CustomAudioEntry);
-      size_t count = std::min((size_t)hdr->count, max_entries);
-
+    size_t count = (nim_pcm_parse_caud_count != nullptr) ? nim_pcm_parse_caud_count(part_data, part_size) : 0;
+    if (count > 0) {
       for (size_t i = 0; i < count; i++) {
-        const auto &e = entries[i];
-        if (e.offset >= part_size || e.offset + e.size > part_size || e.size < 44) continue;
-        WavInfo wav = parse_wav(part_data + e.offset, e.size);
-        if (wav.valid) {
-          char name_buf[33] = {0};
-          memcpy(name_buf, e.name, 32);
-          name_buf[32] = '\0';
-          std::string sound_name = (name_buf[0] != '\0') ? std::string(name_buf) : (default_name + " " + std::to_string(i + 1));
-          items.push_back({sound_name, wav.pcm_data, wav.pcm_len, wav.sample_rate, wav.channels, wav.bits_per_sample});
-          ESP_LOGI(PCM_PLAYER_TAG, "Loaded custom sound: '%s' (%u bytes PCM)", sound_name.c_str(), (unsigned int)wav.pcm_len);
+        char name_buf[33] = {0};
+        uint32_t offset = 0, size = 0;
+        if (nim_pcm_get_caud_entry && nim_pcm_get_caud_entry(part_data, part_size, i, name_buf, sizeof(name_buf), &offset, &size)) {
+          if (offset >= part_size || offset + size > part_size || size < 44) continue;
+          WavInfo wav = parse_wav(part_data + offset, size);
+          if (wav.valid) {
+            std::string sound_name = (name_buf[0] != '\0') ? std::string(name_buf) : (default_name + " " + std::to_string(i + 1));
+            items.push_back({sound_name, wav.pcm_data, wav.pcm_len, wav.sample_rate, wav.channels, wav.bits_per_sample});
+            ESP_LOGI(PCM_PLAYER_TAG, "Loaded custom sound: '%s' (%u bytes PCM)", sound_name.c_str(), (unsigned int)wav.pcm_len);
+          }
         }
       }
     } else {

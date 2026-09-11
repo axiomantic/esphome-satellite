@@ -1,5 +1,4 @@
 import std/unittest
-import std/math
 
 import ../src/xvf3800_hardware
 
@@ -50,3 +49,10 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     check head > 0'u32
     # At least some trailing LEDs are dimmer or unlit
     check colors[6] == 0'u32
+
+  test "XMOS reboot command payload format":
+    check XVF3800_REBOOT_PAYLOAD == [240'u8, 89'u8, 1'u8, 0'u8]
+    var buf: array[4, uint8]
+    let written = nim_xvf3800_get_reboot_payload(cast[ptr UncheckedArray[uint8]](addr buf[0]))
+    check written == 4
+    check buf == [240'u8, 89'u8, 1'u8, 0'u8]

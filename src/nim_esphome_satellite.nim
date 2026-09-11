@@ -25,6 +25,7 @@ include xvf3800_hardware
 include wake_partition_loader
 include pcm_sound_player
 include cancellation_matcher
+include nvs_migration
 
 type
   SatelliteContext* = object

@@ -216,3 +216,33 @@ proc nim_pcm_decode_adpcm_chunk*(
   if valprev != nil: valprev[] = vp
   if index != nil: index[] = idx
   return written
+
+proc nim_pcm_parse_caud_count*(data: ptr uint8, partSize: uint32): csize_t {.exportc, cdecl.} =
+  if data == nil or partSize < uint32(sizeof(CustomAudioHeader)): return 0
+  let arr = cast[ptr UncheckedArray[uint8]](data)
+  let entries = parseCaudEntries(toOpenArray(arr, 0, int(partSize) - 1), partSize)
+  return csize_t(entries.len)
+
+proc nim_pcm_get_caud_entry*(
+    data: ptr uint8,
+    partSize: uint32,
+    index: csize_t,
+    outName: cstring,
+    maxNameLen: csize_t,
+    outOffset: ptr uint32,
+    outSize: ptr uint32
+): bool {.exportc, cdecl.} =
+  if data == nil or partSize < uint32(sizeof(CustomAudioHeader)): return false
+  let arr = cast[ptr UncheckedArray[uint8]](data)
+  let entries = parseCaudEntries(toOpenArray(arr, 0, int(partSize) - 1), partSize)
+  if int(index) >= entries.len: return false
+
+  let e = entries[int(index)]
+  if outOffset != nil: outOffset[] = e.offset
+  if outSize != nil: outSize[] = e.size
+  if outName != nil and maxNameLen > 0:
+    let copyLen = min(e.name.len, int(maxNameLen) - 1)
+    if copyLen > 0:
+      copyMem(outName, cstring(e.name), copyLen)
+    cast[ptr UncheckedArray[char]](outName)[copyLen] = '\0'
+  return true
