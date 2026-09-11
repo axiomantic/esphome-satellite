@@ -1314,7 +1314,7 @@ button:
       - lambda: |-
           if (id(satellite_firmware_update).has_state() && id(satellite_firmware_update).state == esphome::update::UPDATE_STATE_AVAILABLE) {
             ESP_LOGI("satellite", "Initiating OTA update via satellite_firmware_update component...");
-            id(satellite_firmware_update).perform();
+            id(satellite_firmware_update).perform(false);
           } else {
             ESP_LOGI("satellite", "Initiating direct OTA update from main branch...");
             bool ok = esphome::wake_loader::get_wake_partition_loader().flash_firmware_ota(
