@@ -241,6 +241,9 @@ class WakePartitionLoader {
     this->apply_all_sensitivities(clemens, nabu);
   }
 
+  float slot1_cutoff_override_{0.0f};
+  float slot2_cutoff_override_{0.0f};
+
   void set_slot_sensitivity(
       int slot,
       const std::string &level,
@@ -250,10 +253,51 @@ class WakePartitionLoader {
     ESP_LOGI(TAG, "Setting Slot %d sensitivity to '%s'", slot, level.c_str());
     if (slot == 1) {
       this->slot1_sensitivity_ = level;
+      this->slot1_cutoff_override_ = 0.0f;
     } else if (slot == 2) {
       this->slot2_sensitivity_ = level;
+      this->slot2_cutoff_override_ = 0.0f;
     }
     this->apply_all_sensitivities(clemens, nabu);
+  }
+
+  void set_slot_cutoff_override(
+      int slot,
+      float val,
+      micro_wake_word::WakeWordModel *clemens,
+      micro_wake_word::WakeWordModel *nabu
+  ) {
+    ESP_LOGI(TAG, "Setting Slot %d cutoff override to %.2f", slot, val);
+    if (slot == 1) {
+      this->slot1_cutoff_override_ = val;
+    } else if (slot == 2) {
+      this->slot2_cutoff_override_ = val;
+    }
+    this->apply_all_sensitivities(clemens, nabu);
+  }
+
+  uint8_t get_active_cutoff_for_slot(int slot) const {
+    float override_val = (slot == 2) ? this->slot2_cutoff_override_ : this->slot1_cutoff_override_;
+    if (override_val >= 0.05f && override_val <= 0.99f) {
+      return static_cast<uint8_t>(std::max(1, std::min(255, (int)std::round(override_val * 255.0f))));
+    }
+    std::string model = (slot == 2) ? this->slot2_model_name_ : this->slot1_model_name_;
+    std::string level = (slot == 2) ? this->slot2_sensitivity_ : this->slot1_sensitivity_;
+    uint8_t base = 102;
+    if (model == "Okay Nabu") {
+      base = 170;
+    } else {
+      for (const auto &s : this->slots_) {
+        if (s.name == model) {
+          base = s.base_cutoff;
+          break;
+        }
+      }
+    }
+    if (nim_wake_loader_scale_cutoff != nullptr) {
+      return nim_wake_loader_scale_cutoff(base, level.c_str());
+    }
+    return base;
   }
 
   void apply_all_sensitivities(
@@ -261,6 +305,13 @@ class WakePartitionLoader {
       micro_wake_word::WakeWordModel *nabu
   ) {
     auto get_cutoff_for_model = [&](const std::string &model_name, uint8_t base_cutoff) -> uint8_t {
+      float override_val = (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_)
+                              ? this->slot2_cutoff_override_
+                              : this->slot1_cutoff_override_;
+      if (override_val >= 0.05f && override_val <= 0.99f) {
+        return static_cast<uint8_t>(std::max(1, std::min(255, (int)std::round(override_val * 255.0f))));
+      }
+
       std::string level = this->slot1_sensitivity_;
       if (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_) {
         level = this->slot2_sensitivity_;

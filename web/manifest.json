@@ -6,11 +6,6 @@
   "builds": [
     {
       "chipFamily": "ESP32-S3",
-      "ota": {
-        "path": "firmware-ota.bin",
-        "md5": "64f30bc73002db3293b4a58d172bec79",
-        "summary": "Official Seeed ReSpeaker XVF3800 firmware release."
-      },
       "parts": [
         {
           "path": "bootloader.bin",
@@ -28,7 +23,12 @@
           "path": "firmware-ota.bin",
           "offset": 65536
         }
-      ]
+      ],
+      "ota": {
+        "path": "firmware-ota.bin",
+        "md5": "64f30bc73002db3293b4a58d172bec79",
+        "summary": "Official Seeed ReSpeaker XVF3800 firmware release."
+      }
     }
   ],
   "commit": "83c8a88",

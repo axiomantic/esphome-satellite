@@ -76,6 +76,10 @@ esphome:
                 1, id(slot1_sensitivity).current_option(), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
                 2, id(slot2_sensitivity).current_option(), id(clemens_model), id(nabu_model));
+            esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
+                1, id(slot1_cutoff).state, id(clemens_model), id(nabu_model));
+            esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
+                2, id(slot2_cutoff).state, id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_sliding_window(
                 static_cast<size_t>(id(wake_window_size).state), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_mic_pre_gain(
@@ -171,8 +175,6 @@ api:
         url: string
         slot: int
         wake_word: string
-        cutoff: int
-        sliding_window: int
       then:
         - lambda: |-
             extern void nim_satellite_ota_start() __attribute__((weak));
@@ -180,7 +182,7 @@ api:
         - micro_wake_word.stop:
         - lambda: |-
             bool ok = esphome::wake_loader::get_wake_partition_loader().install_custom_wake_word_from_url(
-                url, slot, wake_word, cutoff, sliding_window);
+                url, slot, wake_word, 102, 5);
             if (!ok) {
               ESP_LOGE("satellite", "Failed to install custom wake word from %s", url.c_str());
               extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
@@ -642,6 +644,8 @@ select:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
               1, x, id(clemens_model), id(nabu_model));
+          float p = esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(1) / 255.0f;
+          id(slot1_cutoff).publish_state(p);
           global_preferences->sync();
 
   - platform: template
@@ -661,6 +665,8 @@ select:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
               2, x, id(clemens_model), id(nabu_model));
+          float p = esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(2) / 255.0f;
+          id(slot2_cutoff).publish_state(p);
           global_preferences->sync();
 
   - platform: template
@@ -975,6 +981,42 @@ number:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_mic_pre_gain(x);
+          global_preferences->sync();
+
+  - platform: template
+    id: slot1_cutoff
+    name: "Speech: Slot 1 Probability Cutoff"
+    icon: "mdi:tune"
+    entity_category: config
+    min_value: 0.05
+    max_value: 0.99
+    step: 0.01
+    initial_value: 0.40
+    restore_value: true
+    optimistic: true
+    mode: slider
+    set_action:
+      - lambda: |-
+          esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
+              1, x, id(clemens_model), id(nabu_model));
+          global_preferences->sync();
+
+  - platform: template
+    id: slot2_cutoff
+    name: "Speech: Slot 2 Probability Cutoff"
+    icon: "mdi:tune-vertical"
+    entity_category: config
+    min_value: 0.05
+    max_value: 0.99
+    step: 0.01
+    initial_value: 0.40
+    restore_value: true
+    optimistic: true
+    mode: slider
+    set_action:
+      - lambda: |-
+          esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
+              2, x, id(clemens_model), id(nabu_model));
           global_preferences->sync();
 
   - platform: template
