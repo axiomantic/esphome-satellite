@@ -23,52 +23,52 @@ const
 
 # Legacy option arrays for deterministic string-based mapping
 const
-  LEGACY_SENSITIVITY_OPTIONS*: array[3, string] = [
-    "Slightly sensitive", "Moderately sensitive", "Very sensitive"
+  LEGACY_SENSITIVITY_OPTIONS*: array[3, cstring] = [
+    cstring"Slightly sensitive", cstring"Moderately sensitive", cstring"Very sensitive"
   ]
 
-  LEGACY_CHIME_OPTIONS*: array[18, string] = [
-    "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba", "Meditation Bell",
-    "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl", "Acoustic Harp", "Woodblock",
-    "Ceramic Bell", "Neon Shimmer", "Prism Ping", "Cyber Bloom", "Quantum Beep", "Aero Chime",
-    "Silent"
+  LEGACY_CHIME_OPTIONS*: array[18, cstring] = [
+    cstring"Bell Ping", cstring"Modern Chime", cstring"Crystal Glass", cstring"Warm Kalimba", cstring"Meditation Bell",
+    cstring"Marimba", cstring"Subtle Beep", cstring"Bamboo Chime", cstring"Tibetan Bowl", cstring"Acoustic Harp", cstring"Woodblock",
+    cstring"Ceramic Bell", cstring"Neon Shimmer", cstring"Prism Ping", cstring"Cyber Bloom", cstring"Quantum Beep", cstring"Aero Chime",
+    cstring"Silent"
   ]
 
-  LEGACY_PROC_OPTIONS*: array[18, string] = [
-    "Spinner", "Pulse", "Sonar", "Tick", "Typewriter", "Clockwork", "Water Droplets",
-    "Raindrops", "Forest Stream", "Campfire Ember", "Shishi-Odoshi", "Soft Footsteps",
-    "Radar Ping", "Data Crunch", "Telemetry Blip", "Quantum Flux", "Retro Terminal",
-    "Silent"
+  LEGACY_PROC_OPTIONS*: array[18, cstring] = [
+    cstring"Spinner", cstring"Pulse", cstring"Sonar", cstring"Tick", cstring"Typewriter", cstring"Clockwork", cstring"Water Droplets",
+    cstring"Raindrops", cstring"Forest Stream", cstring"Campfire Ember", cstring"Shishi-Odoshi", cstring"Soft Footsteps",
+    cstring"Radar Ping", cstring"Data Crunch", cstring"Telemetry Blip", cstring"Quantum Flux", cstring"Retro Terminal",
+    cstring"Silent"
   ]
 
-  LEGACY_CANCEL_OPTIONS*: array[18, string] = [
-    "Match Wake Chime", "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba",
-    "Meditation Bell", "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl",
-    "Acoustic Harp", "Woodblock", "Ceramic Bell", "Neon Shimmer", "Prism Ping",
-    "Cyber Bloom", "Quantum Beep", "Aero Chime"
+  LEGACY_CANCEL_OPTIONS*: array[18, cstring] = [
+    cstring"Match Wake Chime", cstring"Bell Ping", cstring"Modern Chime", cstring"Crystal Glass", cstring"Warm Kalimba",
+    cstring"Meditation Bell", cstring"Marimba", cstring"Subtle Beep", cstring"Bamboo Chime", cstring"Tibetan Bowl",
+    cstring"Acoustic Harp", cstring"Woodblock", cstring"Ceramic Bell", cstring"Neon Shimmer", cstring"Prism Ping",
+    cstring"Cyber Bloom", cstring"Quantum Beep", cstring"Aero Chime"
   ]
 
 proc getLegacySensitivityOption*(idx: int): string =
   if idx >= 0 and idx < LEGACY_SENSITIVITY_OPTIONS.len:
-    LEGACY_SENSITIVITY_OPTIONS[idx]
+    $LEGACY_SENSITIVITY_OPTIONS[idx]
   else:
     ""
 
 proc getLegacyChimeOption*(idx: int): string =
   if idx >= 0 and idx < LEGACY_CHIME_OPTIONS.len:
-    LEGACY_CHIME_OPTIONS[idx]
+    $LEGACY_CHIME_OPTIONS[idx]
   else:
     ""
 
 proc getLegacyProcOption*(idx: int): string =
   if idx >= 0 and idx < LEGACY_PROC_OPTIONS.len:
-    LEGACY_PROC_OPTIONS[idx]
+    $LEGACY_PROC_OPTIONS[idx]
   else:
     ""
 
 proc getLegacyCancelOption*(idx: int): string =
   if idx >= 0 and idx < LEGACY_CANCEL_OPTIONS.len:
-    LEGACY_CANCEL_OPTIONS[idx]
+    $LEGACY_CANCEL_OPTIONS[idx]
   else:
     ""
 
@@ -76,27 +76,27 @@ proc getLegacyCancelOption*(idx: int): string =
 proc nim_nvs_get_legacy_sensitivity*(idx: csize_t): cstring {.exportc, cdecl.} =
   let i = int(idx)
   if i >= 0 and i < LEGACY_SENSITIVITY_OPTIONS.len:
-    cstring(LEGACY_SENSITIVITY_OPTIONS[i])
+    LEGACY_SENSITIVITY_OPTIONS[i]
   else:
     nil
 
 proc nim_nvs_get_legacy_chime*(idx: csize_t): cstring {.exportc, cdecl.} =
   let i = int(idx)
   if i >= 0 and i < LEGACY_CHIME_OPTIONS.len:
-    cstring(LEGACY_CHIME_OPTIONS[i])
+    LEGACY_CHIME_OPTIONS[i]
   else:
     nil
 
 proc nim_nvs_get_legacy_proc*(idx: csize_t): cstring {.exportc, cdecl.} =
   let i = int(idx)
   if i >= 0 and i < LEGACY_PROC_OPTIONS.len:
-    cstring(LEGACY_PROC_OPTIONS[i])
+    LEGACY_PROC_OPTIONS[i]
   else:
     nil
 
 proc nim_nvs_get_legacy_cancel*(idx: csize_t): cstring {.exportc, cdecl.} =
   let i = int(idx)
   if i >= 0 and i < LEGACY_CANCEL_OPTIONS.len:
-    cstring(LEGACY_CANCEL_OPTIONS[i])
+    LEGACY_CANCEL_OPTIONS[i]
   else:
     nil

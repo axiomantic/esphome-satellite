@@ -11,6 +11,8 @@ when not declared(startsWith):
 when not declared(info):
   import nim_esphome
 
+var mockOtaSimulatePrematureEof* = false
+
 when defined(esp32) or defined(freertos):
   type
     esp_err_t = cint
@@ -231,6 +233,11 @@ proc nim_satellite_flash_firmware_ota*(urlCStr: cstring): bool {.exportc, cdecl.
     return true
   else:
     # Host simulated path for testing
+    if mockOtaSimulatePrematureEof:
+      error("SatelliteOTA", "HTTP connection closed prematurely before full binary received")
+      nim_satellite_resume_inference()
+      nim_satellite_ota_end(false)
+      return false
     info("SatelliteOTA", "Host simulated OTA flash successful for " & url)
     nim_satellite_ota_end(true)
     return true

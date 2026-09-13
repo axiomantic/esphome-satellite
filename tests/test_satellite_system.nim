@@ -35,6 +35,12 @@ suite "Satellite System Control & OTA Invariants":
     check otaStartedCalled == true
     check otaEndResult == true
 
+  test "Premature EOF in OTA stream flags write failure":
+    mockOtaSimulatePrematureEof = true
+    check nim_satellite_flash_firmware_ota("https://example.com/valid.bin") == false
+    check otaEndResult == false
+    mockOtaSimulatePrematureEof = false
+
   test "Inference suspension and resumption safety":
     # Must execute safely without panic on host
     nim_satellite_suspend_inference()

@@ -87,3 +87,8 @@ suite "Version Synchronization Invariant Suite":
     check "ota_data_initial.bin" in htmlText
     check "firmware-ota.bin" in htmlText
 
+  test "scripts/flash_usb.sh enforces 8MB flash size matching hardware partitions layout":
+    let flashScript = readFile("scripts/flash_usb.sh")
+    check "--flash_size 8MB" in flashScript
+    check "--flash_size 16MB" notin flashScript
+
