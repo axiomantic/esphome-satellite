@@ -32,6 +32,11 @@ suite "NVS Preference Migration & Hash Integrity Suite":
     check $nim_nvs_get_legacy_sensitivity(0) == "Slightly sensitive"
     check $nim_nvs_get_legacy_sensitivity(1) == "Moderately sensitive"
     check $nim_nvs_get_legacy_sensitivity(2) == "Very sensitive"
+    # Negative control: out-of-bounds indices return nil
+    check nim_nvs_get_legacy_sensitivity(3) == nil
+    check nim_nvs_get_legacy_sensitivity(99) == nil
+    # Static memory address invariant: pointer must match rodata array directly
+    check cast[pointer](nim_nvs_get_legacy_sensitivity(0)) == cast[pointer](LEGACY_SENSITIVITY_OPTIONS[0].cstring)
 
   test "Legacy cancel sound options list contains expected defaults":
     check LEGACY_CANCEL_OPTIONS.len == 18
@@ -40,3 +45,8 @@ suite "NVS Preference Migration & Hash Integrity Suite":
     check LEGACY_CANCEL_OPTIONS[17] == "Aero Chime"
     check $nim_nvs_get_legacy_cancel(0) == "Match Wake Chime"
     check $nim_nvs_get_legacy_cancel(17) == "Aero Chime"
+    # Negative control: out-of-bounds indices return nil
+    check nim_nvs_get_legacy_cancel(18) == nil
+    check nim_nvs_get_legacy_cancel(99) == nil
+    # Static memory address invariant: pointer must match rodata array directly
+    check cast[pointer](nim_nvs_get_legacy_cancel(0)) == cast[pointer](LEGACY_CANCEL_OPTIONS[0].cstring)
