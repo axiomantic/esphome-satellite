@@ -45,7 +45,7 @@ done
 
 "${ESPTOOL[@]}" --chip esp32s3 --port "$PORT" --baud "$BAUD" \
     --before default_reset --after hard_reset write_flash -z \
-    --flash_mode dio --flash_freq 80m --flash_size 16MB \
+    --flash_mode dio --flash_freq 80m --flash_size 8MB \
     0x0 "$BOOTLOADER" \
     0x8000 "$PARTITIONS" \
     0xE000 "$OTADATA" \

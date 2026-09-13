@@ -74,17 +74,29 @@ proc getLegacyCancelOption*(idx: int): string =
 
 # C ABI bridge exports
 proc nim_nvs_get_legacy_sensitivity*(idx: csize_t): cstring {.exportc, cdecl.} =
-  let opt = getLegacySensitivityOption(int(idx))
-  if opt.len > 0: cstring(opt) else: nil
+  let i = int(idx)
+  if i >= 0 and i < LEGACY_SENSITIVITY_OPTIONS.len:
+    cstring(LEGACY_SENSITIVITY_OPTIONS[i])
+  else:
+    nil
 
 proc nim_nvs_get_legacy_chime*(idx: csize_t): cstring {.exportc, cdecl.} =
-  let opt = getLegacyChimeOption(int(idx))
-  if opt.len > 0: cstring(opt) else: nil
+  let i = int(idx)
+  if i >= 0 and i < LEGACY_CHIME_OPTIONS.len:
+    cstring(LEGACY_CHIME_OPTIONS[i])
+  else:
+    nil
 
 proc nim_nvs_get_legacy_proc*(idx: csize_t): cstring {.exportc, cdecl.} =
-  let opt = getLegacyProcOption(int(idx))
-  if opt.len > 0: cstring(opt) else: nil
+  let i = int(idx)
+  if i >= 0 and i < LEGACY_PROC_OPTIONS.len:
+    cstring(LEGACY_PROC_OPTIONS[i])
+  else:
+    nil
 
 proc nim_nvs_get_legacy_cancel*(idx: csize_t): cstring {.exportc, cdecl.} =
-  let opt = getLegacyCancelOption(int(idx))
-  if opt.len > 0: cstring(opt) else: nil
+  let i = int(idx)
+  if i >= 0 and i < LEGACY_CANCEL_OPTIONS.len:
+    cstring(LEGACY_CANCEL_OPTIONS[i])
+  else:
+    nil

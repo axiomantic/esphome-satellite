@@ -5,6 +5,12 @@
 ## - FreeRTOS microWakeWord task suspension and resumption to prevent flash cache panics
 ## - Firmware OTA download, validation, partition writing, and boot configuration
 
+when not declared(startsWith):
+  import std/strutils
+
+when not declared(info):
+  import nim_esphome
+
 when defined(esp32) or defined(freertos):
   type
     esp_err_t = cint
@@ -186,8 +192,9 @@ proc nim_satellite_flash_firmware_ota*(urlCStr: cstring): bool {.exportc, cdecl.
           break
         totalBytesWritten += dataRead
       else:
-        if esp_http_client_is_complete_data_received(client):
-          break
+        if not esp_http_client_is_complete_data_received(client):
+          error("SatelliteOTA", "HTTP connection closed prematurely before full binary received")
+          writeFailed = true
         break
 
     discard esp_http_client_close(client)
