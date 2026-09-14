@@ -40,14 +40,14 @@ inline void migrate_legacy_nvs_preferences(
   static const uint32_t NVS_MIGRATION_VERSION_KEY = 3847291045UL;
   auto mig_pref = global_preferences->make_preference<uint32_t>(NVS_MIGRATION_VERSION_KEY);
   uint32_t migrated = 0;
-  if (mig_pref.load(&migrated) && migrated == 1) {
+  if (mig_pref.load(&migrated) && migrated >= 2) {
     return;
   }
 
-  ESP_LOGI(NVS_MIG_TAG, "Running legacy v0.5.0 NVS preference migration check...");
+  ESP_LOGI(NVS_MIG_TAG, "Running legacy NVS preference migration check...");
   bool any_migrated = false;
 
-  // 1. Audio: Voice Volume -> Slot 1 Volume
+  // 1. Audio: Voice Volume (from legacy v0.5.0 or v0.6.0 Slot 1: Volume)
   if (slot1_vol != nullptr) {
     auto leg_pref = global_preferences->make_preference<float>(HASH_LEGACY_VOICE_VOLUME);
     float leg_val = 0.0f;
@@ -55,6 +55,14 @@ inline void migrate_legacy_nvs_preferences(
       ESP_LOGI(NVS_MIG_TAG, "Migrating legacy Voice Volume: %.1f%%", leg_val);
       slot1_vol->make_call().set_value(leg_val).perform();
       any_migrated = true;
+    } else {
+      auto s1_pref = global_preferences->make_preference<float>(2638310478UL); // "Slot 1: Volume"
+      float s1_val = 0.0f;
+      if (s1_pref.load(&s1_val) && s1_val >= 0.0f && s1_val <= 100.0f) {
+        ESP_LOGI(NVS_MIG_TAG, "Migrating Slot 1: Volume to Audio: Voice Volume: %.1f%%", s1_val);
+        slot1_vol->make_call().set_value(s1_val).perform();
+        any_migrated = true;
+      }
     }
   }
 
@@ -136,7 +144,7 @@ inline void migrate_legacy_nvs_preferences(
     }
   }
 
-  uint32_t done = 1;
+  uint32_t done = 2;
   mig_pref.save(&done);
   global_preferences->sync();
   ESP_LOGI(NVS_MIG_TAG, "Legacy NVS preference migration finished (migrated=%s)", any_migrated ? "YES" : "NO");
