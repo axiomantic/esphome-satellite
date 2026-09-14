@@ -56,6 +56,13 @@ suite "Satellite Typestate FSM - Granular Error Handling":
     check dismissed is SilentDismiss
     check dismissed.onDismiss() is Idle
 
+  test "SilentDismiss from Thinking when STT recognizes no words":
+    var idle = Idle(SatelliteContext())
+    var thinking = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var dismissed = thinking.onDismissFromThinking()
+    check dismissed is SilentDismiss
+    check dismissed.onDismiss() is Idle
+
   test "PipelineError on STT or intent failure":
     var idle = Idle(SatelliteContext())
     var listening = idle.onWakeWord("assistant", 0).onChimeFinished()

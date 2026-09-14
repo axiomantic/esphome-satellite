@@ -183,6 +183,31 @@ suite "Satellite Watchdog Loop & Typestate Integration (TDD)":
     check nim_satellite_get_state() == ord(rsPlayingMedia)
     check nim_satellite_is_media_playing()
 
+  test "Silent dismiss during rsThinking when server STT recognizes no words":
+    check nim_satellite_get_state() == ord(rsIdle)
+    nim_satellite_wake_word("assistant", 0)
+    satelliteLoop(1000'u32)
+    nim_satellite_chime_done(true)
+    satelliteLoop(1200'u32)
+    check nim_satellite_get_state() == ord(rsListening)
+
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == ord(rsThinking)
+    satelliteLoop(1500'u32)
+
+    # Server sends stt-no-text-recognized while satellite is in rsThinking
+    nim_satellite_error("stt-no-text-recognized")
+    check nim_satellite_get_state() == ord(rsSilentDismiss)
+    check gTestAbortTriggered
+    satelliteLoop(1500'u32)
+
+    # Held for 500ms then cleanly returns to rsIdle
+    satelliteLoop(1999'u32)
+    check nim_satellite_get_state() == ord(rsSilentDismiss)
+
+    satelliteLoop(2000'u32)
+    check nim_satellite_get_state() == ord(rsIdle)
+
   test "Watchdog loop operates correctly across 32-bit timer rollover (0xFFFFFFFF to 1000)":
     let nearMax = 0xFFFFFFF0'u32
     nim_satellite_wake_word("assistant", 0)

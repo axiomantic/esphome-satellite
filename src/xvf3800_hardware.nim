@@ -87,8 +87,17 @@ proc computeAic3104Volume*(volumeIn: float32, muted: bool): Aic3104VolumeConfig 
     )
 
 proc computeAic3104HpGain*(volumeIn: float32): uint8 =
+  if volumeIn <= 0.001'f32:
+    return 0'u8
   let vol = clamp(volumeIn, 0.0'f32, 1.0'f32)
   uint8(clamp(round(vol * 9.0'f32), 0.0'f32, 9.0'f32))
+
+proc computeAic3104HpLevel*(volumeIn: float32): tuple[hpLevel: uint8, lopLevel: uint8] =
+  if volumeIn <= 0.001'f32:
+    (hpLevel: 0x08'u8, lopLevel: 0x08'u8)
+  else:
+    let gain = computeAic3104HpGain(volumeIn)
+    (hpLevel: (gain shl 4) or 0x0D'u8, lopLevel: (gain shl 4) or 0x0B'u8)
 
 proc makeXmosAic3104LevelPayload*(cmd: uint8, level: uint8): array[4, uint8] {.inline.} =
   let lvl = clamp(level, 0'u8, 9'u8)
@@ -266,6 +275,15 @@ proc nim_aic3104_compute_volume*(
 
 proc nim_aic3104_compute_hp_gain*(volume: cfloat): uint8 {.exportc, cdecl.} =
   computeAic3104HpGain(float32(volume))
+
+proc nim_aic3104_compute_hp_levels*(
+    volume: cfloat,
+    outHpLevel: ptr uint8,
+    outLopLevel: ptr uint8
+) {.exportc, cdecl.} =
+  let (hp, lop) = computeAic3104HpLevel(float32(volume))
+  if outHpLevel != nil: outHpLevel[] = hp
+  if outLopLevel != nil: outLopLevel[] = lop
 
 proc nim_xmos_make_level_payload*(cmd: uint8, level: uint8, outBuf: ptr UncheckedArray[uint8]): csize_t {.exportc, cdecl.} =
   if outBuf != nil:

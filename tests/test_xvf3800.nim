@@ -124,3 +124,19 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     check computeAic3104HpGain(1.0'f32) == 9'u8
     check computeAic3104HpGain(1.5'f32) == 9'u8
 
+  test "AIC3104 dedicated headphone level register calculation with zero mute":
+    # 0.0 volume must mute and power down driver (0x08)
+    let (hpZero, lopZero) = computeAic3104HpLevel(0.0'f32)
+    check hpZero == 0x08'u8
+    check lopZero == 0x08'u8
+
+    # 0.5 volume must set gain to 5 with unmuted/power-up flags (0x5D / 0x5B)
+    let (hpMid, lopMid) = computeAic3104HpLevel(0.5'f32)
+    check hpMid == ((5'u8 shl 4) or 0x0D'u8)
+    check lopMid == ((5'u8 shl 4) or 0x0B'u8)
+
+    # 1.0 volume must set gain to 9 (0x9D / 0x9B)
+    let (hpMax, lopMax) = computeAic3104HpLevel(1.0'f32)
+    check hpMax == ((9'u8 shl 4) or 0x0D'u8)
+    check lopMax == ((9'u8 shl 4) or 0x0B'u8)
+

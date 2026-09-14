@@ -74,7 +74,7 @@ typestate SatelliteFSM:
     Idle -> (Woken | ConnectionError | Muted | PlayingMedia | Alerting | Announcing | Updating) as IdleResult
     Woken -> (Listening | Cancelling | SilentDismiss | PipelineError | ConnectionError) as WokenResult
     Listening -> (Thinking | Cancelling | SilentDismiss | PipelineError | ConnectionError | Idle) as ListenResult
-    Thinking -> (Replying | Cancelling | PipelineError | ConnectionError | Idle) as ThinkResult
+    Thinking -> (Replying | Cancelling | SilentDismiss | PipelineError | ConnectionError | Idle) as ThinkResult
     Replying -> (Idle | Cancelling | FollowUp | PipelineError | ConnectionError) as ReplyResult
     Cancelling -> (Idle | PlayingMedia | ConnectionError) as CancelResult
     FollowUp -> (Listening | Thinking | Cancelling | Idle | ConnectionError) as FollowUpResult
@@ -153,6 +153,10 @@ proc onTtsStarted*(s: Thinking): Replying {.transition.} =
 proc onStopDuringThinking*(s: Thinking): Cancelling {.transition.} =
   info("SatelliteFSM", "State: THINKING -> CANCELLING (Stop command received during thinking)")
   result = Cancelling(SatelliteContext(s))
+
+proc onDismissFromThinking*(s: Thinking): SilentDismiss {.transition.} =
+  info("SatelliteFSM", "State: THINKING -> SILENT_DISMISS (no speech or intent recognized)")
+  result = SilentDismiss(SatelliteContext(s))
 
 proc onProcessingTimeout*(s: Thinking): PipelineError {.transition.} =
   var ctx = SatelliteContext(s)
@@ -691,6 +695,12 @@ proc nim_satellite_error*(code: cstring) {.exportc, cdecl.} =
       ctxDismiss = onChimeFailed(ctxWoken)
       currentState = rsSilentDismiss
       return
+    elif currentState == rsThinking:
+      if satellitePipeline != nil:
+        satellitePipeline.stopProcessingLoop()
+      ctxDismiss = onDismissFromThinking(ctxThinking)
+      currentState = rsSilentDismiss
+      return
 
   notifyHardwareAbort()
   case currentState
@@ -709,6 +719,7 @@ proc nim_satellite_error*(code: cstring) {.exportc, cdecl.} =
     ctxPipelineErr = onPipelineErrorFromReplying(ctxReplying, err)
     currentState = rsPipelineError
   else:
+    mediaWasPlaying = false
     currentState = rsIdle
 
 proc nim_satellite_set_muted*(muted: bool) {.exportc, cdecl.} =
