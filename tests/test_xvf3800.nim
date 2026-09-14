@@ -118,3 +118,9 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     let p2 = makeXmosAic3104LevelPayload(XMOS_CMD_AIC3104_LINEOUT_LEVEL, 9'u8)
     check p2 == [48'u8, 12'u8, 1'u8, 9'u8]
 
+  test "AIC3104 dedicated headphone gain calculation":
+    check computeAic3104HpGain(0.0'f32) == 0'u8
+    check computeAic3104HpGain(0.5'f32) == 5'u8
+    check computeAic3104HpGain(1.0'f32) == 9'u8
+    check computeAic3104HpGain(1.5'f32) == 9'u8
+
