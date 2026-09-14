@@ -55,11 +55,13 @@ proc startStream*(
   )
 
 proc diffMs*(nowMs, sinceMs: uint32): uint32 {.inline.} =
-  ## Computes elapsed time in milliseconds with robust uint32 modular wraparound handling.
-  if nowMs >= sinceMs:
-    nowMs - sinceMs
+  ## Computes elapsed time in milliseconds with robust uint32 modular wraparound handling
+  ## and concurrency jitter protection (clamping negative deltas to 0).
+  let signedDelta = cast[int32](nowMs - sinceMs)
+  if signedDelta <= 0'i32:
+    0'u32
   else:
-    (not 0'u32) - sinceMs + nowMs + 1'u32
+    uint32(signedDelta)
 
 proc feedBytes*(playing: var DmaStreamPlaying, bytes: int, currentMs: uint32) =
   if bytes > 0:
