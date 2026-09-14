@@ -88,28 +88,38 @@
     .ha-selection-note a:hover, .hint a:hover { color: #7dd3fc; }
     .install-warning-notice { width: 100%; box-sizing: border-box; margin-bottom: 8px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 4px; font-size: 0.82rem; color: #fca5a5; display: none; text-align: left; }
     button.install-btn:disabled, button.install-btn.disabled-btn { background: #334155 !important; color: #64748b !important; cursor: not-allowed !important; box-shadow: none !important; opacity: 0.6; }
-    .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-    button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; }
+    .actions { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+    .action-primary { width: 100%; }
+    .action-primary esp-web-install-button { width: 100%; display: block; }
+    button.install-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; box-sizing: border-box; }
     button.install-btn:hover { background: var(--primary-hover); }
-    .action-buttons-row { width: 100%; display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
-    .action-buttons-row esp-web-install-button { flex: 2; min-width: 180px; }
-    .action-buttons-row improv-wifi-serial-launch-button { flex: 1.5; min-width: 160px; }
-    button.wifi-btn { background: #0284c7; color: white; border: none; padding: 14px 18px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: background 0.2s; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .action-secondary-row { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .action-secondary-row improv-wifi-serial-launch-button { width: 100%; display: block; }
+    button.wifi-btn { background: #0284c7; color: white; border: 1px solid #0369a1; padding: 11px 14px; font-size: 0.88rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; box-sizing: border-box; }
     button.wifi-btn:hover { background: #0369a1; }
-    .modal-wifi-btn { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+    button.wifi-btn span, .ha-btn span { white-space: nowrap; }
+    .modal-wifi-btn { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
     .modal-wifi-btn:hover { background: #0369a1; }
-    .btn-guide-wifi { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-guide-wifi { background: #0284c7; color: white; border: none; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
     .btn-guide-wifi:hover { background: #0369a1; }
-    .ha-btn { flex: 1.5; min-width: 170px; background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 14px 18px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; cursor: pointer; text-decoration: none; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .ha-btn { background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 11px 14px; font-size: 0.88rem; font-weight: 600; border-radius: 8px; cursor: pointer; text-decoration: none; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; box-sizing: border-box; width: 100%; }
     .ha-btn:hover { background: rgba(2, 132, 199, 0.2); border-color: #38bdf8; color: #ffffff; }
-    .btn-guide-ha { background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
+    .btn-guide-ha { background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease; white-space: nowrap; }
     .btn-guide-ha:hover { background: rgba(2, 132, 199, 0.2); border-color: #38bdf8; color: #ffffff; }
-    .erase-btn { flex: 1; min-width: 180px; background: #1e293b; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 14px 18px; font-size: 0.92rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-    .erase-btn:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5; }
+    .action-utility-row { width: 100%; display: flex; justify-content: center; margin-top: 2px; }
+    .erase-btn { background: transparent; color: #94a3b8; border: 1px solid #334155; padding: 7px 16px; font-size: 0.82rem; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+    .erase-btn:hover { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; color: #fca5a5; }
+    .erase-btn svg { opacity: 0.75; }
+    .erase-btn:hover svg { opacity: 1; }
+    .erase-btn span { white-space: nowrap; }
+    .install-nvs-tip { margin-top: 4px; font-size: 13px; color: #94a3b8; text-align: center; line-height: 1.4; max-width: 520px; }
     .erase-status { width: 100%; box-sizing: border-box; border-radius: 6px; padding: 12px 16px; font-size: 0.85rem; line-height: 1.5; margin-top: 4px; text-align: left; }
     .erase-status.in-progress { background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; color: #93c5fd; }
     .erase-status.success { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #a7f3d0; }
     .erase-status.error { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #fca5a5; }
+    @media (max-width: 480px) {
+      .action-secondary-row { grid-template-columns: 1fr; }
+    }
     .setup-guide-card { margin-top: 36px; padding-top: 28px; border-top: 1px solid #1e293b; width: 100%; text-align: left; }
     .guide-header { margin-bottom: 18px; }
     .guide-badge { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
@@ -284,15 +294,17 @@
     </div>
     <div class="actions">
       <div id="installWarningNotice" class="install-warning-notice"></div>
-      <div class="action-buttons-row">
+      <div class="action-primary">
         <esp-web-install-button id="installBtn" manifest="manifest.json">
           <button slot="activate" class="install-btn">Install Firmware</button>
           <span slot="unsupported">WebSerial is not supported in this browser. Please use Chrome or Edge on desktop.</span>
         </esp-web-install-button>
+      </div>
+      <div class="action-secondary-row">
         <improv-wifi-serial-launch-button>
           <button slot="activate" class="wifi-btn" title="Configure Wi-Fi credentials directly over USB without re-flashing">
             <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-            <span>Configure Wi-Fi</span>
+            <span>Configure Wi&#8209;Fi</span>
           </button>
           <span slot="unsupported"></span>
         </improv-wifi-serial-launch-button>
@@ -300,12 +312,14 @@
           <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
           <span>Add to Home Assistant</span>
         </a>
+      </div>
+      <div class="action-utility-row">
         <button type="button" id="btnEraseDevice" class="erase-btn" title="Completely wipe all flash partitions, cached Wi-Fi credentials, and NVS settings">
           <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           <span>Erase Device</span>
         </button>
       </div>
-      <div class="install-nvs-tip" style="margin-top: 10px; font-size: 13px; color: #94a3b8; text-align: center; line-height: 1.4;">Updating an existing device? Leave <strong>Erase device</strong> unchecked in the install popup to preserve your Wi-Fi settings, volume preferences, wake words, and sound themes.</div>
+      <div class="install-nvs-tip">Updating an existing device? Leave <strong>Erase device</strong> unchecked in the install popup to preserve your Wi-Fi settings, volume preferences, wake words, and sound themes.</div>
       <div id="eraseStatus" class="erase-status" style="display: none;"></div>
     </div>
 
@@ -326,7 +340,7 @@
               <improv-wifi-serial-launch-button>
                 <button slot="activate" class="btn-guide-wifi">
                   <svg class="icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-                  <span>Configure Wi-Fi via USB (Improv)</span>
+                  <span>Configure Wi&#8209;Fi via USB (Improv)</span>
                 </button>
               </improv-wifi-serial-launch-button>
             </div>
@@ -1803,7 +1817,7 @@
                 <improv-wifi-serial-launch-button>
                   <button slot="activate" class="modal-wifi-btn">
                     <svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-                    <span>Configure Wi-Fi via USB</span>
+                    <span>Configure Wi&#8209;Fi via USB</span>
                   </button>
                 </improv-wifi-serial-launch-button>
               </div>
