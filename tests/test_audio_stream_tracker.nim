@@ -211,6 +211,20 @@ suite "DMA Audio Stream - 32-bit Timer Rollover (TDD)":
     # Immediate wraparound
     check diffMs(0'u32, 0xFFFFFFFF'u32) == 1'u32
 
+    # Concurrency jitter case: now is slightly behind since (e.g. chunk fed on Core 1 right after now sampled on Core 0)
+    check diffMs(1000'u32, 1002'u32) == 0'u32
+    check diffMs(50000'u32, 50010'u32) == 0'u32
+
+  test "Stream tracking does not false-timeout on concurrency jitter":
+    let idle = initDmaStreamIdle()
+    var playing = startStream(idle, dskProcessing, 25000'u32, 3000'u32, true, 1000'u32)
+    # Simulate chunk fed at 1005ms on another core
+    feedBytes(playing, 512, 1005'u32)
+    # Ticked on main loop at 1002ms (sampled slightly before chunk)
+    let res = tickStream(playing, 1002'u32)
+    check res.active == true
+    check res.timedOut == false
+
   test "Stream tracking and feeding across 0xFFFFFFFF boundary":
     let startTimestamp = 0xFFFFFFF0'u32
     let idle = initDmaStreamIdle()
