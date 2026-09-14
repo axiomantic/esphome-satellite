@@ -54,29 +54,27 @@ proc startStream*(
     isLoop: isLoop
   )
 
+proc diffMs*(nowMs, sinceMs: uint32): uint32 {.inline.} =
+  ## Computes elapsed time in milliseconds with robust uint32 modular wraparound handling.
+  if nowMs >= sinceMs:
+    nowMs - sinceMs
+  else:
+    (not 0'u32) - sinceMs + nowMs + 1'u32
+
 proc feedBytes*(playing: var DmaStreamPlaying, bytes: int, currentMs: uint32) =
   if bytes > 0:
     playing.bytesWritten += uint64(bytes)
   playing.lastChunkMs = currentMs
-  if currentMs >= playing.startMs:
-    playing.elapsedMs = currentMs - playing.startMs
-  else:
-    playing.elapsedMs = (not 0'u32) - playing.startMs + currentMs + 1'u32
+  playing.elapsedMs = diffMs(currentMs, playing.startMs)
 
 proc tickStream*(
     playing: var DmaStreamPlaying,
     currentMs: uint32
 ): tuple[active: bool, timedOut: bool, transitionedToIdle: bool] =
-  let elapsed = if currentMs >= playing.startMs:
-                  currentMs - playing.startMs
-                else:
-                  (not 0'u32) - playing.startMs + currentMs + 1'u32
+  let elapsed = diffMs(currentMs, playing.startMs)
   playing.elapsedMs = elapsed
 
-  let idleTime = if currentMs >= playing.lastChunkMs:
-                   currentMs - playing.lastChunkMs
-                 else:
-                   (not 0'u32) - playing.lastChunkMs + currentMs + 1'u32
+  let idleTime = diffMs(currentMs, playing.lastChunkMs)
 
   let deadlineReached = (playing.maxDurationMs > 0'u32) and (elapsed >= playing.maxDurationMs)
   let stallDetected = (playing.inactivityTimeoutMs > 0'u32) and
@@ -126,6 +124,12 @@ proc nim_dma_stream_reset*() =
     gIdleState = abortStream(gPlayingState)
   gTrackerState = tskIdle
 
+proc getTrackerNowMs*(): uint32 {.inline.} =
+  when declared(satelliteNowMs):
+    satelliteNowMs()
+  else:
+    millis()
+
 # C ABI Exports
 proc nim_dma_stream_start*(
     kind: cint,
@@ -133,10 +137,10 @@ proc nim_dma_stream_start*(
     inactivity_timeout_ms: uint32,
     is_loop: bool
 ): bool {.exportc, cdecl.} =
-  nim_dma_stream_start_at(kind, max_duration_ms, inactivity_timeout_ms, is_loop, millis())
+  nim_dma_stream_start_at(kind, max_duration_ms, inactivity_timeout_ms, is_loop, getTrackerNowMs())
 
 proc nim_dma_stream_feed*(bytes: csize_t) {.exportc, cdecl.} =
-  nim_dma_stream_feed_at(bytes, millis())
+  nim_dma_stream_feed_at(bytes, getTrackerNowMs())
 
 proc nim_dma_stream_finish*() {.exportc, cdecl.} =
   if gTrackerState == tskPlaying:
@@ -170,9 +174,6 @@ proc nim_dma_stream_get_kind*(): cint {.exportc, cdecl.} =
 
 proc nim_dma_stream_get_elapsed_ms*(now_ms: uint32): uint32 {.exportc, cdecl.} =
   if gTrackerState == tskPlaying:
-    if now_ms >= gPlayingState.startMs:
-      return now_ms - gPlayingState.startMs
-    else:
-      return gPlayingState.elapsedMs
+    return diffMs(now_ms, gPlayingState.startMs)
   else:
     return 0'u32

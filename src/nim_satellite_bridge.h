@@ -21,6 +21,7 @@ bool nim_satellite_is_cancellation(const char *text, const char *config);
 bool nim_satellite_is_reset_phrase(const char *text);
 int nim_satellite_get_state(void);
 bool nim_satellite_is_cancelling(void);
+void nim_satellite_register_hardware_abort_cb(void (*cb)(void));
 
 // Extended State Functions
 void nim_satellite_set_muted(bool muted);
@@ -142,6 +143,9 @@ inline bool call_nim_is_cancellation(const char *text, const char *config = null
 }
 inline bool call_nim_is_reset_phrase(const char *text) {
   return nim_satellite_is_reset_phrase(text);
+}
+inline void call_nim_satellite_register_hardware_abort_cb(void (*cb)(void)) {
+  nim_satellite_register_hardware_abort_cb(cb);
 }
 inline void call_nim_set_muted(bool muted) {
   nim_satellite_set_muted(muted);

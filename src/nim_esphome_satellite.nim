@@ -20,8 +20,20 @@ import nim_esphome
 import typestates
 import std/strutils
 import nim_esphome/dsl/actions
-include audio_dsp
+
+var gSimulatedMillis*: int64 = -1
+
+proc satelliteNowMs*(): uint32 {.inline.} =
+  if gSimulatedMillis >= 0:
+    uint32(gSimulatedMillis)
+  else:
+    millis()
+
+proc setSimulatedMillis*(ms: int64) =
+  gSimulatedMillis = ms
+
 include audio_stream_tracker
+include audio_dsp
 include xvf3800_hardware
 include wake_partition_loader
 include pcm_sound_player
@@ -104,6 +116,12 @@ proc onChimeTimeout*(s: Woken): PipelineError {.transition.} =
   var ctx = SatelliteContext(s)
   ctx.errorCode = "chime-timeout"
   error("SatelliteFSM", "State: WOKEN -> PIPELINE_ERROR (wake chime playback timeout)")
+  result = PipelineError(ctx)
+
+proc onPipelineErrorFromWoken*(s: Woken, err: string): PipelineError {.transition.} =
+  var ctx = SatelliteContext(s)
+  ctx.errorCode = err
+  error("SatelliteFSM", "State: WOKEN -> PIPELINE_ERROR (" & err & ")")
   result = PipelineError(ctx)
 
 proc onSpeechEnded*(s: Listening): Thinking {.transition.} =
@@ -393,6 +411,9 @@ var
   ctxUpdating: Updating
   mediaWasPlaying: bool = false
   micWasMuted: bool = false
+  lastHeartbeatMs*: uint32 = 0
+  lastObservedState*: RuntimeState = rsIdle
+  stateEnteredMs*: uint32 = 0
   configuredProcessingStyle* = psSpinner
   configuredProcessingVolume* = 75.0'f32
   configuredWakeChimeSound* = wcBell
@@ -516,23 +537,42 @@ proc nim_action_set_chime_volume*(volume: cfloat) {.exportc, cdecl.} =
 
 
 
-proc returnFromVoiceFlow() =
+var gHardwareAbortCb: proc() {.cdecl.} = nil
+
+proc nim_satellite_register_hardware_abort_cb*(cb: proc() {.cdecl.}) {.exportc, cdecl.} =
+  gHardwareAbortCb = cb
+
+proc notifyHardwareAbort*() =
+  if gHardwareAbortCb != nil:
+    gHardwareAbortCb()
+
+proc returnFromIdleToMediaOrIdle*() =
+  if mediaWasPlaying:
+    mediaWasPlaying = false
+    ctxMedia = onMediaPlay(ctxIdle)
+    currentState = rsPlayingMedia
+  else:
+    currentState = rsIdle
+
+proc returnFromSilentDismiss*() =
   if mediaWasPlaying:
     mediaWasPlaying = false
     ctxMedia = onDismissToMedia(ctxDismiss)
     currentState = rsPlayingMedia
   else:
+    ctxIdle = onDismiss(ctxDismiss)
     currentState = rsIdle
 
-proc returnFromPipelineError() =
+proc returnFromPipelineError*() =
   if mediaWasPlaying:
     mediaWasPlaying = false
     ctxMedia = onResetPipelineErrorToMedia(ctxPipelineErr)
     currentState = rsPlayingMedia
   else:
+    ctxIdle = onResetPipelineError(ctxPipelineErr)
     currentState = rsIdle
 
-proc returnFromCancelFlow() =
+proc returnFromCancelFlow*() =
   if mediaWasPlaying:
     mediaWasPlaying = false
     ctxMedia = onCancelFinishedToMedia(ctxCancelling)
@@ -570,8 +610,7 @@ proc nim_satellite_chime_done*(ok: bool) {.exportc, cdecl.} =
       currentState = rsListening
     else:
       ctxDismiss = onChimeFailed(ctxWoken)
-      ctxIdle = onDismiss(ctxDismiss)
-      returnFromVoiceFlow()
+      currentState = rsSilentDismiss
 
 proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
   if currentState == rsListening:
@@ -586,11 +625,10 @@ proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
 proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
   if currentState == rsListening:
     ctxDismiss = onSilenceTimeout(ctxListening)
-    ctxIdle = onDismiss(ctxDismiss)
-    returnFromVoiceFlow()
+    currentState = rsSilentDismiss
   elif currentState == rsFollowUp:
     ctxIdle = onFollowUpTimeout(ctxFollowUp)
-    returnFromVoiceFlow()
+    returnFromIdleToMediaOrIdle()
 
 proc nim_satellite_tts_start*() {.exportc, cdecl.} =
   satellitePipeline.stopProcessingLoop()
@@ -601,7 +639,7 @@ proc nim_satellite_tts_start*() {.exportc, cdecl.} =
 proc nim_satellite_tts_end*() {.exportc, cdecl.} =
   if currentState == rsReplying:
     ctxIdle = onTtsFinished(ctxReplying)
-    returnFromVoiceFlow()
+    returnFromIdleToMediaOrIdle()
 
 proc nim_satellite_follow_up*() {.exportc, cdecl.} =
   if currentState == rsReplying:
@@ -640,28 +678,36 @@ proc nim_satellite_stop_word*() {.exportc, cdecl.} =
 proc nim_satellite_error*(code: cstring) {.exportc, cdecl.} =
   let err = $code
   if err == "stt-no-text-recognized" or err == "duplicate_wake_up_detected":
+    notifyHardwareAbort()
     if currentState == rsListening:
       ctxDismiss = onSilenceTimeout(ctxListening)
-      ctxIdle = onDismiss(ctxDismiss)
-      returnFromVoiceFlow()
+      currentState = rsSilentDismiss
+      return
     elif currentState == rsFollowUp:
       ctxIdle = onFollowUpTimeout(ctxFollowUp)
-      returnFromVoiceFlow()
-    return
+      returnFromIdleToMediaOrIdle()
+      return
+    elif currentState == rsWoken:
+      ctxDismiss = onChimeFailed(ctxWoken)
+      currentState = rsSilentDismiss
+      return
 
+  notifyHardwareAbort()
   case currentState
+  of rsWoken:
+    ctxPipelineErr = onPipelineErrorFromWoken(ctxWoken, err)
+    currentState = rsPipelineError
   of rsListening:
     ctxPipelineErr = onPipelineErrorFromListening(ctxListening, err)
-    ctxIdle = onResetPipelineError(ctxPipelineErr)
-    returnFromPipelineError()
+    currentState = rsPipelineError
   of rsThinking:
+    if satellitePipeline != nil:
+      satellitePipeline.stopProcessingLoop()
     ctxPipelineErr = onPipelineErrorFromThinking(ctxThinking, err)
-    ctxIdle = onResetPipelineError(ctxPipelineErr)
-    returnFromPipelineError()
+    currentState = rsPipelineError
   of rsReplying:
     ctxPipelineErr = onPipelineErrorFromReplying(ctxReplying, err)
-    ctxIdle = onResetPipelineError(ctxPipelineErr)
-    returnFromPipelineError()
+    currentState = rsPipelineError
   else:
     currentState = rsIdle
 
@@ -810,12 +856,21 @@ esphomeSetup:
       else:
         debug("SatelliteAudio", "Processing sound tick: style=" & $style & " count=" & $count)
 
-var lastHeartbeatMs: uint32 = 0
-var lastObservedState: RuntimeState = rsIdle
-var stateEnteredMs: uint32 = 0
+proc nim_satellite_reset_for_test*() =
+  currentState = rsIdle
+  ctxIdle = Idle(SatelliteContext())
+  mediaWasPlaying = false
+  micWasMuted = false
+  lastHeartbeatMs = 0
+  lastObservedState = rsIdle
+  stateEnteredMs = 0
+  gSimulatedMillis = -1
+  gHardwareAbortCb = nil
+  nim_dma_stream_reset()
+  if satellitePipeline != nil:
+    satellitePipeline.stopProcessingLoop()
 
-esphomeLoop:
-  let now = millis()
+proc satelliteLoop*(now: uint32) =
   if currentState != lastObservedState:
     lastObservedState = currentState
     stateEnteredMs = now
@@ -826,23 +881,22 @@ esphomeLoop:
   let dmaTickRes = nim_dma_stream_tick(now)
   if dmaTickRes == 2:
     warn("SatelliteDMA", "DMA playback stream lease expired or stalled. Aborting stream.")
+    notifyHardwareAbort()
     case currentState
     of rsWoken:
       warn("SatelliteFSM", "DMA stream lease expired during Woken chime. Triggering PipelineError.")
       ctxPipelineErr = onChimeTimeout(ctxWoken)
-      ctxIdle = onResetPipelineError(ctxPipelineErr)
-      returnFromPipelineError()
+      currentState = rsPipelineError
     of rsThinking:
       warn("SatelliteFSM", "DMA stream lease expired during Thinking loop. Triggering PipelineError.")
       if satellitePipeline != nil:
         satellitePipeline.stopProcessingLoop()
       ctxPipelineErr = onProcessingTimeout(ctxThinking)
-      ctxIdle = onResetPipelineError(ctxPipelineErr)
-      returnFromPipelineError()
+      currentState = rsPipelineError
     of rsReplying:
       warn("SatelliteFSM", "DMA stream lease expired during Replying. Returning to Idle.")
       ctxIdle = onTtsTimeout(ctxReplying)
-      returnFromVoiceFlow()
+      returnFromIdleToMediaOrIdle()
     of rsCancelling:
       warn("SatelliteFSM", "DMA stream lease expired during Cancelling. Returning to Idle.")
       ctxIdle = onCancelTimeout(ctxCancelling)
@@ -850,41 +904,51 @@ esphomeLoop:
     else:
       discard
 
-  let elapsed = now - stateEnteredMs
+  let elapsed = diffMs(now, stateEnteredMs)
 
   case currentState
   of rsWoken:
-    if elapsed >= 2000:
-      warn("SatelliteFSM", "Watchdog: Woken state timed out after 2s. Triggering PipelineError.")
+    if elapsed >= 5000:
+      warn("SatelliteFSM", "Watchdog: Woken state timed out after 5s. Triggering PipelineError.")
+      notifyHardwareAbort()
       ctxPipelineErr = onChimeTimeout(ctxWoken)
-      ctxIdle = onResetPipelineError(ctxPipelineErr)
-      returnFromPipelineError()
+      currentState = rsPipelineError
   of rsListening:
     if elapsed >= 10000:
       warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s. Returning to Idle.")
+      notifyHardwareAbort()
       nim_satellite_silence_timeout()
   of rsThinking:
     if elapsed >= 20000:
       warn("SatelliteFSM", "Watchdog: Thinking state timed out after 20s. Triggering PipelineError.")
-      satellitePipeline.stopProcessingLoop()
+      notifyHardwareAbort()
+      if satellitePipeline != nil:
+        satellitePipeline.stopProcessingLoop()
       ctxPipelineErr = onProcessingTimeout(ctxThinking)
-      ctxIdle = onResetPipelineError(ctxPipelineErr)
-      returnFromPipelineError()
+      currentState = rsPipelineError
   of rsReplying:
     if elapsed >= 60000:
       warn("SatelliteFSM", "Watchdog: Replying state timed out after 60s. Returning to Idle.")
+      notifyHardwareAbort()
       ctxIdle = onTtsTimeout(ctxReplying)
-      returnFromVoiceFlow()
+      returnFromIdleToMediaOrIdle()
   of rsCancelling:
-    if elapsed >= 1500:
-      warn("SatelliteFSM", "Watchdog: Cancelling state timed out after 1.5s. Returning to Idle.")
+    if elapsed >= 3000:
+      warn("SatelliteFSM", "Watchdog: Cancelling state timed out after 3s. Returning to Idle.")
+      notifyHardwareAbort()
       ctxIdle = onCancelTimeout(ctxCancelling)
       returnFromCancelFlow()
   of rsFollowUp:
     if elapsed >= 5000:
       warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 5s. Returning to Idle.")
       ctxIdle = onFollowUpTimeout(ctxFollowUp)
-      returnFromVoiceFlow()
+      returnFromIdleToMediaOrIdle()
+  of rsSilentDismiss:
+    if elapsed >= 500:
+      returnFromSilentDismiss()
+  of rsPipelineError:
+    if elapsed >= 2000:
+      returnFromPipelineError()
   of rsAlerting:
     if elapsed >= 300000:
       warn("SatelliteFSM", "Watchdog: Alerting state timed out after 5m. Returning to Idle.")
@@ -900,14 +964,19 @@ esphomeLoop:
       warn("SatelliteFSM", "Watchdog: Updating state timed out after 5m. Returning to Idle.")
       ctxIdle = onOtaTimeout(ctxUpdating)
       currentState = rsIdle
-  of rsPipelineError:
-    if elapsed >= 2000:
-      returnFromPipelineError()
   else:
     discard
 
-  if now - lastHeartbeatMs >= 10000:
+  # Immediately update state tracking if state changed during loop evaluation
+  if currentState != lastObservedState:
+    lastObservedState = currentState
+    stateEnteredMs = now
+
+  if diffMs(now, lastHeartbeatMs) >= 10000:
     lastHeartbeatMs = now
     info("Satellite", "Heartbeat: state=" & $currentState & " uptime=" & $(now div 1000) & "s heap=" & $getFreeHeap())
+
+esphomeLoop:
+  satelliteLoop(satelliteNowMs())
 
 

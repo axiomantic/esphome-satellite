@@ -61,6 +61,10 @@ esphome:
                 id(mww)->start();
               }
             });
+            nim_satellite_register_hardware_abort_cb([]() {
+              id(va).request_stop();
+              esphome::get_pcm_sound_player().stop();
+            });
             id(board_speaker).set_volume(id(slot1_volume).state / 100.0f);
         - lambda: |-
             esphome::wake_loader::get_wake_partition_loader().init(
