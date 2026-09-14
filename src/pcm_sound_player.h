@@ -28,6 +28,14 @@ bool nim_pcm_get_caud_entry(
     uint32_t *out_offset,
     uint32_t *out_size
 );
+bool nim_dma_stream_start(int kind, uint32_t max_duration_ms, uint32_t inactivity_timeout_ms, bool is_loop);
+void nim_dma_stream_feed(size_t bytes);
+void nim_dma_stream_finish(void);
+void nim_dma_stream_abort(void);
+int nim_dma_stream_tick(uint32_t now_ms);
+bool nim_dma_stream_is_active(void);
+int nim_dma_stream_get_kind(void);
+uint32_t nim_dma_stream_get_elapsed_ms(uint32_t now_ms);
 }
 
 struct CustomSoundItem {
@@ -217,6 +225,7 @@ class PcmSoundPlayer {
 
   void play_sound(const std::string &name, bool loop = false, float volume = -1.0f) {
     this->is_playing_cancel_ = false;
+    this->current_stream_kind_ = loop ? 2 : 1;
     if (this->speaker_ == nullptr) return;
     if (name == "Silent") {
       this->stop();
@@ -234,6 +243,7 @@ class PcmSoundPlayer {
 
   void play_processing_sound(const std::string &name, bool loop = true, float volume = -1.0f) {
     this->is_playing_cancel_ = false;
+    this->current_stream_kind_ = 2;
     if (name == "Silent") {
       this->stop();
       return;
@@ -249,6 +259,7 @@ class PcmSoundPlayer {
 
   void play_chime(const std::string &name, bool loop = false, float volume = -1.0f) {
     this->is_playing_cancel_ = false;
+    this->current_stream_kind_ = 1;
     if (name == "Silent") {
       this->stop();
       return;
@@ -268,6 +279,7 @@ class PcmSoundPlayer {
       return;
     }
     this->is_playing_cancel_ = true;
+    this->current_stream_kind_ = 3;
     for (const auto &item : this->custom_cancel_sounds_) {
       if (item.name == name || (name == "Custom" && !this->custom_cancel_sounds_.empty() && &item == &this->custom_cancel_sounds_[0])) {
         this->play_raw_pcm(item.pcm_data, item.pcm_len, item.sample_rate, item.channels, item.bits_per_sample, loop, volume, item.name.c_str());
@@ -313,6 +325,17 @@ class PcmSoundPlayer {
     }
     this->speaker_->start();
 
+    uint32_t max_dur = 5000;
+    uint32_t inact_to = 2000;
+    if (this->current_stream_kind_ == 2) {
+      max_dur = 25000;
+      inact_to = 3000;
+    } else if (this->current_stream_kind_ == 3) {
+      max_dur = 3000;
+      inact_to = 1500;
+    }
+    nim_dma_stream_start(this->current_stream_kind_, max_dur, inact_to, loop);
+
     ESP_LOGD(PCM_PLAYER_TAG, "Playing ADPCM audio: %s (%zu bytes, loop=%d, vol=%.2f)", name, length, (int)loop, volume);
 
     BaseType_t ret = xTaskCreatePinnedToCore(
@@ -328,6 +351,7 @@ class PcmSoundPlayer {
       ESP_LOGE(PCM_PLAYER_TAG, "Failed to create playback task!");
       this->is_playing_ = false;
       this->speaker_->stop();
+      nim_dma_stream_abort();
     }
   }
 
@@ -350,6 +374,17 @@ class PcmSoundPlayer {
     }
     this->speaker_->start();
 
+    uint32_t max_dur = 5000;
+    uint32_t inact_to = 2000;
+    if (this->current_stream_kind_ == 2) {
+      max_dur = 25000;
+      inact_to = 3000;
+    } else if (this->current_stream_kind_ == 3) {
+      max_dur = 3000;
+      inact_to = 1500;
+    }
+    nim_dma_stream_start(this->current_stream_kind_, max_dur, inact_to, loop);
+
     ESP_LOGI(PCM_PLAYER_TAG, "Playing custom raw PCM: %s (%zu bytes, %uHz, %uch, %ubit, loop=%d, vol=%.2f)",
              name, length, (unsigned int)sample_rate, (unsigned int)channels, (unsigned int)bits, (int)loop, volume);
 
@@ -366,6 +401,7 @@ class PcmSoundPlayer {
       ESP_LOGE(PCM_PLAYER_TAG, "Failed to create playback task!");
       this->is_playing_ = false;
       this->speaker_->stop();
+      nim_dma_stream_abort();
     }
   }
 
@@ -378,6 +414,7 @@ class PcmSoundPlayer {
     this->is_playing_ = false;
     this->is_playing_cancel_ = false;
     this->is_loop_ = false;
+    nim_dma_stream_abort();
     this->stop_task_();
     if (this->speaker_ != nullptr) {
       this->speaker_->stop();
@@ -398,6 +435,7 @@ class PcmSoundPlayer {
   bool is_playing_cancel() const { return this->is_playing_ && this->is_playing_cancel_; }
 
  protected:
+  int current_stream_kind_{1};
   speaker::Speaker *speaker_{nullptr};
   const uint8_t *data_{nullptr};
   size_t data_len_{0};
@@ -474,6 +512,7 @@ class PcmSoundPlayer {
         while (bytes_to_send > 0 && this->is_playing_) {
           size_t written = this->speaker_->play(ptr, bytes_to_send, pdMS_TO_TICKS(50));
           if (written > 0) {
+            nim_dma_stream_feed(written);
             ptr += written;
             this->read_offset_ += written;
             bytes_to_send -= written;
@@ -522,6 +561,7 @@ class PcmSoundPlayer {
         while (total_bytes > 0 && this->is_playing_) {
           size_t written = this->speaker_->play(ptr, total_bytes, pdMS_TO_TICKS(50));
           if (written > 0) {
+            nim_dma_stream_feed(written);
             ptr += written;
             total_bytes -= written;
           } else {
@@ -539,6 +579,7 @@ class PcmSoundPlayer {
         wait_count++;
       }
       ESP_LOGD(PCM_PLAYER_TAG, "Audio finished");
+      nim_dma_stream_finish();
       bool was_cancel = this->is_playing_cancel_;
       if (this->on_finished_) {
         this->on_finished_();

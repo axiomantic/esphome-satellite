@@ -55,6 +55,41 @@ bool nim_wake_loader_validate_header(const uint8_t *data, uint32_t partSize, int
 bool nim_pcm_parse_wav(const uint8_t *data, size_t len, uint32_t *outSampleRate, uint16_t *outChannels, uint16_t *outBits, size_t *outPcmOffset, size_t *outPcmLen);
 size_t nim_pcm_decode_adpcm_chunk(const uint8_t *adpcmData, size_t adpcmLen, int16_t *outSamples, float volume, int16_t *valprev, int8_t *index);
 
+// DMA Audio Stream Typestate Tracker Nim Hooks
+bool nim_dma_stream_start(int kind, uint32_t max_duration_ms, uint32_t inactivity_timeout_ms, bool is_loop);
+void nim_dma_stream_feed(size_t bytes);
+void nim_dma_stream_finish(void);
+void nim_dma_stream_abort(void);
+int nim_dma_stream_tick(uint32_t now_ms);
+bool nim_dma_stream_is_active(void);
+int nim_dma_stream_get_kind(void);
+uint32_t nim_dma_stream_get_elapsed_ms(uint32_t now_ms);
+
+inline bool call_nim_dma_stream_start(int kind, uint32_t max_duration_ms, uint32_t inactivity_timeout_ms, bool is_loop) {
+  return nim_dma_stream_start(kind, max_duration_ms, inactivity_timeout_ms, is_loop);
+}
+inline void call_nim_dma_stream_feed(size_t bytes) {
+  nim_dma_stream_feed(bytes);
+}
+inline void call_nim_dma_stream_finish(void) {
+  nim_dma_stream_finish();
+}
+inline void call_nim_dma_stream_abort(void) {
+  nim_dma_stream_abort();
+}
+inline int call_nim_dma_stream_tick(uint32_t now_ms) {
+  return nim_dma_stream_tick(now_ms);
+}
+inline bool call_nim_dma_stream_is_active(void) {
+  return nim_dma_stream_is_active();
+}
+inline int call_nim_dma_stream_get_kind(void) {
+  return nim_dma_stream_get_kind();
+}
+inline uint32_t call_nim_dma_stream_get_elapsed_ms(uint32_t now_ms) {
+  return nim_dma_stream_get_elapsed_ms(now_ms);
+}
+
 inline void call_nim_audio_dsp_process(int16_t *samples, int count) {
   nim_audio_dsp_process(samples, count);
 }
