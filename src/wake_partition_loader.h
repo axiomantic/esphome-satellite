@@ -2,6 +2,7 @@
 
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/preferences.h"
 #include "esphome/components/micro_wake_word/micro_wake_word.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/ota/ota_backend.h"
@@ -21,6 +22,12 @@ namespace wake_loader {
 
 static const char *const TAG = "wake_loader";
 static const uint32_t WAKE_MAGIC = 0x57414B45; // 'WAKE' in little-endian
+static const uint32_t HASH_SLOT1_WW_NAME = 2841950101UL;
+static const uint32_t HASH_SLOT2_WW_NAME = 2841950102UL;
+
+struct WakeWordFixedStringPref {
+  char value[64];
+};
 
 struct __attribute__((packed)) WakeModelHeader {
   uint32_t magic;                 // 0x57414B45 ("WAKE")
@@ -230,10 +237,67 @@ class WakePartitionLoader {
       slot2_select->traits.set_options(fixed_opts2);
       ESP_LOGI(TAG, "Populated Slot 2 Wake Word select with %zu options", this->slot2_options_.size());
     }
+
+    std::string active_s1 = "Mr. Clemens";
+    std::string active_s2 = "Disabled";
+
+    if (global_preferences != nullptr) {
+      WakeWordFixedStringPref s1_pref{};
+      auto p1 = global_preferences->make_preference<WakeWordFixedStringPref>(HASH_SLOT1_WW_NAME);
+      if (p1.load(&s1_pref) && s1_pref.value[0] != '\0') {
+        std::string candidate(s1_pref.value);
+        for (const auto &opt : this->slot1_options_) {
+          if (opt == candidate) {
+            active_s1 = candidate;
+            break;
+          }
+        }
+      } else if (slot1_select != nullptr) {
+        auto leg_idx_pref = global_preferences->make_preference<size_t>(slot1_select->get_object_id_hash());
+        size_t idx = 0;
+        if (leg_idx_pref.load(&idx) && idx < this->slot1_options_.size()) {
+          active_s1 = this->slot1_options_[idx];
+          ESP_LOGI(TAG, "Migrated Slot 1 Wake Word from index %zu: '%s'", idx, active_s1.c_str());
+        } else if (!this->custom_names_.empty()) {
+          active_s1 = this->custom_names_[0];
+          ESP_LOGI(TAG, "Defaulting Slot 1 Wake Word to installed partition model: '%s'", active_s1.c_str());
+        }
+      }
+
+      WakeWordFixedStringPref s2_pref{};
+      auto p2 = global_preferences->make_preference<WakeWordFixedStringPref>(HASH_SLOT2_WW_NAME);
+      if (p2.load(&s2_pref) && s2_pref.value[0] != '\0') {
+        std::string candidate(s2_pref.value);
+        for (const auto &opt : this->slot2_options_) {
+          if (opt == candidate) {
+            active_s2 = candidate;
+            break;
+          }
+        }
+      } else if (slot2_select != nullptr) {
+        auto leg_idx_pref = global_preferences->make_preference<size_t>(slot2_select->get_object_id_hash());
+        size_t idx = 0;
+        if (leg_idx_pref.load(&idx) && idx < this->slot2_options_.size()) {
+          active_s2 = this->slot2_options_[idx];
+          ESP_LOGI(TAG, "Migrated Slot 2 Wake Word from index %zu: '%s'", idx, active_s2.c_str());
+        }
+      }
+    }
+
+    this->slot1_model_name_ = active_s1;
+    this->slot2_model_name_ = active_s2;
+    if (slot1_select != nullptr) {
+      slot1_select->publish_state(active_s1);
+    }
+    if (slot2_select != nullptr) {
+      slot2_select->publish_state(active_s2);
+    }
   }
 
   bool has_custom_models() const { return !this->slots_.empty(); }
   const std::vector<std::string> &custom_names() const { return this->custom_names_; }
+  const std::string &get_slot1_model_name() const { return this->slot1_model_name_; }
+  const std::string &get_slot2_model_name() const { return this->slot2_model_name_; }
 
   void update_slot_models(
       const std::string &slot1_choice,
@@ -245,6 +309,20 @@ class WakePartitionLoader {
     this->slot2_model_name_ = slot2_choice;
     ESP_LOGI(TAG, "Configured Wake Word Slots -> Slot 1: '%s', Slot 2: '%s'",
              slot1_choice.c_str(), slot2_choice.c_str());
+
+    if (global_preferences != nullptr) {
+      WakeWordFixedStringPref p1{};
+      strncpy(p1.value, slot1_choice.c_str(), sizeof(p1.value) - 1);
+      auto pref1 = global_preferences->make_preference<WakeWordFixedStringPref>(HASH_SLOT1_WW_NAME);
+      pref1.save(&p1);
+
+      WakeWordFixedStringPref p2{};
+      strncpy(p2.value, slot2_choice.c_str(), sizeof(p2.value) - 1);
+      auto pref2 = global_preferences->make_preference<WakeWordFixedStringPref>(HASH_SLOT2_WW_NAME);
+      pref2.save(&p2);
+
+      global_preferences->sync();
+    }
 
     auto should_enable = [&](const std::string &name) -> bool {
       if (name == this->slot1_model_name_) return true;

@@ -44,6 +44,8 @@ void nim_audio_dsp_process(int16_t *samples, int count);
 void nim_audio_dsp_process32(int32_t *samples, int count);
 void nim_audio_dsp_set_mic_pre_gain(float db);
 void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count);
+void nim_audio_dsp_set_enabled(bool enabled);
+bool nim_audio_dsp_is_enabled(void);
 
 // Hardware & Animation Nim Hooks
 void nim_xvf3800_make_gpo_payload(uint8_t pin, uint8_t val, uint8_t *outBuf);
@@ -102,6 +104,12 @@ inline void call_nim_audio_dsp_set_mic_pre_gain(float db) {
 }
 inline void call_nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) {
   nim_audio_dsp_apply_mic_pre_gain32(samples, count);
+}
+inline void call_nim_audio_dsp_set_enabled(bool enabled) {
+  nim_audio_dsp_set_enabled(enabled);
+}
+inline bool call_nim_audio_dsp_is_enabled(void) {
+  return nim_audio_dsp_is_enabled();
 }
 
 // Safe C++ inlined callers

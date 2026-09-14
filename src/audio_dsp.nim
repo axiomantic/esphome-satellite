@@ -109,18 +109,38 @@ proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int) =
 
 # Global singleton audio DSP processor for satellite speaker pipeline
 var globalVoiceCompressor = newAudioCompressor()
+var globalAudioDspEnabled* = true
+
+proc nim_audio_dsp_set_enabled*(enabled: bool) {.exportc: "nim_audio_dsp_set_enabled", cdecl.} =
+  globalAudioDspEnabled = enabled
+
+proc nim_audio_dsp_is_enabled*(): bool {.exportc: "nim_audio_dsp_is_enabled", cdecl.} =
+  return globalAudioDspEnabled
+
+proc shouldApplyDsp*(): bool {.inline.} =
+  if not globalAudioDspEnabled:
+    return false
+  when declared(nim_dma_stream_get_kind):
+    let kind = nim_dma_stream_get_kind()
+    # 0 = dskNone (unclassified fallback), 4 = dskTts (dialogue speech).
+    # Chimes (1), processing loops (2), cancel cues (3), and media (5) are strictly bypassed.
+    return kind == 0 or kind == 4
+  else:
+    return true
 
 proc nim_audio_dsp_process*(samples: ptr UncheckedArray[int16], count: int) {.exportc: "nim_audio_dsp_process", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (16-bit PCM)
   if samples != nil and count > 0:
-    globalVoiceCompressor.process(cast[ptr int16](samples), count)
+    if shouldApplyDsp():
+      globalVoiceCompressor.process(cast[ptr int16](samples), count)
     when declared(nim_dma_stream_feed):
       nim_dma_stream_feed(csize_t(count * sizeof(int16)))
 
 proc nim_audio_dsp_process32*(samples: ptr UncheckedArray[int32], count: int) {.exportc: "nim_audio_dsp_process32", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (32-bit PCM)
   if samples != nil and count > 0:
-    globalVoiceCompressor.process32(cast[ptr int32](samples), count)
+    if shouldApplyDsp():
+      globalVoiceCompressor.process32(cast[ptr int32](samples), count)
     when declared(nim_dma_stream_feed):
       nim_dma_stream_feed(csize_t(count * sizeof(int32)))
 

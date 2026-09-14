@@ -123,3 +123,23 @@ suite "Real-Time Audio DSP Suite (TDD)":
     var testUnity: array[1, int32] = [12345'i32]
     nim_audio_dsp_apply_mic_pre_gain32(cast[ptr UncheckedArray[int32]](testUnity[0].addr), 1)
     check testUnity[0] == 12345'i32
+
+  test "Audio DSP enable and bypass toggle":
+    check nim_audio_dsp_is_enabled() == true
+    
+    # When disabled, audio passes through completely unchanged (no makeup gain or compression)
+    nim_audio_dsp_set_enabled(false)
+    check nim_audio_dsp_is_enabled() == false
+
+    var rawSamples: array[16, int16]
+    for i in 0 ..< rawSamples.len: rawSamples[i] = 1000
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](rawSamples[0].addr), rawSamples.len)
+    # Since DSP is disabled, 1000 must remain exactly 1000!
+    for i in 0 ..< rawSamples.len:
+      check rawSamples[i] == 1000
+
+    # When re-enabled, vocal boost is applied
+    nim_audio_dsp_set_enabled(true)
+    check nim_audio_dsp_is_enabled() == true
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](rawSamples[0].addr), rawSamples.len)
+    check rawSamples[10] > 1400
