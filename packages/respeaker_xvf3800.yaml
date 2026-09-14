@@ -66,6 +66,7 @@ esphome:
               esphome::get_pcm_sound_player().stop();
             });
             id(board_speaker).set_volume(id(slot1_volume).state / 100.0f);
+            id(aic3104_dac).set_headphone_volume(id(headphone_output_volume).state / 100.0f);
         - lambda: |-
             esphome::wake_loader::get_wake_partition_loader().init(
                 id(mww), id(slot1_wake_word), id(slot2_wake_word));
@@ -439,7 +440,6 @@ voice_assistant:
   id: va
   microphone: board_mic
   speaker: board_speaker
-  micro_wake_word: mww
   conversation_timeout: 300s
   on_start:
     - lambda: |-
@@ -620,7 +620,7 @@ text:
     id: custom_firmware_url
     name: "System: Custom Firmware URL"
     icon: "mdi:link-variant"
-    entity_category: config
+    entity_category: diagnostic
     initial_value: "https://raw.githubusercontent.com/axiomantic/esphome-satellite/main/web/firmware-ota.bin"
     restore_value: true
     optimistic: true
@@ -670,7 +670,7 @@ select:
     id: firmware_version_channel
     name: "System: Firmware Version Channel"
     icon: "mdi:source-branch"
-    entity_category: config
+    entity_category: diagnostic
     optimistic: true
     initial_option: "Latest Official (main)"
     restore_value: true
@@ -717,7 +717,7 @@ select:
     id: slot1_sensitivity
     name: "Slot 1: Sensitivity"
     icon: "mdi:tune"
-    entity_category: config
+    entity_category: diagnostic
     optimistic: true
     initial_option: "Moderately sensitive"
     restore_value: true
@@ -738,7 +738,7 @@ select:
     id: slot2_sensitivity
     name: "Slot 2: Sensitivity"
     icon: "mdi:tune-vertical"
-    entity_category: config
+    entity_category: diagnostic
     optimistic: true
     initial_option: "Moderately sensitive"
     restore_value: true
@@ -983,7 +983,6 @@ select:
     id: led_pattern
     name: "Hardware: LED Idle Pattern"
     icon: "mdi:led-strip-variant"
-    entity_category: config
     optimistic: true
     initial_option: "Off"
     restore_value: true
@@ -1001,7 +1000,6 @@ number:
     id: slot1_volume
     name: "Slot 1: Volume"
     icon: "mdi:volume-high"
-    entity_category: config
     min_value: 0
     max_value: 100
     step: 5
@@ -1019,7 +1017,6 @@ number:
     id: slot2_volume
     name: "Slot 2: Volume"
     icon: "mdi:volume-medium"
-    entity_category: config
     min_value: 0
     max_value: 100
     step: 5
@@ -1034,10 +1031,25 @@ number:
           global_preferences->sync();
 
   - platform: template
+    id: headphone_output_volume
+    name: "Headphone Output Volume"
+    icon: "mdi:headphones"
+    min_value: 0
+    max_value: 100
+    step: 5
+    initial_value: 80
+    restore_value: true
+    optimistic: true
+    set_action:
+      - lambda: |-
+          id(aic3104_dac).set_headphone_volume(x / 100.0f);
+          global_preferences->sync();
+
+  - platform: template
     id: wake_window_size
     name: "Voice: Wake Window Size"
     icon: "mdi:timer-sand"
-    entity_category: config
+    entity_category: diagnostic
     min_value: 2
     max_value: 5
     step: 1
@@ -1055,7 +1067,7 @@ number:
     id: mic_pre_gain_boost
     name: "Voice: Mic Pre-Gain Boost"
     icon: "mdi:amplifier"
-    entity_category: config
+    entity_category: diagnostic
     unit_of_measurement: "dB"
     min_value: 0
     max_value: 12
@@ -1073,7 +1085,7 @@ number:
     id: slot1_cutoff
     name: "Slot 1: Probability Cutoff"
     icon: "mdi:tune"
-    entity_category: config
+    entity_category: diagnostic
     min_value: 0.05
     max_value: 0.99
     step: 0.01
@@ -1091,7 +1103,7 @@ number:
     id: slot2_cutoff
     name: "Slot 2: Probability Cutoff"
     icon: "mdi:tune-vertical"
-    entity_category: config
+    entity_category: diagnostic
     min_value: 0.05
     max_value: 0.99
     step: 0.01
@@ -1109,7 +1121,6 @@ number:
     id: led_brightness
     name: "Hardware: LED Brightness"
     icon: "mdi:brightness-6"
-    entity_category: config
     min_value: 0.05
     max_value: 1.0
     step: 0.05
@@ -1317,7 +1328,7 @@ button:
     id: update_firmware_btn
     name: "System: Update Firmware to Latest"
     icon: "mdi:cloud-download"
-    entity_category: config
+    entity_category: diagnostic
     on_press:
       - lambda: |-
           if (id(satellite_firmware_update).has_state() && id(satellite_firmware_update).state == esphome::update::UPDATE_STATE_AVAILABLE) {
@@ -1333,7 +1344,7 @@ button:
     id: flash_firmware_channel_btn
     name: "System: Flash Selected Firmware"
     icon: "mdi:flash"
-    entity_category: config
+    entity_category: diagnostic
     on_press:
       - lambda: |-
           std::string channel = id(firmware_version_channel).current_option();
@@ -1350,7 +1361,7 @@ button:
     id: clear_custom_wake_models_btn
     name: "System: Clear Custom Wake Models"
     icon: "mdi:delete-sweep"
-    entity_category: config
+    entity_category: diagnostic
     on_press:
       - lambda: |-
           for (int s = 1; s <= 3; s++) {

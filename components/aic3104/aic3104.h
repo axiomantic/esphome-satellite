@@ -109,11 +109,15 @@ class AIC3104 : public audio_dac::AudioDac, public Component, public i2c::I2CDev
   bool is_muted() override;
   float volume() override;
 
+  bool set_headphone_volume(float volume);
+  float headphone_volume() const { return this->headphone_volume_; }
+
  protected:
   bool write_mute_();
   bool write_volume_();
 
-  float volume_{0};
+  float volume_{0.8f};
+  float headphone_volume_{0.8f};
 };
 
 }  // namespace aic3104
