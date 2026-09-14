@@ -519,8 +519,10 @@ voice_assistant:
         float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
         id(board_speaker).set_volume(vol);
         call_nim_tts_start();
+        nim_dma_stream_start(4, 60000, 3000, false);
   on_tts_stream_end:
     - lambda: |-
+        nim_dma_stream_finish();
         if (esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
           ESP_LOGI("satellite", "Continuous dialogue active after stream end. Transitioning to Follow Up.");
           call_nim_follow_up();

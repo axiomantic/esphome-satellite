@@ -21,6 +21,7 @@ import typestates
 import std/strutils
 import nim_esphome/dsl/actions
 include audio_dsp
+include audio_stream_tracker
 include xvf3800_hardware
 include wake_partition_loader
 include pcm_sound_player
@@ -821,6 +822,33 @@ esphomeLoop:
 
   if satellitePipeline != nil:
     satellitePipeline.tick(now)
+
+  let dmaTickRes = nim_dma_stream_tick(now)
+  if dmaTickRes == 2:
+    warn("SatelliteDMA", "DMA playback stream lease expired or stalled. Aborting stream.")
+    case currentState
+    of rsWoken:
+      warn("SatelliteFSM", "DMA stream lease expired during Woken chime. Triggering PipelineError.")
+      ctxPipelineErr = onChimeTimeout(ctxWoken)
+      ctxIdle = onResetPipelineError(ctxPipelineErr)
+      returnFromPipelineError()
+    of rsThinking:
+      warn("SatelliteFSM", "DMA stream lease expired during Thinking loop. Triggering PipelineError.")
+      if satellitePipeline != nil:
+        satellitePipeline.stopProcessingLoop()
+      ctxPipelineErr = onProcessingTimeout(ctxThinking)
+      ctxIdle = onResetPipelineError(ctxPipelineErr)
+      returnFromPipelineError()
+    of rsReplying:
+      warn("SatelliteFSM", "DMA stream lease expired during Replying. Returning to Idle.")
+      ctxIdle = onTtsTimeout(ctxReplying)
+      returnFromVoiceFlow()
+    of rsCancelling:
+      warn("SatelliteFSM", "DMA stream lease expired during Cancelling. Returning to Idle.")
+      ctxIdle = onCancelTimeout(ctxCancelling)
+      returnFromCancelFlow()
+    else:
+      discard
 
   let elapsed = now - stateEnteredMs
 
