@@ -17,8 +17,8 @@
 #include <pcm_convert.h>
 
 extern "C" {
-void nim_audio_dsp_process(int16_t *samples, int count) __attribute__((weak));
-void nim_audio_dsp_process32(int32_t *samples, int count) __attribute__((weak));
+void nim_audio_dsp_process(int16_t *samples, int count);
+void nim_audio_dsp_process32(int32_t *samples, int count);
 }
 
 namespace esphome::i2s_audio {

@@ -24,7 +24,10 @@ static const uint8_t PIN_MIC_MUTE = 30; // 1 = muted, 0 = unmuted
 static const uint8_t PIN_AMP_ENABLE = 31; // 0 = enabled (active low), 1 = disabled
 static const uint8_t PIN_LED_POWER = 33; // 1 = power on, 0 = power off
 
-extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf) __attribute__((weak));
+extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf);
+extern "C" size_t nim_aic3104_get_init_registers(uint8_t *outRegs, uint8_t *outVals);
+extern "C" void nim_aic3104_compute_volume(float vol, bool muted, uint8_t *outDacVal, uint8_t *outHpLevel, uint8_t *outLopLevel);
+extern "C" size_t nim_xmos_make_level_payload(uint8_t cmd, uint8_t level, uint8_t *outBuf);
 
 class XVF3800Hardware {
  public:
@@ -48,7 +51,7 @@ class XVF3800Hardware {
     // 3. Ensure Mic Mute LED/Line is unmuted on XMOS (X0D30 = 0)
     write_gpo_pin(PIN_MIC_MUTE, 0);
 
-    // 4. Initialize AIC3104 Codec Volume to 0dB attenuation
+    // 4. Initialize AIC3104 Codec (DAC Power, Datapath, Headphone & Lineout outputs)
     init_aic3104();
 
     // 5. Initial LED Test pattern (brief green flash on boot)
@@ -79,18 +82,43 @@ class XVF3800Hardware {
 
   void init_aic3104() {
     if (!this->bus_) return;
-    // Page 0
-    uint8_t page_cmd[2] = {0x00, 0x00};
-    this->bus_->write(AIC3104_I2C_ADDR, page_cmd, 2);
 
-    // Left DAC volume = 0x00 (0dB attenuation)
-    uint8_t l_vol[2] = {0x2B, 0x00};
-    this->bus_->write(AIC3104_I2C_ADDR, l_vol, 2);
+    ESP_LOGI(TAG, "Configuring TLV320AIC3104 DAC registers (power, datapath, HPLOUT/HPROUT, LEFT_LOP/RIGHT_LOP)...");
+    uint8_t regs[32];
+    uint8_t vals[32];
+    size_t count = 0;
+    if (nim_aic3104_get_init_registers != nullptr) {
+      count = nim_aic3104_get_init_registers(regs, vals);
+    } else {
+      static const uint8_t fallback_regs[] = {0x00, 0x07, 0x25, 0x29, 0x2B, 0x2C, 0x2F, 0x33, 0x40, 0x41, 0x52, 0x56, 0x59, 0x5D};
+      static const uint8_t fallback_vals[] = {0x00, 0x0A, 0xC0, 0x00, 0x00, 0x00, 0x80, 0x0D, 0x80, 0x0D, 0x80, 0x0B, 0x80, 0x0B};
+      count = sizeof(fallback_regs);
+      memcpy(regs, fallback_regs, count);
+      memcpy(vals, fallback_vals, count);
+    }
 
-    // Right DAC volume = 0x00 (0dB attenuation)
-    uint8_t r_vol[2] = {0x2C, 0x00};
-    this->bus_->write(AIC3104_I2C_ADDR, r_vol, 2);
-    ESP_LOGD(TAG, "AIC3104 DAC volume set to 0dB");
+    for (size_t i = 0; i < count; i++) {
+      uint8_t cmd[2] = {regs[i], vals[i]};
+      i2c::ErrorCode err = this->bus_->write(AIC3104_I2C_ADDR, cmd, 2);
+      if (err != i2c::ERROR_OK) {
+        ESP_LOGW(TAG, "Failed writing AIC3104 reg 0x%02X=0x%02X (err=%d)", regs[i], vals[i], (int)err);
+      }
+    }
+
+    // Also configure XMOS AIC3104 output levels (ResID 48, Cmd 11 & 12 = 9)
+    uint8_t hp_payload[4];
+    uint8_t line_payload[4];
+    if (nim_xmos_make_level_payload != nullptr) {
+      nim_xmos_make_level_payload(11, 9, hp_payload);
+      nim_xmos_make_level_payload(12, 9, line_payload);
+    } else {
+      hp_payload[0] = 48; hp_payload[1] = 11; hp_payload[2] = 1; hp_payload[3] = 9;
+      line_payload[0] = 48; line_payload[1] = 12; line_payload[2] = 1; line_payload[3] = 9;
+    }
+    this->bus_->write(XVF3800_I2C_ADDR, hp_payload, sizeof(hp_payload));
+    this->bus_->write(XVF3800_I2C_ADDR, line_payload, sizeof(line_payload));
+
+    ESP_LOGI(TAG, "TLV320AIC3104 DAC initialized successfully (3.5mm lineout/headphone unmuted)");
   }
 
   void reboot_xmos() {

@@ -57,7 +57,7 @@ esphome:
               id(board_speaker).set_volume(vol);
             });
             esphome::get_pcm_sound_player().set_on_cancel_finished([]() {
-              if (id(mww) != nullptr && !id(mic_mute_switch).state) {
+              if (!id(mic_mute_switch).state) {
                 id(mww)->start();
               }
             });
@@ -188,44 +188,36 @@ api:
         wake_word: string
       then:
         - lambda: |-
-            extern void nim_satellite_ota_start() __attribute__((weak));
-            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+            call_nim_ota_start();
         - micro_wake_word.stop:
         - lambda: |-
             bool ok = esphome::wake_loader::get_wake_partition_loader().install_custom_wake_word_from_url(
                 url, slot, wake_word, 102, 5);
             if (!ok) {
               ESP_LOGE("satellite", "Failed to install custom wake word from %s", url.c_str());
-              extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-              if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+              call_nim_ota_end(false);
               return;
             }
             ESP_LOGI("satellite", "Custom wake word '%s' installed. Restarting in 1s...", wake_word.c_str());
         - lambda: |-
-            extern void nim_satellite_restart(void) __attribute__((weak));
-            if (nim_satellite_restart != nullptr) nim_satellite_restart();
-            else esp_restart();
+            call_nim_restart();
     - service: remove_custom_wake_word
       variables:
         slot: int
       then:
         - lambda: |-
-            extern void nim_satellite_ota_start() __attribute__((weak));
-            if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+            call_nim_ota_start();
         - micro_wake_word.stop:
         - lambda: |-
             bool ok = esphome::wake_loader::get_wake_partition_loader().remove_custom_wake_word(slot);
             if (!ok) {
-              ESP_LOGE("satellite", "Failed to remove custom wake word from slot %d", slot);
-              extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-              if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+              ESP_LOGE("satellite", "Failed to remove custom wake word from slot %d", (int) slot);
+              call_nim_ota_end(false);
               return;
             }
-            ESP_LOGI("satellite", "Custom wake word removed from slot %d. Restarting in 1s...", slot);
+            ESP_LOGI("satellite", "Custom wake word removed from slot %d. Restarting in 1s...", (int) slot);
         - lambda: |-
-            extern void nim_satellite_restart(void) __attribute__((weak));
-            if (nim_satellite_restart != nullptr) nim_satellite_restart();
-            else esp_restart();
+            call_nim_restart();
     - service: update_firmware_from_url
       variables:
         url: string
@@ -261,67 +253,55 @@ ota:
   - platform: esphome
     on_begin:
       - lambda: |-
-          if (global_preferences != nullptr) global_preferences->sync();
-          extern void nim_satellite_ota_start() __attribute__((weak));
-          if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+          call_nim_sync_preferences();
+          call_nim_ota_start();
           esphome::wake_loader::get_wake_partition_loader().suspend_inference_for_flash();
     on_end:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+          call_nim_ota_end(true);
     on_error:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+          call_nim_ota_end(false);
           esphome::wake_loader::get_wake_partition_loader().resume_inference_after_flash();
     on_abort:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+          call_nim_ota_end(false);
           esphome::wake_loader::get_wake_partition_loader().resume_inference_after_flash();
   - platform: http_request
     id: ota_http
     on_begin:
       - lambda: |-
-          if (global_preferences != nullptr) global_preferences->sync();
-          extern void nim_satellite_ota_start() __attribute__((weak));
-          if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+          call_nim_sync_preferences();
+          call_nim_ota_start();
           esphome::wake_loader::get_wake_partition_loader().suspend_inference_for_flash();
     on_end:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+          call_nim_ota_end(true);
     on_error:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+          call_nim_ota_end(false);
           esphome::wake_loader::get_wake_partition_loader().resume_inference_after_flash();
     on_abort:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+          call_nim_ota_end(false);
           esphome::wake_loader::get_wake_partition_loader().resume_inference_after_flash();
   - platform: web_server
     id: ota_web
     on_begin:
       - lambda: |-
-          if (global_preferences != nullptr) global_preferences->sync();
-          extern void nim_satellite_ota_start() __attribute__((weak));
-          if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+          call_nim_sync_preferences();
+          call_nim_ota_start();
           esphome::wake_loader::get_wake_partition_loader().suspend_inference_for_flash();
     on_end:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+          call_nim_ota_end(true);
     on_error:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+          call_nim_ota_end(false);
           esphome::wake_loader::get_wake_partition_loader().resume_inference_after_flash();
     on_abort:
       - lambda: |-
-          extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-          if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+          call_nim_ota_end(false);
           esphome::wake_loader::get_wake_partition_loader().resume_inference_after_flash();
 
 i2c:
@@ -376,7 +356,7 @@ speaker:
     dac_type: external
     channel: stereo
     audio_dac: aic3104_dac
-    timeout: never
+    timeout: 500ms
 
   - platform: resampler
     id: board_speaker
@@ -439,6 +419,8 @@ micro_wake_word:
                             lambda: |-
                               return !esphome::get_pcm_sound_player().is_playing();
                           timeout: 2000ms
+                      - lambda: |-
+                          call_nim_chime_done(true);
                     else:
                       - lambda: |-
                           call_nim_chime_done(true);
@@ -461,6 +443,12 @@ voice_assistant:
         if (st == "Follow Up") {
           ESP_LOGI("satellite", "Continuous dialogue start: active listening in Follow Up state.");
         } else {
+          call_nim_chime_done(true);
+        }
+  on_listening:
+    - lambda: |-
+        std::string st = get_satellite_state_name();
+        if (st == "Woken") {
           call_nim_chime_done(true);
         }
   on_stt_vad_end:
@@ -531,30 +519,38 @@ voice_assistant:
         float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
         id(board_speaker).set_volume(vol);
         call_nim_tts_start();
-  on_tts_end:
+  on_tts_stream_end:
     - lambda: |-
         if (esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
-          ESP_LOGI("satellite", "Continuous dialogue active. Transitioning to Follow Up.");
+          ESP_LOGI("satellite", "Continuous dialogue active after stream end. Transitioning to Follow Up.");
           call_nim_follow_up();
         } else {
           call_nim_tts_end();
         }
+    - if:
+        condition:
+          lambda: |-
+            return !esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va)) && !id(mic_mute_switch).state;
+        then:
+          - micro_wake_word.start:
   on_end:
     - lambda: |-
         if (!esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
-          if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
-            esphome::get_pcm_sound_player().stop();
-            float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-            id(board_speaker).set_volume(vol);
-          }
-          if (!call_nim_is_cancelling()) {
-            call_nim_stop_word();
+          if (std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).is_running()) {
+            if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
+              esphome::get_pcm_sound_player().stop();
+              float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
+              id(board_speaker).set_volume(vol);
+            }
+            if (!call_nim_is_cancelling()) {
+              call_nim_stop_word();
+            }
           }
         }
     - if:
         condition:
           lambda: |-
-            return !esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va)) && !call_nim_is_cancelling() && !id(mic_mute_switch).state;
+            return !esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va)) && !id(mic_mute_switch).state && std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).is_running();
         then:
           - micro_wake_word.start:
   on_error:
@@ -581,7 +577,7 @@ voice_assistant:
     - if:
         condition:
           lambda: |-
-            return !esphome::get_pcm_sound_player().is_playing_cancel() && !call_nim_is_cancelling() && !id(mic_mute_switch).state;
+            return !id(mic_mute_switch).state;
         then:
           - micro_wake_word.start:
   on_client_connected:
@@ -1240,6 +1236,11 @@ script:
                         lambda: |-
                           return !esphome::get_pcm_sound_player().is_playing();
                       timeout: 1800ms
+                  - lambda: |-
+                      call_nim_chime_done(true);
+                else:
+                  - lambda: |-
+                      call_nim_chime_done(true);
             - voice_assistant.start:
                 wake_word: !lambda return ww;
           else:
@@ -1349,9 +1350,7 @@ button:
           for (int s = 1; s <= 3; s++) {
             esphome::wake_loader::get_wake_partition_loader().remove_custom_wake_word(s);
           }
-          extern void nim_satellite_restart(void) __attribute__((weak));
-          if (nim_satellite_restart != nullptr) nim_satellite_restart();
-          else esp_restart();
+          call_nim_restart();
 
   - platform: restart
     id: restart_satellite_btn
@@ -1383,7 +1382,7 @@ interval:
           }
 
   # Self-healing watchdog: monitors active state duration and guarantees wake word listening
-  - interval: 2s
+  - interval: 500ms
     then:
       - lambda: |-
           if (id(satellite_firmware_update).has_state()) {
@@ -1393,10 +1392,28 @@ interval:
             }
           }
           static uint32_t active_start_ms = 0;
+          static uint32_t va_orphan_start_ms = 0;
+          static std::string prev_state = "";
           std::string s = get_satellite_state_name();
+          if (s != prev_state) {
+            active_start_ms = millis();
+            prev_state = s;
+          }
+
           if (s == "Idle") {
             active_start_ms = 0;
-            if (id(mic_mute_switch).state == false && id(mww).is_running() == false) {
+            if (id(va).is_running()) {
+              if (va_orphan_start_ms == 0) {
+                va_orphan_start_ms = millis();
+              } else if (millis() - va_orphan_start_ms > 3000) {
+                ESP_LOGW("satellite", "Watchdog: Terminating orphaned voice assistant in Idle state after 3s.");
+                id(va).request_stop();
+                va_orphan_start_ms = 0;
+              }
+            } else {
+              va_orphan_start_ms = 0;
+            }
+            if (id(mic_mute_switch).state == false && id(mww).is_running() == false && !esphome::get_pcm_sound_player().is_playing_cancel()) {
               ESP_LOGW("satellite", "Watchdog: Satellite in %s state without active wake word listening. Resuming microWakeWord.", s.c_str());
               id(mww).start();
             }
@@ -1417,41 +1434,38 @@ interval:
               }
             }
           } else if (s == "Thinking" || s == "Listening" || s == "Woken" || s == "Follow Up") {
-            if (active_start_ms == 0) {
-              active_start_ms = millis();
-            } else {
-              uint32_t elapsed = millis() - active_start_ms;
-              uint32_t max_allowed = (s == "Thinking") ? 45000 : 25000;
-              if (elapsed > max_allowed) {
-                ESP_LOGW("satellite", "Watchdog: Satellite stuck in '%s' for %u ms! Forcing reset to Idle.", s.c_str(), elapsed);
-                active_start_ms = 0;
-                id(va).request_stop();
-                esphome::get_pcm_sound_player().stop();
-                call_nim_stop_word();
-                bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
-                bool played_cancel = false;
-                if (enabled) {
-                  std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
-                  if (opt == "Match Wake Chime") {
-                    opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-                  }
-                  if (opt != "Silent") {
-                    float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-                    esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
-                    played_cancel = true;
-                  }
+            uint32_t elapsed = millis() - active_start_ms;
+            uint32_t max_allowed = (s == "Thinking") ? 20000 : 25000;
+            if (elapsed > max_allowed) {
+              ESP_LOGW("satellite", "Watchdog: Satellite stuck in '%s' for %u ms! Forcing reset to Idle.", s.c_str(), (unsigned) elapsed);
+              active_start_ms = 0;
+              id(va).request_stop();
+              esphome::get_pcm_sound_player().stop();
+              call_nim_stop_word();
+              bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
+              bool played_cancel = false;
+              if (enabled) {
+                std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
+                if (opt == "Match Wake Chime") {
+                  opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
                 }
-                if (!played_cancel) {
-                  call_nim_cancel_done(true);
-                  if (id(mic_mute_switch).state == false) {
-                    id(mww).start();
-                  }
+                if (opt != "Silent") {
+                  float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
+                  esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+                  played_cancel = true;
+                }
+              }
+              if (!played_cancel) {
+                call_nim_cancel_done(true);
+                if (id(mic_mute_switch).state == false) {
+                  id(mww).start();
                 }
               }
             }
           } else {
             // Passive or connection error states - reset watchdog timer
             active_start_ms = 0;
+            va_orphan_start_ms = 0;
           }
 
 

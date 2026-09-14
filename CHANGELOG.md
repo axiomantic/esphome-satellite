@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1] - 2026-09-11
+## [0.6.1] - 2026-09-14
 
 ### Added
+- TLV320AIC3104 Headphone and Lineout DAC Routing: Full initialization and volume control of all DAC output stages (HPLOUT, HPROUT, LEFT_LOP, RIGHT_LOP) enabling amplified audio output to the 3.5mm stereo jack and line-out stages.
+- Strong Symbol Linkage Architecture: Converted all Nim C ABI exports from weak to strong references across adapter headers, ensuring Nim state machines, audio DSP, and hardware routines are extracted from the static archive and linked into the final executable.
+- Event-Driven Audio Lifecycle: Added `on_tts_stream_end` handling and tuned speaker timeout from never to 500ms, enabling clean voice assistant completion and immediate wake word re-arming without hanging in response finished state.
 - Remote OTA Update Architecture: Onboard web server and Home Assistant update entity integration enabling one-click OTA flashing from remote GitHub binaries.
 - Dynamic Web Server Update Banner: Embedded interactive banner on the device web page showing remote update status, current version, and an Install OTA Update trigger with countdown and auto-reconnect.
 - Global OTA State Listener: Attached listener to ESPHome OTA global callback ensuring microWakeWord inference task suspension and state machine transitions to rsUpdating during all OTA operations, preventing Core 1 flash cache panics.

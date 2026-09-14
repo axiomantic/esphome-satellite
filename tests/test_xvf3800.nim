@@ -66,3 +66,55 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     let written = nim_xvf3800_get_reboot_payload(cast[ptr UncheckedArray[uint8]](addr buf[0]))
     check written == 4
     check buf == [240'u8, 89'u8, 1'u8, 0'u8]
+
+  test "AIC3104 initialization registers include DAC power and headphone/lineout routing":
+    let regs = makeAic3104InitRegisters()
+    check regs.len >= 14
+    var foundPage0 = false
+    var foundDacPower = false
+    var foundHpRoute = false
+    var foundHpLevel = false
+    var foundLopRoute = false
+    var foundLopLevel = false
+
+    for r in regs:
+      if r.reg == 0x00'u8 and r.val == 0x00'u8: foundPage0 = true
+      if r.reg == 0x25'u8 and r.val == 0xC0'u8: foundDacPower = true
+      if r.reg == 0x2F'u8 and r.val == 0x80'u8: foundHpRoute = true
+      if r.reg == 0x33'u8 and r.val == 0x0D'u8: foundHpLevel = true
+      if r.reg == 0x52'u8 and r.val == 0x80'u8: foundLopRoute = true
+      if r.reg == 0x56'u8 and r.val == 0x0B'u8: foundLopLevel = true
+
+    check foundPage0
+    check foundDacPower
+    check foundHpRoute
+    check foundHpLevel
+    check foundLopRoute
+    check foundLopLevel
+
+  test "AIC3104 volume calculation handles mute, normal, and boost curves":
+    let muted = computeAic3104Volume(0.8'f32, true)
+    check muted.dacVal == 0x80'u8
+    check (muted.hpLevel and 0x08'u8) > 0'u8 or muted.hpLevel == 0x08'u8 # Muted bit set
+
+    let zero = computeAic3104Volume(0.0'f32, false)
+    check zero.dacVal == 0x80'u8
+
+    let normal = computeAic3104Volume(0.8'f32, false)
+    check normal.dacVal == 0x00'u8  # 0dB digital attenuation
+    check normal.hpLevel == 0x0D'u8 # 0dB analog gain, unmuted, powered up
+    check normal.lopLevel == 0x0B'u8 # 0dB analog gain, unmuted, powered up
+
+    let maxBoost = computeAic3104Volume(1.0'f32, false)
+    check maxBoost.dacVal == 0x00'u8
+    check (maxBoost.hpLevel shr 4) == 9'u8 # +9dB analog boost
+    check (maxBoost.hpLevel and 0x0F'u8) == 0x0D'u8 # unmuted, powered up
+    check (maxBoost.lopLevel shr 4) == 9'u8 # +9dB analog boost
+
+  test "XMOS AIC3104 level commands payload formatting":
+    let p1 = makeXmosAic3104LevelPayload(XMOS_CMD_AIC3104_HP_LEVEL, 9'u8)
+    check p1 == [48'u8, 11'u8, 1'u8, 9'u8]
+
+    let p2 = makeXmosAic3104LevelPayload(XMOS_CMD_AIC3104_LINEOUT_LEVEL, 9'u8)
+    check p2 == [48'u8, 12'u8, 1'u8, 9'u8]
+
