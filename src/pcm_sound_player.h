@@ -2,6 +2,7 @@
 
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/preferences.h"
 #include "esphome/components/speaker/speaker.h"
 #include "esphome/components/select/select.h"
 #include "sound_data.h"
@@ -17,6 +18,16 @@
 namespace esphome {
 
 static const char *const PCM_PLAYER_TAG = "pcm_sound_player";
+static const uint32_t HASH_SLOT1_CHIME_NAME  = 2841950201UL;
+static const uint32_t HASH_SLOT2_CHIME_NAME  = 2841950202UL;
+static const uint32_t HASH_SLOT1_PROC_NAME   = 2841950203UL;
+static const uint32_t HASH_SLOT2_PROC_NAME   = 2841950204UL;
+static const uint32_t HASH_SLOT1_CANCEL_NAME = 2841950205UL;
+static const uint32_t HASH_SLOT2_CANCEL_NAME = 2841950206UL;
+
+struct SoundFixedStringPref {
+  char value[64];
+};
 extern "C" {
 size_t nim_pcm_parse_caud_count(const uint8_t *data, uint32_t part_size);
 bool nim_pcm_get_caud_entry(
@@ -116,61 +127,120 @@ class PcmSoundPlayer {
       }
     }
 
-    // Update Home Assistant select entities if custom sounds were found
+    // Always populate full options lists (17 acoustic themes + Silent + custom partition sounds)
+    this->chime_options_storage_ = {
+      "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba", "Meditation Bell",
+      "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl", "Acoustic Harp", "Woodblock",
+      "Ceramic Bell", "Neon Shimmer", "Prism Ping", "Cyber Bloom", "Quantum Beep", "Aero Chime",
+      "Silent"
+    };
+    for (const auto &c : this->custom_chimes_) {
+      this->chime_options_storage_.push_back(c.name);
+    }
+    FixedVector<const char *> fixed_chimes;
+    fixed_chimes.init(this->chime_options_storage_.size());
+    for (const auto &opt : this->chime_options_storage_) fixed_chimes.push_back(opt.c_str());
+    if (chime_sel != nullptr) chime_sel->traits.set_options(fixed_chimes);
+    if (chime_sel2 != nullptr) chime_sel2->traits.set_options(fixed_chimes);
     if (!this->custom_chimes_.empty()) {
-      this->chime_options_storage_ = {
-        "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba", "Meditation Bell",
-        "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl", "Acoustic Harp", "Woodblock",
-        "Ceramic Bell", "Neon Shimmer", "Prism Ping", "Cyber Bloom", "Quantum Beep", "Aero Chime",
-        "Silent"
-      };
-      for (const auto &c : this->custom_chimes_) {
-        this->chime_options_storage_.push_back(c.name);
-      }
-      FixedVector<const char *> fixed_opts;
-      fixed_opts.init(this->chime_options_storage_.size());
-      for (const auto &opt : this->chime_options_storage_) fixed_opts.push_back(opt.c_str());
-      if (chime_sel != nullptr) chime_sel->traits.set_options(fixed_opts);
-      if (chime_sel2 != nullptr) chime_sel2->traits.set_options(fixed_opts);
       ESP_LOGI(PCM_PLAYER_TAG, "Updated Wake Chime Sound options with %zu custom sound(s)", this->custom_chimes_.size());
     }
 
+    this->proc_options_storage_ = {
+      "Spinner", "Pulse", "Sonar", "Tick", "Typewriter", "Clockwork", "Water Droplets",
+      "Raindrops", "Forest Stream", "Campfire Ember", "Shishi-Odoshi", "Soft Footsteps",
+      "Radar Ping", "Data Crunch", "Telemetry Blip", "Quantum Flux", "Retro Terminal",
+      "Silent"
+    };
+    for (const auto &p : this->custom_processing_sounds_) {
+      this->proc_options_storage_.push_back(p.name);
+    }
+    FixedVector<const char *> fixed_procs;
+    fixed_procs.init(this->proc_options_storage_.size());
+    for (const auto &opt : this->proc_options_storage_) fixed_procs.push_back(opt.c_str());
+    if (proc_sel != nullptr) proc_sel->traits.set_options(fixed_procs);
+    if (proc_sel2 != nullptr) proc_sel2->traits.set_options(fixed_procs);
     if (!this->custom_processing_sounds_.empty()) {
-      this->proc_options_storage_ = {
-        "Spinner", "Pulse", "Sonar", "Tick", "Typewriter", "Clockwork", "Water Droplets",
-        "Raindrops", "Forest Stream", "Campfire Ember", "Shishi-Odoshi", "Soft Footsteps",
-        "Radar Ping", "Data Crunch", "Telemetry Blip", "Quantum Flux", "Retro Terminal",
-        "Silent"
-      };
-      for (const auto &p : this->custom_processing_sounds_) {
-        this->proc_options_storage_.push_back(p.name);
-      }
-      FixedVector<const char *> fixed_opts;
-      fixed_opts.init(this->proc_options_storage_.size());
-      for (const auto &opt : this->proc_options_storage_) fixed_opts.push_back(opt.c_str());
-      if (proc_sel != nullptr) proc_sel->traits.set_options(fixed_opts);
-      if (proc_sel2 != nullptr) proc_sel2->traits.set_options(fixed_opts);
       ESP_LOGI(PCM_PLAYER_TAG, "Updated Processing Sound options with %zu custom sound(s)", this->custom_processing_sounds_.size());
     }
 
+    this->cancel_options_storage_ = {
+      "Match Wake Chime", "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba",
+      "Meditation Bell", "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl",
+      "Acoustic Harp", "Woodblock", "Ceramic Bell", "Neon Shimmer", "Prism Ping",
+      "Cyber Bloom", "Quantum Beep", "Aero Chime", "Silent"
+    };
+    for (const auto &cs : this->custom_cancel_sounds_) {
+      this->cancel_options_storage_.push_back(cs.name);
+    }
+    FixedVector<const char *> fixed_cancels;
+    fixed_cancels.init(this->cancel_options_storage_.size());
+    for (const auto &opt : this->cancel_options_storage_) fixed_cancels.push_back(opt.c_str());
+    if (cancel_sel != nullptr) cancel_sel->traits.set_options(fixed_cancels);
+    if (cancel_sel2 != nullptr) cancel_sel2->traits.set_options(fixed_cancels);
     if (!this->custom_cancel_sounds_.empty()) {
-      this->cancel_options_storage_ = {
-        "Match Wake Chime", "Bell Ping", "Modern Chime", "Crystal Glass", "Warm Kalimba",
-        "Meditation Bell", "Marimba", "Subtle Beep", "Bamboo Chime", "Tibetan Bowl",
-        "Acoustic Harp", "Woodblock", "Ceramic Bell", "Neon Shimmer", "Prism Ping",
-        "Cyber Bloom", "Quantum Beep", "Aero Chime", "Silent"
-      };
-      for (const auto &cs : this->custom_cancel_sounds_) {
-        this->cancel_options_storage_.push_back(cs.name);
-      }
-      FixedVector<const char *> fixed_opts;
-      fixed_opts.init(this->cancel_options_storage_.size());
-      for (const auto &opt : this->cancel_options_storage_) fixed_opts.push_back(opt.c_str());
-      if (cancel_sel != nullptr) cancel_sel->traits.set_options(fixed_opts);
-      if (cancel_sel2 != nullptr) cancel_sel2->traits.set_options(fixed_opts);
       ESP_LOGI(PCM_PLAYER_TAG, "Updated Cancel Sound options with %zu custom sound(s)", this->custom_cancel_sounds_.size());
     }
+
+    // Restore persistent sound names from NVS (or migrate legacy indices)
+    this->restore_select_option_(chime_sel, HASH_SLOT1_CHIME_NAME, this->chime_options_storage_, "Bell Ping");
+    this->restore_select_option_(chime_sel2, HASH_SLOT2_CHIME_NAME, this->chime_options_storage_, "Modern Chime");
+    this->restore_select_option_(proc_sel, HASH_SLOT1_PROC_NAME, this->proc_options_storage_, "Spinner");
+    this->restore_select_option_(proc_sel2, HASH_SLOT2_PROC_NAME, this->proc_options_storage_, "Pulse");
+    this->restore_select_option_(cancel_sel, HASH_SLOT1_CANCEL_NAME, this->cancel_options_storage_, "Match Wake Chime");
+    this->restore_select_option_(cancel_sel2, HASH_SLOT2_CANCEL_NAME, this->cancel_options_storage_, "Match Wake Chime");
   }
+
+  void save_sound_pref_(uint32_t hash, const std::string &name) {
+    if (global_preferences == nullptr || name.empty()) return;
+    SoundFixedStringPref pref{};
+    strncpy(pref.value, name.c_str(), sizeof(pref.value) - 1);
+    auto p = global_preferences->make_preference<SoundFixedStringPref>(hash);
+    p.save(&pref);
+    global_preferences->sync();
+  }
+
+  void restore_select_option_(
+      select::Select *sel,
+      uint32_t hash,
+      const std::vector<std::string> &options,
+      const std::string &default_option
+  ) {
+    if (sel == nullptr) return;
+    std::string active = default_option;
+    bool found_saved = false;
+    if (global_preferences != nullptr) {
+      SoundFixedStringPref pref{};
+      auto p = global_preferences->make_preference<SoundFixedStringPref>(hash);
+      if (p.load(&pref) && pref.value[0] != '\0') {
+        std::string candidate(pref.value);
+        for (const auto &opt : options) {
+          if (opt == candidate) {
+            active = candidate;
+            found_saved = true;
+            break;
+          }
+        }
+      }
+      if (!found_saved) {
+        auto idx_pref = global_preferences->make_preference<size_t>(sel->get_object_id_hash());
+        size_t idx = 0;
+        if (idx_pref.load(&idx) && idx < options.size()) {
+          active = options[idx];
+          ESP_LOGI(PCM_PLAYER_TAG, "Migrated sound setting from index %zu: '%s'", idx, active.c_str());
+          this->save_sound_pref_(hash, active);
+        }
+      }
+    }
+    sel->publish_state(active);
+  }
+
+  void save_slot1_chime(const std::string &name) { save_sound_pref_(HASH_SLOT1_CHIME_NAME, name); }
+  void save_slot2_chime(const std::string &name) { save_sound_pref_(HASH_SLOT2_CHIME_NAME, name); }
+  void save_slot1_proc(const std::string &name) { save_sound_pref_(HASH_SLOT1_PROC_NAME, name); }
+  void save_slot2_proc(const std::string &name) { save_sound_pref_(HASH_SLOT2_PROC_NAME, name); }
+  void save_slot1_cancel(const std::string &name) { save_sound_pref_(HASH_SLOT1_CANCEL_NAME, name); }
+  void save_slot2_cancel(const std::string &name) { save_sound_pref_(HASH_SLOT2_CANCEL_NAME, name); }
 
   static std::vector<CustomSoundItem> parse_custom_sounds(const uint8_t *part_data, size_t part_size, const std::string &default_name) {
     std::vector<CustomSoundItem> items;
