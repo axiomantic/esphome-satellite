@@ -1051,15 +1051,16 @@ select:
 number:
   - platform: template
     id: slot1_volume
-    name: "Slot 1: Volume"
+    name: "Audio: Voice Volume"
     icon: "mdi:volume-high"
-    entity_category: ""
+    entity_category: config
     min_value: 0
     max_value: 100
     step: 5
     initial_value: ${voice_volume_default}
     restore_value: true
     optimistic: true
+    mode: slider
     set_action:
       - lambda: |-
           if (id(active_assistant_slot) == 1) {
@@ -1069,15 +1070,16 @@ number:
 
   - platform: template
     id: slot2_volume
-    name: "Slot 2: Volume"
+    name: "Slot 2: Voice Volume"
     icon: "mdi:volume-medium"
-    entity_category: ""
+    entity_category: config
     min_value: 0
     max_value: 100
     step: 5
     initial_value: ${voice_volume_default}
     restore_value: true
     optimistic: true
+    mode: slider
     set_action:
       - lambda: |-
           if (id(active_assistant_slot) == 2) {
