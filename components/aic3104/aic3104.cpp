@@ -16,9 +16,12 @@ static const char *const TAG = "aic3104";
     return; \
   }
 
+#include <cmath>
+
 extern "C" size_t nim_aic3104_get_init_registers(uint8_t *outRegs, uint8_t *outVals);
 extern "C" void nim_aic3104_compute_volume(float vol, bool muted, uint8_t *outDacVal, uint8_t *outHpLevel, uint8_t *outLopLevel);
 extern "C" uint8_t nim_aic3104_compute_hp_gain(float volume);
+extern "C" void nim_aic3104_compute_hp_levels(float volume, uint8_t *outHpLevel, uint8_t *outLopLevel);
 
 void AIC3104::setup() {
   ESP_LOGI(TAG, "Setting up TLV320AIC3104 audio DAC...");
@@ -62,7 +65,10 @@ bool AIC3104::set_mute_on() {
 }
 
 bool AIC3104::set_volume(float volume) {
-  this->volume_ = clamp<float>(volume, 0.0, 1.0);
+  if (std::isnan(volume)) {
+    volume = 0.8f;
+  }
+  this->volume_ = clamp<float>(volume, 0.0f, 1.0f);
   ESP_LOGD(TAG, "AIC3104 set_volume called: %.2f", this->volume_);
   bool result = this->write_volume_();
   ESP_LOGD(TAG, "AIC3104 write_volume result: %s", result ? "SUCCESS" : "FAILED");
@@ -70,6 +76,9 @@ bool AIC3104::set_volume(float volume) {
 }
 
 bool AIC3104::set_headphone_volume(float volume) {
+  if (std::isnan(volume)) {
+    volume = 0.8f;
+  }
   this->headphone_volume_ = clamp<float>(volume, 0.0f, 1.0f);
   ESP_LOGD(TAG, "AIC3104 set_headphone_volume called: %.2f", this->headphone_volume_);
   return this->write_volume_();
@@ -105,11 +114,18 @@ bool AIC3104::write_volume_() {
   }
 
   if (!this->is_muted_) {
-    uint8_t hp_gain = (nim_aic3104_compute_hp_gain != nullptr)
-                          ? nim_aic3104_compute_hp_gain(this->headphone_volume_)
-                          : (uint8_t)clamp<float>(this->headphone_volume_ * 9.0f, 0.0f, 9.0f);
-    hp_level = (hp_gain << 4) | 0x0D;
-    lop_level = (hp_gain << 4) | 0x0B;
+    if (this->headphone_volume_ <= 0.001f) {
+      hp_level = 0x08;
+      lop_level = 0x08;
+    } else if (nim_aic3104_compute_hp_levels != nullptr) {
+      nim_aic3104_compute_hp_levels(this->headphone_volume_, &hp_level, &lop_level);
+    } else {
+      uint8_t hp_gain = (nim_aic3104_compute_hp_gain != nullptr)
+                            ? nim_aic3104_compute_hp_gain(this->headphone_volume_)
+                            : (uint8_t)clamp<float>(this->headphone_volume_ * 9.0f, 0.0f, 9.0f);
+      hp_level = (hp_gain << 4) | 0x0D;
+      lop_level = (hp_gain << 4) | 0x0B;
+    }
   }
 
   ESP_LOGD(TAG, "Writing AIC3104 volume registers: DAC=0x%02X, HP=0x%02X, LOP=0x%02X", dac_val, hp_level, lop_level);

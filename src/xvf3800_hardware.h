@@ -28,6 +28,7 @@ extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf);
 extern "C" size_t nim_aic3104_get_init_registers(uint8_t *outRegs, uint8_t *outVals);
 extern "C" void nim_aic3104_compute_volume(float vol, bool muted, uint8_t *outDacVal, uint8_t *outHpLevel, uint8_t *outLopLevel);
 extern "C" uint8_t nim_aic3104_compute_hp_gain(float volume);
+extern "C" void nim_aic3104_compute_hp_levels(float volume, uint8_t *outHpLevel, uint8_t *outLopLevel);
 extern "C" size_t nim_xmos_make_level_payload(uint8_t cmd, uint8_t level, uint8_t *outBuf);
 
 class XVF3800Hardware {
