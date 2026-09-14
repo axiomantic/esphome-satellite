@@ -707,13 +707,102 @@ Every synthesized audio file is automatically normalized, trimmed of leading/tra
 | `select.slot_2_processing_sound` | `select` | 17 Acoustic Themes, `Silent`, `Custom` | Continuous audio loop played during Slot 2 cloud processing. |
 | `select.slot_2_cancel_sound` | `select` | `Match Wake Chime`, 17 Themes, `Silent` | Resolve cue played when Slot 2 interaction is cancelled. |
 | `switch.slot_2_cancel_sound_enabled` | `switch` | `on` / `off` | Master toggle for Slot 2 cancel sound playback. |
+| `number.hardware_headphone_volume` | `number` | `0%` – `100%` (step `5%`) | Dedicated analog headphone/lineout volume control on TLV320AIC3104 with zero-volume mute power-down. |
 | `select.hardware_led_idle_pattern` | `select` | `Off`, `Breathe`, `Rainbow`, `Spinner` | Ambient idle animation mode for the 12-LED addressable ring. |
 | `number.hardware_led_brightness` | `number` | `5%` – `100%` (step `5%`) | Brightness scaling for all LED animations. |
-| `switch.privacy_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |
+| `switch.hardware_microphone_mute` | `switch` | `on` / `off` | Hardware/firmware microphone privacy mute toggle. |
 | `sensor.status_satellite_state` | `sensor` | 14 Typestates | Real-time state machine telemetry (*Idle*, *Woken*, *Listening*, *Thinking*, *Replying*). |
 | `button.hardware_reset_audio_hardware` | `button` | Action | Hardware codec re-initialization and XMOS SoC reboot pulse. |
+| `button.system_restart_satellite` | `button` | Action | Soft reboot of the satellite microcontroller. |
 
 All control settings are saved to on-device NVS flash memory and persist across power cycles and firmware updates.
+
+### Device Page Organization & Visual Headers
+
+On the Home Assistant Device page (`/config/devices/device/<id>`), entities are organized across three distinct cards with visual divider headers:
+
+1. **Controls Card**: Daily interactive controls including Slot 1/2 volumes, Headphone Volume, LED Brightness and Idle Pattern, Microphone Mute, Cancellation Words, Voice Wake Window, and Mic Pre-Gain Boost.
+2. **Configuration Card**: Acoustic profile selections for Slot 1 and Slot 2 (Wake Chimes, Processing Loops, Cancel Sounds, and Sensitivity tiers) separated by visual divider headers.
+3. **Diagnostic Card**: System maintenance actions (Reboot, Codec Reset, Firmware Channel, OTA Update, Probability Cutoffs, and Satellite State telemetry).
+
+### Lovelace Dashboard Card Example
+
+You can add this sectioned card to any Home Assistant dashboard for a unified satellite control center:
+
+```yaml
+type: entities
+title: Voice Satellite Control Center
+show_header_toggle: false
+entities:
+  - type: section
+    label: Device & Audio Controls
+  - entity: media_player.voice_satellite_speaker
+    name: Satellite Speaker
+  - entity: number.voice_satellite_slot_1_volume
+    name: Slot 1 Volume
+  - entity: number.voice_satellite_slot_2_volume
+    name: Slot 2 Volume
+  - entity: number.voice_satellite_hardware_headphone_volume
+    name: Headphone Output Volume
+  - entity: switch.voice_satellite_hardware_microphone_mute
+    name: Microphone Privacy Mute
+  - entity: number.voice_satellite_hardware_led_brightness
+    name: LED Ring Brightness
+  - entity: select.voice_satellite_hardware_led_idle_pattern
+    name: LED Idle Animation
+
+  - type: section
+    label: Slot 1 Persona
+  - entity: select.voice_satellite_slot_1_wake_chime
+    name: Wake Chime
+  - entity: switch.voice_satellite_slot_1_wake_chime_enabled
+    name: Wake Chime Enabled
+  - entity: select.voice_satellite_slot_1_processing_sound
+    name: Processing Loop
+  - entity: select.voice_satellite_slot_1_cancel_sound
+    name: Cancel Sound
+  - entity: switch.voice_satellite_slot_1_cancel_sound_enabled
+    name: Cancel Sound Enabled
+  - entity: select.voice_satellite_slot_1_sensitivity
+    name: Sensitivity
+
+  - type: section
+    label: Slot 2 Persona
+  - entity: select.voice_satellite_slot_2_wake_chime
+    name: Wake Chime
+  - entity: switch.voice_satellite_slot_2_wake_chime_enabled
+    name: Wake Chime Enabled
+  - entity: select.voice_satellite_slot_2_processing_sound
+    name: Processing Loop
+  - entity: select.voice_satellite_slot_2_cancel_sound
+    name: Cancel Sound
+  - entity: switch.voice_satellite_slot_2_cancel_sound_enabled
+    name: Cancel Sound Enabled
+  - entity: select.voice_satellite_slot_2_sensitivity
+    name: Sensitivity
+
+  - type: section
+    label: Voice Assistant Pipeline
+  - entity: text.voice_satellite_voice_cancellation_words
+    name: Cancellation Words
+  - entity: button.voice_satellite_voice_reset_conversation_history
+    name: Reset Conversation Context
+  - entity: number.voice_satellite_voice_mic_pre_gain_boost
+    name: Mic Pre-Gain Boost (dB)
+  - entity: number.voice_satellite_voice_wake_window_size
+    name: Sliding Window Size
+
+  - type: section
+    label: System Maintenance
+  - entity: sensor.voice_satellite_status_satellite_state
+    name: Satellite State
+  - entity: update.voice_satellite_firmware
+    name: Firmware Status
+  - entity: button.voice_satellite_hardware_reset_audio_hardware
+    name: Reset Codec & XMOS
+  - entity: button.voice_satellite_system_restart_satellite
+    name: Reboot Satellite
+```
 
 ---
 
