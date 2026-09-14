@@ -16,8 +16,29 @@ static const char *const TAG = "aic3104";
     return; \
   }
 
+extern "C" size_t nim_aic3104_get_init_registers(uint8_t *outRegs, uint8_t *outVals);
+extern "C" void nim_aic3104_compute_volume(float vol, bool muted, uint8_t *outDacVal, uint8_t *outHpLevel, uint8_t *outLopLevel);
+
 void AIC3104::setup() {
-  // do nothing
+  ESP_LOGI(TAG, "Setting up TLV320AIC3104 audio DAC...");
+  uint8_t regs[32];
+  uint8_t vals[32];
+  size_t count = 0;
+  if (nim_aic3104_get_init_registers != nullptr) {
+    count = nim_aic3104_get_init_registers(regs, vals);
+  } else {
+    static const uint8_t fallback_regs[] = {0x00, 0x07, 0x25, 0x29, 0x2B, 0x2C, 0x2F, 0x33, 0x40, 0x41, 0x52, 0x56, 0x59, 0x5D};
+    static const uint8_t fallback_vals[] = {0x00, 0x0A, 0xC0, 0x00, 0x00, 0x00, 0x80, 0x0D, 0x80, 0x0D, 0x80, 0x0B, 0x80, 0x0B};
+    count = sizeof(fallback_regs);
+    memcpy(regs, fallback_regs, count);
+    memcpy(vals, fallback_vals, count);
+  }
+
+  for (size_t i = 0; i < count; i++) {
+    if (!this->write_byte(regs[i], vals[i])) {
+      ESP_LOGW(TAG, "Failed writing AIC3104 register 0x%02X=0x%02X", regs[i], vals[i]);
+    }
+  }
 }
 
 void AIC3104::dump_config() {
@@ -52,45 +73,43 @@ bool AIC3104::is_muted() { return this->is_muted_; }
 float AIC3104::volume() { return this->volume_; }
 
 bool AIC3104::write_mute_() {
-  // XVF3800/AIC3104 mute control - setting volume to maximum attenuation
-  uint8_t mute_value = this->is_muted_ ? 0x80 : ((1.0f - this->volume_) * 0x80);
-  
-  if (!this->write_byte(AIC3104_PAGE_CTRL, 0x00) || 
-      !this->write_byte(AIC3104_LEFT_DAC_VOLUME, mute_value) ||
-      !this->write_byte(AIC3104_RIGHT_DAC_VOLUME, mute_value)) {
-    ESP_LOGE(TAG, "Writing mute failed");
-    return false;
-  }
-
-  ESP_LOGVV(TAG, "Mute %s (volume=0x%.2x)", this->is_muted_ ? "ON" : "OFF", mute_value);
-  return true;
+  return this->write_volume_();
 }
 
 bool AIC3104::write_volume_() {
-  ESP_LOGD(TAG, "write_volume_() called - volume: %.2f", this->volume_);
-  
+  ESP_LOGD(TAG, "write_volume_() called - volume: %.2f (muted: %d)", this->volume_, (int)this->is_muted_);
+
   if (!this->write_byte(AIC3104_PAGE_CTRL, 0x00)) {
     ESP_LOGE(TAG, "Failed to set page 0");
     return false;
   }
-  
-  // Map volume 0.0-1.0 to DAC range 0x80-0x00 (inverted)
-  // 0x00 = 0dB (loudest), 0x7F = -63.5dB (quietest), 0x80 = mute
-  uint8_t dac_val = (uint8_t)((1.0f - this->volume_) * 0x80);
-  dac_val = clamp<uint8_t>(dac_val, 0x00, 0x80);
-  
-  ESP_LOGD(TAG, "Writing DAC volume: 0x%.2x (%.1fdB attenuation) to registers 0x2B/0x2C", 
-           dac_val, -(float)dac_val);
-  
-  if (!this->write_byte(AIC3104_LEFT_DAC_VOLUME, dac_val) ||
-      !this->write_byte(AIC3104_RIGHT_DAC_VOLUME, dac_val)) {
-    ESP_LOGE(TAG, "Writing DAC volume failed");
+
+  uint8_t dac_val = 0;
+  uint8_t hp_level = 0x0D;
+  uint8_t lop_level = 0x0B;
+
+  if (nim_aic3104_compute_volume != nullptr) {
+    nim_aic3104_compute_volume(this->volume_, this->is_muted_, &dac_val, &hp_level, &lop_level);
+  } else {
+    dac_val = this->is_muted_ ? 0x80 : (uint8_t)clamp<float>((1.0f - this->volume_) * 0x80, 0.0f, 128.0f);
+    hp_level = this->is_muted_ ? 0x08 : 0x0D;
+    lop_level = this->is_muted_ ? 0x08 : 0x0B;
+  }
+
+  ESP_LOGD(TAG, "Writing AIC3104 volume registers: DAC=0x%02X, HP=0x%02X, LOP=0x%02X", dac_val, hp_level, lop_level);
+
+  bool ok = this->write_byte(AIC3104_LEFT_DAC_VOLUME, dac_val) &&
+            this->write_byte(AIC3104_RIGHT_DAC_VOLUME, dac_val) &&
+            this->write_byte(AIC3104_HPLOUT_LEVEL, hp_level) &&
+            this->write_byte(AIC3104_HPROUT_LEVEL, hp_level) &&
+            this->write_byte(AIC3104_LEFT_LOP_LEVEL, lop_level) &&
+            this->write_byte(AIC3104_RIGHT_LOP_LEVEL, lop_level);
+
+  if (!ok) {
+    ESP_LOGE(TAG, "Writing AIC3104 volume registers failed");
     return false;
   }
-  
-  ESP_LOGD(TAG, "Volume %.1f%% -> DAC: 0x%.2x (%.1fdB attenuation) - SUCCESS", 
-           this->volume_ * 100.0f, dac_val, -(float)dac_val);
-  
+
   return true;
 }
 

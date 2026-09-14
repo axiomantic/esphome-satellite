@@ -18,7 +18,7 @@ namespace esphome {
 
 static const char *const PCM_PLAYER_TAG = "pcm_sound_player";
 extern "C" {
-size_t nim_pcm_parse_caud_count(const uint8_t *data, uint32_t part_size) __attribute__((weak));
+size_t nim_pcm_parse_caud_count(const uint8_t *data, uint32_t part_size);
 bool nim_pcm_get_caud_entry(
     const uint8_t *data,
     uint32_t part_size,
@@ -27,7 +27,7 @@ bool nim_pcm_get_caud_entry(
     size_t max_name_len,
     uint32_t *out_offset,
     uint32_t *out_size
-) __attribute__((weak));
+);
 }
 
 struct CustomSoundItem {
@@ -374,6 +374,7 @@ class PcmSoundPlayer {
 
   void stop() {
     if (!this->is_playing_ && this->task_handle_ == nullptr) return;
+    bool was_cancel = this->is_playing_cancel_;
     this->is_playing_ = false;
     this->is_playing_cancel_ = false;
     this->is_loop_ = false;
@@ -384,6 +385,12 @@ class PcmSoundPlayer {
     ESP_LOGD(PCM_PLAYER_TAG, "Audio stopped");
     if (this->on_finished_) {
       this->on_finished_();
+    }
+    if (was_cancel) {
+      if (this->on_cancel_finished_) {
+        this->on_cancel_finished_();
+      }
+      call_nim_cancel_done(true);
     }
   }
 

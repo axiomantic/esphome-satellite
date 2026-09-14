@@ -17,6 +17,79 @@ const
   XVF3800_I2C_ADDR* = 0x2C'u8
   AIC3104_I2C_ADDR* = 0x18'u8
 
+  AIC3104_PAGE_CTRL* = 0x00'u8
+  AIC3104_CODEC_DATAPATH* = 0x07'u8
+  AIC3104_DAC_POWER* = 0x25'u8
+  AIC3104_DAC_OUT_SWITCH* = 0x29'u8
+  AIC3104_LEFT_DAC_VOL* = 0x2B'u8
+  AIC3104_RIGHT_DAC_VOL* = 0x2C'u8
+  AIC3104_DAC_L1_HPLOUT* = 0x2F'u8
+  AIC3104_HPLOUT_LEVEL* = 0x33'u8
+  AIC3104_DAC_R1_HPROUT* = 0x40'u8
+  AIC3104_HPROUT_LEVEL* = 0x41'u8
+  AIC3104_DAC_L1_LEFT_LOP* = 0x52'u8
+  AIC3104_LEFT_LOP_LEVEL* = 0x56'u8
+  AIC3104_DAC_R1_RIGHT_LOP* = 0x59'u8
+  AIC3104_RIGHT_LOP_LEVEL* = 0x5D'u8
+
+  XMOS_APP_SERVICER_RESID* = 48'u8
+  XMOS_CMD_AIC3104_HP_LEVEL* = 11'u8
+  XMOS_CMD_AIC3104_LINEOUT_LEVEL* = 12'u8
+
+type
+  Aic3104Register* = object
+    reg*: uint8
+    val*: uint8
+
+  Aic3104VolumeConfig* = object
+    dacVal*: uint8
+    hpLevel*: uint8
+    lopLevel*: uint8
+
+proc makeAic3104InitRegisters*(): seq[Aic3104Register] =
+  @[
+    Aic3104Register(reg: AIC3104_PAGE_CTRL, val: 0x00'u8),
+    Aic3104Register(reg: AIC3104_CODEC_DATAPATH, val: 0x0A'u8),
+    Aic3104Register(reg: AIC3104_DAC_POWER, val: 0xC0'u8),
+    Aic3104Register(reg: AIC3104_DAC_OUT_SWITCH, val: 0x00'u8),
+    Aic3104Register(reg: AIC3104_LEFT_DAC_VOL, val: 0x00'u8),
+    Aic3104Register(reg: AIC3104_RIGHT_DAC_VOL, val: 0x00'u8),
+    Aic3104Register(reg: AIC3104_DAC_L1_HPLOUT, val: 0x80'u8),
+    Aic3104Register(reg: AIC3104_HPLOUT_LEVEL, val: 0x0D'u8),
+    Aic3104Register(reg: AIC3104_DAC_R1_HPROUT, val: 0x80'u8),
+    Aic3104Register(reg: AIC3104_HPROUT_LEVEL, val: 0x0D'u8),
+    Aic3104Register(reg: AIC3104_DAC_L1_LEFT_LOP, val: 0x80'u8),
+    Aic3104Register(reg: AIC3104_LEFT_LOP_LEVEL, val: 0x0B'u8),
+    Aic3104Register(reg: AIC3104_DAC_R1_RIGHT_LOP, val: 0x80'u8),
+    Aic3104Register(reg: AIC3104_RIGHT_LOP_LEVEL, val: 0x0B'u8),
+  ]
+
+proc computeAic3104Volume*(volumeIn: float32, muted: bool): Aic3104VolumeConfig =
+  if muted or volumeIn <= 0.001'f32:
+    return Aic3104VolumeConfig(dacVal: 0x80'u8, hpLevel: 0x08'u8, lopLevel: 0x08'u8)
+
+  let vol = clamp(volumeIn, 0.0'f32, 1.0'f32)
+  if vol <= 0.8'f32:
+    let norm = vol / 0.8'f32
+    let dacAtten = uint8(clamp(round((1.0'f32 - norm) * 72.0'f32), 0.0'f32, 127.0'f32))
+    return Aic3104VolumeConfig(
+      dacVal: dacAtten,
+      hpLevel: 0x0D'u8,
+      lopLevel: 0x0B'u8
+    )
+  else:
+    let boostNorm = (vol - 0.8'f32) / 0.2'f32
+    let gain = uint8(clamp(round(boostNorm * 9.0'f32), 0.0'f32, 9.0'f32))
+    return Aic3104VolumeConfig(
+      dacVal: 0x00'u8,
+      hpLevel: (gain shl 4) or 0x0D'u8,
+      lopLevel: (gain shl 4) or 0x0B'u8
+    )
+
+proc makeXmosAic3104LevelPayload*(cmd: uint8, level: uint8): array[4, uint8] {.inline.} =
+  let lvl = clamp(level, 0'u8, 9'u8)
+  [XMOS_APP_SERVICER_RESID, cmd, 1'u8, lvl]
+
 proc makeGpoPayload*(pin: uint8, val: uint8): array[5, uint8] {.inline.} =
   [GPO_SERVICER_RESID, GPO_CMD_WRITE_VALUE, 2'u8, pin, val]
 
@@ -162,3 +235,34 @@ proc nim_xvf3800_get_reboot_payload*(outBuf: ptr UncheckedArray[uint8]): csize_t
   if outBuf != nil:
     copyMem(addr outBuf[0], unsafeAddr XVF3800_REBOOT_PAYLOAD[0], 4)
   return 4
+
+proc nim_aic3104_get_init_count*(): csize_t {.exportc, cdecl.} =
+  let r = makeAic3104InitRegisters()
+  return csize_t(r.len)
+
+proc nim_aic3104_get_init_registers*(outRegs: ptr UncheckedArray[uint8], outVals: ptr UncheckedArray[uint8]): csize_t {.exportc, cdecl.} =
+  let r = makeAic3104InitRegisters()
+  if outRegs != nil and outVals != nil:
+    for i in 0 ..< r.len:
+      outRegs[i] = r[i].reg
+      outVals[i] = r[i].val
+  return csize_t(r.len)
+
+proc nim_aic3104_compute_volume*(
+    vol: cfloat,
+    muted: bool,
+    outDacVal: ptr uint8,
+    outHpLevel: ptr uint8,
+    outLopLevel: ptr uint8
+) {.exportc, cdecl.} =
+  let cfg = computeAic3104Volume(float32(vol), muted)
+  if outDacVal != nil: outDacVal[] = cfg.dacVal
+  if outHpLevel != nil: outHpLevel[] = cfg.hpLevel
+  if outLopLevel != nil: outLopLevel[] = cfg.lopLevel
+
+proc nim_xmos_make_level_payload*(cmd: uint8, level: uint8, outBuf: ptr UncheckedArray[uint8]): csize_t {.exportc, cdecl.} =
+  if outBuf != nil:
+    let p = makeXmosAic3104LevelPayload(cmd, level)
+    copyMem(addr outBuf[0], unsafeAddr p[0], 4)
+  return 4
+

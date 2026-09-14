@@ -46,9 +46,9 @@ bool nim_wake_loader_validate_header(
     size_t *out_arena,
     char *out_name,
     size_t max_name_len
-) __attribute__((weak));
+);
 
-uint8_t nim_wake_loader_scale_cutoff(uint8_t base_cutoff, const char *level) __attribute__((weak));
+uint8_t nim_wake_loader_scale_cutoff(uint8_t base_cutoff, const char *level);
 
 bool nim_wake_installer_pack_header(
     uint8_t *out_buf,
@@ -58,16 +58,16 @@ bool nim_wake_installer_pack_header(
     uint8_t cutoff,
     uint8_t window,
     uint16_t arena_kb
-) __attribute__((weak));
+);
 
-bool nim_wake_installer_validate_tflite(const uint8_t *data, size_t len) __attribute__((weak));
+bool nim_wake_installer_validate_tflite(const uint8_t *data, size_t len);
 
-bool nim_wake_installer_get_partition_name(int slot, char *out_buf, size_t max_len) __attribute__((weak));
+bool nim_wake_installer_get_partition_name(int slot, char *out_buf, size_t max_len);
 
-bool nim_satellite_flash_firmware_ota(const char *url) __attribute__((weak));
-void nim_satellite_suspend_inference(void) __attribute__((weak));
-void nim_satellite_resume_inference(void) __attribute__((weak));
-void nim_satellite_restart(void) __attribute__((weak));
+bool nim_satellite_flash_firmware_ota(const char *url);
+void nim_satellite_suspend_inference(void);
+void nim_satellite_resume_inference(void);
+void nim_satellite_restart(void);
 }
 
 struct CustomWakeSlot {
@@ -411,10 +411,7 @@ class WakePartitionLoader {
   void set_mic_pre_gain(float db) {
     ESP_LOGI(TAG, "Setting microphone pre-gain boost to %.1f dB", db);
     this->mic_pre_gain_db_ = db;
-    extern void nim_audio_dsp_set_mic_pre_gain(float db) __attribute__((weak));
-    if (nim_audio_dsp_set_mic_pre_gain != nullptr) {
-      nim_audio_dsp_set_mic_pre_gain(db);
-    }
+    call_nim_audio_dsp_set_mic_pre_gain(db);
   }
 
   // Backward compatibility helpers
@@ -630,11 +627,7 @@ class WakePartitionLoader {
       return false;
     }
     char part_name[16] = {0};
-    if (nim_wake_installer_get_partition_name != nullptr) {
-      nim_wake_installer_get_partition_name(slot, part_name, sizeof(part_name));
-    } else {
-      snprintf(part_name, sizeof(part_name), slot == 1 ? "wake_model" : (slot == 2 ? "wake_model_2" : "wake_model_3"));
-    }
+    nim_wake_installer_get_partition_name(slot, part_name, sizeof(part_name));
 
     const esp_partition_t *part = esp_partition_find_first(
         ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
@@ -682,10 +675,7 @@ class WakePartitionLoader {
     if (this->mww_ != nullptr) {
       this->mww_->stop();
     }
-    if (nim_satellite_flash_firmware_ota != nullptr) {
-      return nim_satellite_flash_firmware_ota(url.c_str());
-    }
-    return false;
+    return nim_satellite_flash_firmware_ota(url.c_str());
   }
 
   micro_wake_word::MicroWakeWord *get_mww() { return this->mww_; }
@@ -696,15 +686,11 @@ class WakePartitionLoader {
     if (this->mww_ != nullptr) {
       this->mww_->stop();
     }
-    if (nim_satellite_suspend_inference != nullptr) {
-      nim_satellite_suspend_inference();
-    }
+    nim_satellite_suspend_inference();
   }
 
   void resume_inference_after_flash() {
-    if (nim_satellite_resume_inference != nullptr) {
-      nim_satellite_resume_inference();
-    }
+    nim_satellite_resume_inference();
   }
 
  protected:
@@ -731,17 +717,14 @@ class SatelliteOtaGlobalListener : public ota::OTAGlobalStateListener {
   void on_ota_global_state(ota::OTAState state, float progress, uint8_t error, ota::OTAComponent *component) override {
     if (state == ota::OTA_STARTED) {
       ESP_LOGI("satellite_ota", "Global OTA started, stopping inference and setting updating typestate");
-      extern void nim_satellite_ota_start() __attribute__((weak));
-      if (nim_satellite_ota_start != nullptr) nim_satellite_ota_start();
+      call_nim_ota_start();
       get_wake_partition_loader().suspend_inference_for_flash();
     } else if (state == ota::OTA_COMPLETED) {
       ESP_LOGI("satellite_ota", "Global OTA completed successfully");
-      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(true);
+      call_nim_ota_end(true);
     } else if (state == ota::OTA_ERROR || state == ota::OTA_ABORT) {
       ESP_LOGW("satellite_ota", "Global OTA finished with error or abort (error %u), resuming inference", error);
-      extern void nim_satellite_ota_end(bool ok) __attribute__((weak));
-      if (nim_satellite_ota_end != nullptr) nim_satellite_ota_end(false);
+      call_nim_ota_end(false);
       get_wake_partition_loader().resume_inference_after_flash();
     }
   }

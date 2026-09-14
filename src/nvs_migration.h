@@ -20,10 +20,10 @@ static const uint32_t HASH_LEGACY_WAKE_CHIME_SWITCH = 3930144138UL;       // "Au
 static const uint32_t HASH_LEGACY_CANCEL_SOUND_SWITCH = 483196759UL;       // "Audio: Cancel Sound Enabled"
 
 extern "C" {
-const char *nim_nvs_get_legacy_sensitivity(size_t idx) __attribute__((weak));
-const char *nim_nvs_get_legacy_chime(size_t idx) __attribute__((weak));
-const char *nim_nvs_get_legacy_proc(size_t idx) __attribute__((weak));
-const char *nim_nvs_get_legacy_cancel(size_t idx) __attribute__((weak));
+const char *nim_nvs_get_legacy_sensitivity(size_t idx);
+const char *nim_nvs_get_legacy_chime(size_t idx);
+const char *nim_nvs_get_legacy_proc(size_t idx);
+const char *nim_nvs_get_legacy_cancel(size_t idx);
 }
 
 inline void migrate_legacy_nvs_preferences(
@@ -63,7 +63,7 @@ inline void migrate_legacy_nvs_preferences(
     auto leg_pref = global_preferences->make_preference<size_t>(HASH_LEGACY_CANCEL_SOUND);
     size_t leg_idx = 0;
     if (leg_pref.load(&leg_idx)) {
-      const char *opt = nim_nvs_get_legacy_cancel ? nim_nvs_get_legacy_cancel(leg_idx) : nullptr;
+      const char *opt = nim_nvs_get_legacy_cancel(leg_idx);
       if (opt != nullptr) {
         ESP_LOGI(NVS_MIG_TAG, "Migrating legacy Cancel Sound: '%s' (idx %zu)", opt, leg_idx);
         slot1_cancel->make_call().set_option(opt).perform();
@@ -77,7 +77,7 @@ inline void migrate_legacy_nvs_preferences(
     auto leg_pref = global_preferences->make_preference<size_t>(HASH_LEGACY_WAKE_CHIME);
     size_t leg_idx = 0;
     if (leg_pref.load(&leg_idx)) {
-      const char *opt = nim_nvs_get_legacy_chime ? nim_nvs_get_legacy_chime(leg_idx) : nullptr;
+      const char *opt = nim_nvs_get_legacy_chime(leg_idx);
       if (opt != nullptr) {
         ESP_LOGI(NVS_MIG_TAG, "Migrating legacy Wake Chime: '%s' (idx %zu)", opt, leg_idx);
         slot1_chime->make_call().set_option(opt).perform();
@@ -91,7 +91,7 @@ inline void migrate_legacy_nvs_preferences(
     auto leg_pref = global_preferences->make_preference<size_t>(HASH_LEGACY_PROCESSING_SOUND);
     size_t leg_idx = 0;
     if (leg_pref.load(&leg_idx)) {
-      const char *opt = nim_nvs_get_legacy_proc ? nim_nvs_get_legacy_proc(leg_idx) : nullptr;
+      const char *opt = nim_nvs_get_legacy_proc(leg_idx);
       if (opt != nullptr) {
         ESP_LOGI(NVS_MIG_TAG, "Migrating legacy Processing Sound: '%s' (idx %zu)", opt, leg_idx);
         slot1_proc->make_call().set_option(opt).perform();
@@ -105,7 +105,7 @@ inline void migrate_legacy_nvs_preferences(
     auto leg_pref = global_preferences->make_preference<size_t>(HASH_LEGACY_SENSITIVITY);
     size_t leg_idx = 0;
     if (leg_pref.load(&leg_idx)) {
-      const char *opt = nim_nvs_get_legacy_sensitivity ? nim_nvs_get_legacy_sensitivity(leg_idx) : nullptr;
+      const char *opt = nim_nvs_get_legacy_sensitivity(leg_idx);
       if (opt != nullptr) {
         ESP_LOGI(NVS_MIG_TAG, "Migrating legacy Wake Word Sensitivity: '%s' (idx %zu)", opt, leg_idx);
         slot1_sens->make_call().set_option(opt).perform();

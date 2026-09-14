@@ -10,6 +10,8 @@
 
 #include "esphome/components/audio/audio.h"
 
+extern "C" void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count);
+
 namespace esphome::i2s_audio {
 
 static const UBaseType_t MAX_LISTENERS = 16;
@@ -266,8 +268,7 @@ void I2SAudioMicrophone::mic_task(void *params) {
             );
         }
 
-        extern void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) __attribute__((weak));
-        if (nim_audio_dsp_apply_mic_pre_gain32 != nullptr && !each_third_sample.empty()) {
+        if (!each_third_sample.empty()) {
           nim_audio_dsp_apply_mic_pre_gain32(
               reinterpret_cast<int32_t *>(each_third_sample.data()),
               each_third_sample.size() / sizeof(int32_t));

@@ -6,139 +6,140 @@ extern "C" {
 #endif
 
 // Core Voice Assistant Functions
-void nim_satellite_wake_word(const char *word, int angle) __attribute__((weak));
-void nim_satellite_chime_done(bool ok) __attribute__((weak));
-void nim_satellite_cancel_done(bool ok) __attribute__((weak));
-void nim_satellite_speech_ended(void) __attribute__((weak));
-void nim_satellite_silence_timeout(void) __attribute__((weak));
-void nim_satellite_tts_start(void) __attribute__((weak));
-void nim_satellite_tts_end(void) __attribute__((weak));
-void nim_satellite_stop_word(void) __attribute__((weak));
-void nim_satellite_error(const char *code) __attribute__((weak));
-void nim_satellite_disconnected(void) __attribute__((weak));
-void nim_satellite_connected(void) __attribute__((weak));
-bool nim_satellite_is_cancellation(const char *text, const char *config) __attribute__((weak));
-bool nim_satellite_is_reset_phrase(const char *text) __attribute__((weak));
-int nim_satellite_get_state(void) __attribute__((weak));
-bool nim_satellite_is_cancelling(void) __attribute__((weak));
+void nim_satellite_wake_word(const char *word, int angle);
+void nim_satellite_chime_done(bool ok);
+void nim_satellite_cancel_done(bool ok);
+void nim_satellite_speech_ended(void);
+void nim_satellite_silence_timeout(void);
+void nim_satellite_tts_start(void);
+void nim_satellite_tts_end(void);
+void nim_satellite_stop_word(void);
+void nim_satellite_error(const char *code);
+void nim_satellite_disconnected(void);
+void nim_satellite_connected(void);
+bool nim_satellite_is_cancellation(const char *text, const char *config);
+bool nim_satellite_is_reset_phrase(const char *text);
+int nim_satellite_get_state(void);
+bool nim_satellite_is_cancelling(void);
 
 // Extended State Functions
-void nim_satellite_set_muted(bool muted) __attribute__((weak));
-void nim_satellite_follow_up(void) __attribute__((weak));
-void nim_satellite_media_play(void) __attribute__((weak));
-void nim_satellite_media_stop(void) __attribute__((weak));
-void nim_satellite_alert_start(void) __attribute__((weak));
-void nim_satellite_alert_stop(void) __attribute__((weak));
-void nim_satellite_announcement_start(void) __attribute__((weak));
-void nim_satellite_announcement_end(void) __attribute__((weak));
-void nim_satellite_ota_start(void) __attribute__((weak));
-void nim_satellite_ota_end(bool ok) __attribute__((weak));
-bool nim_satellite_is_muted(void) __attribute__((weak));
-bool nim_satellite_is_media_playing(void) __attribute__((weak));
-bool nim_satellite_is_alerting(void) __attribute__((weak));
+void nim_satellite_set_muted(bool muted);
+void nim_satellite_follow_up(void);
+void nim_satellite_media_play(void);
+void nim_satellite_media_stop(void);
+void nim_satellite_alert_start(void);
+void nim_satellite_alert_stop(void);
+void nim_satellite_announcement_start(void);
+void nim_satellite_announcement_end(void);
+void nim_satellite_ota_start(void);
+void nim_satellite_ota_end(bool ok);
+void nim_satellite_restart(void);
+bool nim_satellite_is_muted(void);
+bool nim_satellite_is_media_playing(void);
+bool nim_satellite_is_alerting(void);
 
 // Real-Time Audio DSP Hooks
-void nim_audio_dsp_process(int16_t *samples, int count) __attribute__((weak));
-void nim_audio_dsp_process32(int32_t *samples, int count) __attribute__((weak));
-void nim_audio_dsp_set_mic_pre_gain(float db) __attribute__((weak));
-void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) __attribute__((weak));
+void nim_audio_dsp_process(int16_t *samples, int count);
+void nim_audio_dsp_process32(int32_t *samples, int count);
+void nim_audio_dsp_set_mic_pre_gain(float db);
+void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count);
 
 // Hardware & Animation Nim Hooks
-void nim_xvf3800_make_gpo_payload(uint8_t pin, uint8_t val, uint8_t *outBuf) __attribute__((weak));
-void nim_xvf3800_update_animation(const char *stateName, const char *patternPref, float brightness, uint32_t nowMs, uint32_t *outColors) __attribute__((weak));
+void nim_xvf3800_make_gpo_payload(uint8_t pin, uint8_t val, uint8_t *outBuf);
+void nim_xvf3800_update_animation(const char *stateName, const char *patternPref, float brightness, uint32_t nowMs, uint32_t *outColors);
 
 // Partition Loader Nim Hooks
-bool nim_wake_loader_validate_header(const uint8_t *data, uint32_t partSize, int slotIndex, uint32_t *outModelSize, uint8_t *outCutoff, size_t *outWindow, size_t *outArena, char *outName, size_t maxNameLen) __attribute__((weak));
+bool nim_wake_loader_validate_header(const uint8_t *data, uint32_t partSize, int slotIndex, uint32_t *outModelSize, uint8_t *outCutoff, size_t *outWindow, size_t *outArena, char *outName, size_t maxNameLen);
 
 // PCM Player Nim Hooks
-bool nim_pcm_parse_wav(const uint8_t *data, size_t len, uint32_t *outSampleRate, uint16_t *outChannels, uint16_t *outBits, size_t *outPcmOffset, size_t *outPcmLen) __attribute__((weak));
-size_t nim_pcm_decode_adpcm_chunk(const uint8_t *adpcmData, size_t adpcmLen, int16_t *outSamples, float volume, int16_t *valprev, int8_t *index) __attribute__((weak));
+bool nim_pcm_parse_wav(const uint8_t *data, size_t len, uint32_t *outSampleRate, uint16_t *outChannels, uint16_t *outBits, size_t *outPcmOffset, size_t *outPcmLen);
+size_t nim_pcm_decode_adpcm_chunk(const uint8_t *adpcmData, size_t adpcmLen, int16_t *outSamples, float volume, int16_t *valprev, int8_t *index);
 
 inline void call_nim_audio_dsp_process(int16_t *samples, int count) {
-  if (nim_audio_dsp_process) nim_audio_dsp_process(samples, count);
+  nim_audio_dsp_process(samples, count);
 }
 inline void call_nim_audio_dsp_process32(int32_t *samples, int count) {
-  if (nim_audio_dsp_process32) nim_audio_dsp_process32(samples, count);
+  nim_audio_dsp_process32(samples, count);
 }
 inline void call_nim_audio_dsp_set_mic_pre_gain(float db) {
-  if (nim_audio_dsp_set_mic_pre_gain) nim_audio_dsp_set_mic_pre_gain(db);
+  nim_audio_dsp_set_mic_pre_gain(db);
 }
 inline void call_nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) {
-  if (nim_audio_dsp_apply_mic_pre_gain32) nim_audio_dsp_apply_mic_pre_gain32(samples, count);
+  nim_audio_dsp_apply_mic_pre_gain32(samples, count);
 }
 
 // Safe C++ inlined callers
 inline void call_nim_wake_word(const char *word, int angle) {
-  if (nim_satellite_wake_word) nim_satellite_wake_word(word, angle);
+  nim_satellite_wake_word(word, angle);
 }
 inline void call_nim_chime_done(bool ok) {
-  if (nim_satellite_chime_done) nim_satellite_chime_done(ok);
+  nim_satellite_chime_done(ok);
 }
 inline void call_nim_cancel_done(bool ok) {
-  if (nim_satellite_cancel_done) nim_satellite_cancel_done(ok);
+  nim_satellite_cancel_done(ok);
 }
 inline bool call_nim_is_cancelling(void) {
-  if (nim_satellite_is_cancelling) return nim_satellite_is_cancelling();
-  return false;
+  return nim_satellite_is_cancelling();
 }
 inline void call_nim_speech_ended(void) {
-  if (nim_satellite_speech_ended) nim_satellite_speech_ended();
+  nim_satellite_speech_ended();
 }
 inline void call_nim_tts_start(void) {
-  if (nim_satellite_tts_start) nim_satellite_tts_start();
+  nim_satellite_tts_start();
 }
 inline void call_nim_tts_end(void) {
-  if (nim_satellite_tts_end) nim_satellite_tts_end();
+  nim_satellite_tts_end();
 }
 inline void call_nim_stop_word(void) {
-  if (nim_satellite_stop_word) nim_satellite_stop_word();
+  nim_satellite_stop_word();
 }
 inline void call_nim_error(const char *code) {
-  if (nim_satellite_error) nim_satellite_error(code);
+  nim_satellite_error(code);
 }
 inline void call_nim_connected(void) {
-  if (nim_satellite_connected) nim_satellite_connected();
+  nim_satellite_connected();
 }
 inline void call_nim_disconnected(void) {
-  if (nim_satellite_disconnected) nim_satellite_disconnected();
+  nim_satellite_disconnected();
 }
 inline bool call_nim_is_cancellation(const char *text, const char *config = nullptr) {
-  if (nim_satellite_is_cancellation) return nim_satellite_is_cancellation(text, config);
-  return false;
+  return nim_satellite_is_cancellation(text, config);
 }
 inline bool call_nim_is_reset_phrase(const char *text) {
-  if (nim_satellite_is_reset_phrase) return nim_satellite_is_reset_phrase(text);
-  return false;
+  return nim_satellite_is_reset_phrase(text);
 }
 inline void call_nim_set_muted(bool muted) {
-  if (nim_satellite_set_muted) nim_satellite_set_muted(muted);
+  nim_satellite_set_muted(muted);
 }
 inline void call_nim_follow_up(void) {
-  if (nim_satellite_follow_up) nim_satellite_follow_up();
+  nim_satellite_follow_up();
 }
 inline void call_nim_media_play(void) {
-  if (nim_satellite_media_play) nim_satellite_media_play();
+  nim_satellite_media_play();
 }
 inline void call_nim_media_stop(void) {
-  if (nim_satellite_media_stop) nim_satellite_media_stop();
+  nim_satellite_media_stop();
 }
 inline void call_nim_alert_start(void) {
-  if (nim_satellite_alert_start) nim_satellite_alert_start();
+  nim_satellite_alert_start();
 }
 inline void call_nim_alert_stop(void) {
-  if (nim_satellite_alert_stop) nim_satellite_alert_stop();
+  nim_satellite_alert_stop();
 }
 inline void call_nim_announcement_start(void) {
-  if (nim_satellite_announcement_start) nim_satellite_announcement_start();
+  nim_satellite_announcement_start();
 }
 inline void call_nim_announcement_end(void) {
-  if (nim_satellite_announcement_end) nim_satellite_announcement_end();
+  nim_satellite_announcement_end();
 }
 inline void call_nim_ota_start(void) {
-  if (nim_satellite_ota_start) nim_satellite_ota_start();
+  nim_satellite_ota_start();
 }
 inline void call_nim_ota_end(bool ok) {
-  if (nim_satellite_ota_end) nim_satellite_ota_end(ok);
+  nim_satellite_ota_end(ok);
+}
+inline void call_nim_restart(void) {
+  nim_satellite_restart();
 }
 inline void call_nim_sync_preferences(void) {
   if (global_preferences != nullptr) {
@@ -147,34 +148,34 @@ inline void call_nim_sync_preferences(void) {
 }
 
 // Home Assistant Actions Bridge
-void nim_action_test_audio(const char *style, float volume) __attribute__((weak));
-void nim_action_set_mute(bool muted) __attribute__((weak));
-void nim_action_set_processing_sound(const char *sound) __attribute__((weak));
-void nim_action_set_processing_volume(float volume) __attribute__((weak));
-void nim_action_set_chime_sound(const char *sound) __attribute__((weak));
-void nim_action_set_chime_volume(float volume) __attribute__((weak));
+void nim_action_test_audio(const char *style, float volume);
+void nim_action_set_mute(bool muted);
+void nim_action_set_processing_sound(const char *sound);
+void nim_action_set_processing_volume(float volume);
+void nim_action_set_chime_sound(const char *sound);
+void nim_action_set_chime_volume(float volume);
 
 inline void call_nim_action_test_audio(const char *style, float volume) {
-  if (nim_action_test_audio) nim_action_test_audio(style, volume);
+  nim_action_test_audio(style, volume);
 }
 inline void call_nim_action_set_mute(bool muted) {
-  if (nim_action_set_mute) nim_action_set_mute(muted);
+  nim_action_set_mute(muted);
 }
 inline void call_nim_action_set_processing_sound(const char *sound) {
-  if (nim_action_set_processing_sound) nim_action_set_processing_sound(sound);
+  nim_action_set_processing_sound(sound);
 }
 inline void call_nim_action_set_processing_volume(float volume) {
-  if (nim_action_set_processing_volume) nim_action_set_processing_volume(volume);
+  nim_action_set_processing_volume(volume);
 }
 inline void call_nim_action_set_chime_sound(const char *sound) {
-  if (nim_action_set_chime_sound) nim_action_set_chime_sound(sound);
+  nim_action_set_chime_sound(sound);
 }
 inline void call_nim_action_set_chime_volume(float volume) {
-  if (nim_action_set_chime_volume) nim_action_set_chime_volume(volume);
+  nim_action_set_chime_volume(volume);
 }
 
 inline const char* get_satellite_state_name() {
-  int s = nim_satellite_get_state ? nim_satellite_get_state() : 0;
+  int s = nim_satellite_get_state();
   switch (s) {
     case 0: return "Idle";
     case 1: return "Woken";
@@ -204,12 +205,24 @@ inline const char* get_satellite_state_name() {
 namespace esphome {
 namespace voice_assistant {
 
-class VoiceAssistantAccessor : public VoiceAssistant {
+template<typename Tag, typename Tag::type M>
+struct MemberRobber {
+  friend typename Tag::type get_member(Tag) {
+    return M;
+  }
+};
+
+struct VoiceAssistantContinueConversationTag {
+  typedef bool VoiceAssistant::*type;
+  friend type get_member(VoiceAssistantContinueConversationTag);
+};
+template struct MemberRobber<VoiceAssistantContinueConversationTag, &VoiceAssistant::continue_conversation_>;
+
+class VoiceAssistantAccessor {
  public:
   static bool is_continuing(const VoiceAssistant *va) {
     if (!va) return false;
-    const auto *acc = static_cast<const VoiceAssistantAccessor*>(va);
-    return acc->continue_conversation_ || acc->continuous_;
+    return (va->*get_member(VoiceAssistantContinueConversationTag{})) || va->is_continuous();
   }
 };
 
