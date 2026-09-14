@@ -192,3 +192,56 @@ suite "Runtime C ABI Wrapper Suite":
 
     nim_dma_stream_abort()
     check nim_dma_stream_is_active() == false
+
+suite "DMA Audio Stream - 32-bit Timer Rollover (TDD)":
+  setup:
+    nim_dma_stream_reset()
+
+  test "diffMs calculates elapsed time across 0xFFFFFFFF boundary":
+    # Normal case: now >= since
+    check diffMs(1500'u32, 1000'u32) == 500'u32
+    check diffMs(1000'u32, 1000'u32) == 0'u32
+
+    # Rollover case: since is near 0xFFFFFFFF, now is past 0
+    let nearMax = 0xFFFFFFF0'u32
+    let afterZero = 1000'u32
+    # Elapsed should be 16 + 1000 = 1016ms
+    check diffMs(afterZero, nearMax) == 1016'u32
+
+    # Immediate wraparound
+    check diffMs(0'u32, 0xFFFFFFFF'u32) == 1'u32
+
+  test "Stream tracking and feeding across 0xFFFFFFFF boundary":
+    let startTimestamp = 0xFFFFFFF0'u32
+    let idle = initDmaStreamIdle()
+    var playing = startStream(idle, dskTts, 60000'u32, 2000'u32, false, startTimestamp)
+
+    # 500ms later, time has wrapped around to 484 (0xFFFFFFF0 + 500 = 484)
+    let time1 = 484'u32
+    feedBytes(playing, 512, time1)
+    check playing.elapsedMs == 500'u32
+    check playing.lastChunkMs == 484'u32
+    check playing.bytesWritten == 512'u64
+
+    # Tick at 1000ms elapsed (time = 984'u32)
+    let res1 = tickStream(playing, 984'u32)
+    check res1.active == true
+    check res1.timedOut == false
+    check playing.elapsedMs == 1000'u32
+
+  test "C ABI functions handle timer rollover correctly":
+    let startTimestamp = 0xFFFFFFF0'u32
+    check nim_dma_stream_start_at(cint(ord(dskChime)), 5000'u32, 2000'u32, false, startTimestamp) == true
+    check nim_dma_stream_is_active() == true
+
+    # Check elapsed time across boundary
+    check nim_dma_stream_get_elapsed_ms(1000'u32) == 1016'u32
+
+    # Feed across boundary
+    nim_dma_stream_feed_at(256'u, 1000'u32)
+    check nim_dma_stream_tick(1500'u32) == 1'i32 # active (500ms since feed, 1516ms elapsed)
+
+    # Tick after lease timeout (5000ms lease expires at start + 5000 = 4984)
+    check nim_dma_stream_tick(5000'u32) == 2'i32 # timed out
+    check nim_dma_stream_is_active() == false
+

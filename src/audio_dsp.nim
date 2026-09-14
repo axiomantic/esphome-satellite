@@ -114,11 +114,15 @@ proc nim_audio_dsp_process*(samples: ptr UncheckedArray[int16], count: int) {.ex
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (16-bit PCM)
   if samples != nil and count > 0:
     globalVoiceCompressor.process(cast[ptr int16](samples), count)
+    when declared(nim_dma_stream_feed):
+      nim_dma_stream_feed(csize_t(count * sizeof(int16)))
 
 proc nim_audio_dsp_process32*(samples: ptr UncheckedArray[int32], count: int) {.exportc: "nim_audio_dsp_process32", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (32-bit PCM)
   if samples != nil and count > 0:
     globalVoiceCompressor.process32(cast[ptr int32](samples), count)
+    when declared(nim_dma_stream_feed):
+      nim_dma_stream_feed(csize_t(count * sizeof(int32)))
 
 # Microphone Pre-Gain Boost for High-Recall Female Voice & Low Energy Equalization
 var globalMicPreGainLinear*: float32 = 1.41253754'f32 # Default +3 dB: 10^(3/20)
