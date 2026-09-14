@@ -665,6 +665,51 @@ text_sensor:
       }
       return {};
 
+  - platform: template
+    id: header_slot_1
+    name: "Slot 1: ─── Acoustic Profile ───"
+    icon: "mdi:account-tie"
+    entity_category: config
+    lambda: |-
+      return { "Acoustic Profile" };
+    update_interval: 60s
+
+  - platform: template
+    id: header_slot_2
+    name: "Slot 2: ─── Acoustic Profile ───"
+    icon: "mdi:account-voice"
+    entity_category: config
+    lambda: |-
+      return { "Acoustic Profile" };
+    update_interval: 60s
+
+  - platform: template
+    id: header_hardware_controls
+    name: "Hardware: ─── Device Controls ───"
+    icon: "mdi:tune"
+    entity_category: ""
+    lambda: |-
+      return { "Active" };
+    update_interval: 60s
+
+  - platform: template
+    id: header_voice_pipeline
+    name: "Voice: ─── Pipeline Settings ───"
+    icon: "mdi:microphone-settings"
+    entity_category: ""
+    lambda: |-
+      return { "Active" };
+    update_interval: 60s
+
+  - platform: template
+    id: header_system_maintenance
+    name: "System: ─── Maintenance & Updates ───"
+    icon: "mdi:tools"
+    entity_category: diagnostic
+    lambda: |-
+      return { "System" };
+    update_interval: 60s
+
 select:
   - platform: template
     id: firmware_version_channel
