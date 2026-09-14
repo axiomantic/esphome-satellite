@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - TLV320AIC3104 Headphone and Lineout DAC Routing: Full initialization and volume control of all DAC output stages (HPLOUT, HPROUT, LEFT_LOP, RIGHT_LOP) enabling amplified audio output to the 3.5mm stereo jack and line-out stages.
+- Dedicated Headphone Volume Slider: Added `Hardware: Headphone Volume` entity exposing dedicated analog attenuation with zero-volume mute power-down.
+- DMA Playback Stream Lease Tracker: Bounded lease tracking and inactivity stall protection in Nim with signed delta modular arithmetic (`diffMs`) protecting against multi-core FreeRTOS timer jitter.
+- Visual Section Divider Headers: Embedded text sensor divider headers for Slot 1, Slot 2, Hardware, Voice, and System grouping entities cleanly on the Home Assistant device page.
 - Strong Symbol Linkage Architecture: Converted all Nim C ABI exports from weak to strong references across adapter headers, ensuring Nim state machines, audio DSP, and hardware routines are extracted from the static archive and linked into the final executable.
 - Event-Driven Audio Lifecycle: Added `on_tts_stream_end` handling and tuned speaker timeout from never to 500ms, enabling clean voice assistant completion and immediate wake word re-arming without hanging in response finished state.
 - Remote OTA Update Architecture: Onboard web server and Home Assistant update entity integration enabling one-click OTA flashing from remote GitHub binaries.
@@ -18,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Diagnostic Firmware Sensors: Added System: Firmware Update Available binary sensor and System: Installed Firmware Version and System: Latest Firmware Version text sensors.
 
 ### Changed
+- Home Assistant entity categorization overhauled across Controls, Configuration, and Diagnostic cards, moving all everyday Voice and Hardware controls into Controls.
 - Slot 2 audio previews (wake chime, processing sound, cancel sound) play through the onboard speaker with independent volume controls without requiring Slot 2 to be active.
 - Home Assistant entity categories and friendly names organized with standardized prefixes (Slot 1, Slot 2, Voice, Hardware, System).
 - Reordered boot initialization ensuring custom models, probability cutoffs, and sliding window sizes are configured before microWakeWord start.
