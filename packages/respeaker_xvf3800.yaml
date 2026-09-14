@@ -605,7 +605,7 @@ text:
     id: stop_words_config
     name: "Voice: Cancellation Words"
     icon: "mdi:close-circle-outline"
-    entity_category: config
+    entity_category: ""
     initial_value: "stop, nevermind, never mind, cancel, abort, dismiss, quit, silence, quiet, shut up"
     restore_value: true
     optimistic: true
@@ -717,7 +717,7 @@ select:
     id: slot1_sensitivity
     name: "Slot 1: Sensitivity"
     icon: "mdi:tune"
-    entity_category: diagnostic
+    entity_category: config
     optimistic: true
     initial_option: "Moderately sensitive"
     restore_value: true
@@ -738,7 +738,7 @@ select:
     id: slot2_sensitivity
     name: "Slot 2: Sensitivity"
     icon: "mdi:tune-vertical"
-    entity_category: diagnostic
+    entity_category: config
     optimistic: true
     initial_option: "Moderately sensitive"
     restore_value: true
@@ -983,6 +983,7 @@ select:
     id: led_pattern
     name: "Hardware: LED Idle Pattern"
     icon: "mdi:led-strip-variant"
+    entity_category: ""
     optimistic: true
     initial_option: "Off"
     restore_value: true
@@ -1000,6 +1001,7 @@ number:
     id: slot1_volume
     name: "Slot 1: Volume"
     icon: "mdi:volume-high"
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1017,6 +1019,7 @@ number:
     id: slot2_volume
     name: "Slot 2: Volume"
     icon: "mdi:volume-medium"
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1032,8 +1035,9 @@ number:
 
   - platform: template
     id: headphone_output_volume
-    name: "Headphone Output Volume"
+    name: "Hardware: Headphone Volume"
     icon: "mdi:headphones"
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1049,7 +1053,7 @@ number:
     id: wake_window_size
     name: "Voice: Wake Window Size"
     icon: "mdi:timer-sand"
-    entity_category: diagnostic
+    entity_category: ""
     min_value: 2
     max_value: 5
     step: 1
@@ -1067,7 +1071,7 @@ number:
     id: mic_pre_gain_boost
     name: "Voice: Mic Pre-Gain Boost"
     icon: "mdi:amplifier"
-    entity_category: diagnostic
+    entity_category: ""
     unit_of_measurement: "dB"
     min_value: 0
     max_value: 12
@@ -1121,6 +1125,7 @@ number:
     id: led_brightness
     name: "Hardware: LED Brightness"
     icon: "mdi:brightness-6"
+    entity_category: ""
     min_value: 0.05
     max_value: 1.0
     step: 0.05
@@ -1134,8 +1139,9 @@ number:
 switch:
   - platform: template
     id: mic_mute_switch
-    name: "Privacy Mute"
+    name: "Hardware: Microphone Mute"
     icon: "mdi:microphone-off"
+    entity_category: ""
     optimistic: true
     on_turn_on:
       - lambda: |-
@@ -1287,7 +1293,7 @@ button:
     id: reset_conversation_history_btn
     name: "Voice: Reset Conversation History"
     icon: "mdi:comment-remove-outline"
-    entity_category: config
+    entity_category: ""
     on_press:
       - lambda: |-
           ESP_LOGI("voice_assistant", "Explicit conversation history reset triggered by user button.");
@@ -1373,7 +1379,7 @@ button:
     id: restart_satellite_btn
     name: "System: Restart Satellite"
     icon: "mdi:restart-alert"
-    entity_category: config
+    entity_category: diagnostic
 
 interval:
   - interval: 50ms
