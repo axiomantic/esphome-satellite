@@ -450,6 +450,7 @@ voice_assistant:
   id: va
   microphone: board_mic
   speaker: board_speaker
+  micro_wake_word: mww
   conversation_timeout: 300s
   on_start:
     - lambda: |-
