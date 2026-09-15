@@ -73,12 +73,13 @@ esphome:
             call_nim_audio_dsp_set_speaker_protection(id(speaker_protection_switch).state);
         - lambda: |-
             esphome::wake_loader::get_wake_partition_loader().init(
-                id(mww), id(slot1_wake_word), id(slot2_wake_word));
+                id(mww), id(slot1_wake_word), id(slot2_wake_word), id(cancel_model));
             esphome::wake_loader::get_wake_partition_loader().update_slot_models(
                 esphome::wake_loader::get_wake_partition_loader().get_slot1_model_name(),
                 esphome::wake_loader::get_wake_partition_loader().get_slot2_model_name(),
                 id(clemens_model),
-                id(nabu_model));
+                id(nabu_model),
+                id(cancel_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
                 1, id(slot1_sensitivity).current_option(), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
@@ -88,7 +89,7 @@ esphome:
             esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
                 2, id(slot2_cutoff).state, id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_sliding_window(
-                static_cast<size_t>(id(wake_window_size).state), id(clemens_model), id(nabu_model));
+                static_cast<size_t>(id(wake_window_size).state), id(clemens_model), id(nabu_model), id(cancel_model));
             esphome::wake_loader::get_wake_partition_loader().set_mic_pre_gain(
                 id(mic_pre_gain_boost).state);
         - micro_wake_word.start:
@@ -393,6 +394,8 @@ micro_wake_word:
       id: clemens_model
     - model: okay_nabu
       id: nabu_model
+    - model: ../assets/models/cancel.json
+      id: cancel_model
   on_wake_word_detected:
     - if:
         condition:
@@ -401,50 +404,81 @@ micro_wake_word:
           - lambda: |-
               ESP_LOGD("satellite", "Wake word '%s' ignored because mic is muted.", wake_word.c_str());
         else:
-          - lambda: |-
-              esphome::get_pcm_sound_player().stop();
-              id(board_speaker).stop();
-              int slot = esphome::wake_loader::get_wake_partition_loader().get_slot_for_wake_word(wake_word);
-              id(previous_assistant_slot) = id(active_assistant_slot);
-              id(active_assistant_slot) = slot;
-              if (id(previous_assistant_slot) != slot) {
-                ESP_LOGI("satellite", "Switched from Slot %d to Slot %d. Resetting conversation ID for isolation.",
-                         id(previous_assistant_slot), slot);
-                id(va).reset_conversation_id();
-              }
-              call_nim_wake_word(wake_word.c_str(), 0);
-          - micro_wake_word.stop:
           - if:
               condition:
-                api.connected:
+                lambda: |-
+                  return wake_word == "Cancel" || wake_word == "cancel_keywords";
               then:
+                - lambda: |-
+                    ESP_LOGI("satellite", "Local cancellation wake word detected: '%s'. Executing instant interrupt.", wake_word.c_str());
+                    id(va).request_stop();
+                    esphome::get_pcm_sound_player().stop();
+                    id(board_speaker).stop();
+                    call_nim_stop_word();
+                    bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
+                    bool played_cancel = false;
+                    if (enabled) {
+                      std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound).current_option() : id(slot1_cancel_sound).current_option();
+                      if (opt == "Match Wake Chime") {
+                        opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+                      }
+                      if (opt != "Silent") {
+                        float vol = calculate_effective_sound_volume(id(master_volume).state, id(cancel_sound_volume).state);
+                        esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
+                        played_cancel = true;
+                      }
+                    }
+                    if (!played_cancel) {
+                      float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
+                      id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
+                      call_nim_cancel_done(true);
+                    }
+                - micro_wake_word.start:
+              else:
+                - lambda: |-
+                    esphome::get_pcm_sound_player().stop();
+                    id(board_speaker).stop();
+                    int slot = esphome::wake_loader::get_wake_partition_loader().get_slot_for_wake_word(wake_word);
+                    id(previous_assistant_slot) = id(active_assistant_slot);
+                    id(active_assistant_slot) = slot;
+                    if (id(previous_assistant_slot) != slot) {
+                      ESP_LOGI("satellite", "Switched from Slot %d to Slot %d. Resetting conversation ID for isolation.",
+                               id(previous_assistant_slot), slot);
+                      id(va).reset_conversation_id();
+                    }
+                    call_nim_wake_word(wake_word.c_str(), 0);
+                - micro_wake_word.stop:
                 - if:
                     condition:
-                      lambda: |-
-                        bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime).state : id(slot1_wake_chime).state;
-                        std::string snd = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-                        return enabled && snd != "Silent";
+                      api.connected:
                     then:
-                      - lambda: |-
-                          std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-                          float vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
-                          esphome::get_pcm_sound_player().play_chime(opt, false, vol);
-                      - wait_until:
+                      - if:
                           condition:
                             lambda: |-
-                              return !esphome::get_pcm_sound_player().is_playing();
-                          timeout: 2000ms
-                      - lambda: |-
-                          call_nim_chime_done(true);
+                              bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime).state : id(slot1_wake_chime).state;
+                              std::string snd = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+                              return enabled && snd != "Silent";
+                          then:
+                            - lambda: |-
+                                std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+                                float vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
+                                esphome::get_pcm_sound_player().play_chime(opt, false, vol);
+                            - wait_until:
+                                condition:
+                                  lambda: |-
+                                    return !esphome::get_pcm_sound_player().is_playing();
+                                timeout: 2000ms
+                            - lambda: |-
+                                call_nim_chime_done(true);
+                          else:
+                            - lambda: |-
+                                call_nim_chime_done(true);
+                      - voice_assistant.start:
+                          wake_word: !lambda return wake_word;
                     else:
-                      - lambda: |-
-                          call_nim_chime_done(true);
-                - voice_assistant.start:
-                    wake_word: !lambda return wake_word;
-              else:
-                - script.execute:
-                    id: connect_and_start_assistant
-                    ww: !lambda return wake_word;
+                      - script.execute:
+                          id: connect_and_start_assistant
+                          ww: !lambda return wake_word;
 
 voice_assistant:
   id: va
@@ -1174,7 +1208,7 @@ number:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_sliding_window(
-              static_cast<size_t>(x), id(clemens_model), id(nabu_model));
+              static_cast<size_t>(x), id(clemens_model), id(nabu_model), id(cancel_model));
           global_preferences->sync();
 
   - platform: template

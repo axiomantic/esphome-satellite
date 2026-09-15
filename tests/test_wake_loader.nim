@@ -137,3 +137,19 @@ suite "Wake Partition Loader Suite (TDD)":
     check getSlotPartitionName(0) == ""
     check getSlotPartitionName(4) == ""
     check getSlotPartitionName(-1) == ""
+
+  test "packWakeModelHeader for Cancel wake word in slot 3":
+    let cancelHdr = packWakeModelHeader(
+      name = "Cancel",
+      modelSize = 63840'u32,
+      cutoff = 102'u8,
+      window = 5'u8,
+      arenaKb = 40'u16
+    )
+    let parsed = parseWakeModelHeader(cancelHdr, 262144'u32, slotIndex = 3)
+    check parsed.valid
+    check parsed.wakeWord == "Cancel"
+    check parsed.probabilityCutoff == 102'u8
+    check parsed.slidingWindowSize == 5
+    check parsed.tensorArenaBytes == 40960
+    check getSlotPartitionName(3) == "wake_model_3"

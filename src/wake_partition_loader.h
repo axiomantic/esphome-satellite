@@ -130,13 +130,20 @@ class WakePartitionLoader {
   void init(
       micro_wake_word::MicroWakeWord *mww,
       select::Select *slot1_select = nullptr,
-      select::Select *slot2_select = nullptr
+      select::Select *slot2_select = nullptr,
+      micro_wake_word::WakeWordModel *cancel_model = nullptr
   ) {
     if (mww == nullptr) {
       ESP_LOGE(TAG, "MicroWakeWord pointer is null!");
       return;
     }
     this->mww_ = mww;
+    if (cancel_model != nullptr) {
+      this->cancel_model_ = cancel_model;
+      this->cancel_model_->enable();
+      this->cancel_model_->set_probability_cutoff(102);
+      ESP_LOGI(TAG, "Initialized and enabled dedicated Cancel wake word model");
+    }
     this->attach_ota_listener();
 
     const char *part_names[3] = {"wake_model", "wake_model_2", "wake_model_3"};
@@ -303,8 +310,12 @@ class WakePartitionLoader {
       const std::string &slot1_choice,
       const std::string &slot2_choice,
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu
+      micro_wake_word::WakeWordModel *nabu,
+      micro_wake_word::WakeWordModel *cancel = nullptr
   ) {
+    if (cancel != nullptr) {
+      this->cancel_model_ = cancel;
+    }
     this->slot1_model_name_ = slot1_choice;
     this->slot2_model_name_ = slot2_choice;
     ESP_LOGI(TAG, "Configured Wake Word Slots -> Slot 1: '%s', Slot 2: '%s'",
@@ -338,14 +349,22 @@ class WakePartitionLoader {
       if (should_enable("Okay Nabu")) nabu->enable();
       else nabu->disable();
     }
+    if (this->cancel_model_) {
+      this->cancel_model_->enable();
+    }
     for (auto &s : this->slots_) {
       if (s.model) {
-        if (should_enable(s.name)) s.model->enable();
-        else s.model->disable();
+        if (s.name == "Cancel" || s.name == "cancel_keywords") {
+          s.model->enable();
+        } else if (should_enable(s.name)) {
+          s.model->enable();
+        } else {
+          s.model->disable();
+        }
       }
     }
 
-    this->apply_all_sensitivities(clemens, nabu);
+    this->apply_all_sensitivities(clemens, nabu, cancel);
   }
 
   float slot1_cutoff_override_{0.0f};
@@ -409,8 +428,12 @@ class WakePartitionLoader {
 
   void apply_all_sensitivities(
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu
+      micro_wake_word::WakeWordModel *nabu,
+      micro_wake_word::WakeWordModel *cancel = nullptr
   ) {
+    if (cancel != nullptr) {
+      this->cancel_model_ = cancel;
+    }
     auto get_cutoff_for_model = [&](const std::string &model_name, uint8_t base_cutoff) -> uint8_t {
       float override_val = (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_)
                               ? this->slot2_cutoff_override_
@@ -441,9 +464,13 @@ class WakePartitionLoader {
       ESP_LOGI(TAG, "Applied Nabu cutoff %u (%s)", c,
                (this->slot2_model_name_ == "Okay Nabu" ? this->slot2_sensitivity_.c_str() : this->slot1_sensitivity_.c_str()));
     }
+    if (this->cancel_model_) {
+      this->cancel_model_->set_probability_cutoff(102);
+      ESP_LOGI(TAG, "Applied Cancel cutoff 102");
+    }
     for (auto &s : this->slots_) {
       if (s.model) {
-        uint8_t c = get_cutoff_for_model(s.name, s.base_cutoff);
+        uint8_t c = (s.name == "Cancel" || s.name == "cancel_keywords") ? 102 : get_cutoff_for_model(s.name, s.base_cutoff);
         s.model->set_probability_cutoff(c);
         ESP_LOGI(TAG, "Applied '%s' cutoff %u", s.name.c_str(), c);
       }
@@ -451,6 +478,9 @@ class WakePartitionLoader {
   }
 
   int get_slot_for_wake_word(const std::string &detected_word) const {
+    if (detected_word == "Cancel" || detected_word == "cancel_keywords") {
+      return 3;
+    }
     if (detected_word == this->slot1_model_name_) {
       return 1;
     }
@@ -468,7 +498,15 @@ class WakePartitionLoader {
     return StreamingModelWindowAccessor::get_sliding_avg_prob(model);
   }
 
-  void set_sliding_window(size_t window, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+  void set_sliding_window(
+      size_t window,
+      micro_wake_word::WakeWordModel *clemens,
+      micro_wake_word::WakeWordModel *nabu,
+      micro_wake_word::WakeWordModel *cancel = nullptr
+  ) {
+    if (cancel != nullptr) {
+      this->cancel_model_ = cancel;
+    }
     ESP_LOGI(TAG, "Updating microWakeWord sliding window size to %zu frames", window);
     this->sliding_window_size_ = window;
 
@@ -478,6 +516,9 @@ class WakePartitionLoader {
     }
     StreamingModelWindowAccessor::set_window(clemens, window);
     StreamingModelWindowAccessor::set_window(nabu, window);
+    if (this->cancel_model_) {
+      StreamingModelWindowAccessor::set_window(this->cancel_model_, window);
+    }
     for (auto &s : this->slots_) {
       StreamingModelWindowAccessor::set_window(s.model, window);
     }
@@ -757,6 +798,7 @@ class WakePartitionLoader {
   }
 
   micro_wake_word::MicroWakeWord *get_mww() { return this->mww_; }
+  micro_wake_word::WakeWordModel *get_cancel_model() const { return this->cancel_model_; }
 
   void attach_ota_listener();
 
@@ -773,6 +815,7 @@ class WakePartitionLoader {
 
  protected:
   micro_wake_word::MicroWakeWord *mww_{nullptr};
+  micro_wake_word::WakeWordModel *cancel_model_{nullptr};
   std::vector<CustomWakeSlot> slots_;
   std::vector<std::string> custom_names_;
   std::vector<std::string> slot1_options_;
