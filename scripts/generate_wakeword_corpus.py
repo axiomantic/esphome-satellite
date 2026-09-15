@@ -1474,7 +1474,7 @@ class F5TTSBackend:
                 print(f"[Warning] Failed to initialize in-process F5TTS engine: {e}", file=sys.stderr)
         return self._api_model
 
-    def synthesize(self, text: str, ref_audio: Path, ref_text: str, out_path: Path) -> bool:
+    def synthesize(self, text: str, ref_audio: Path, ref_text: str, out_path: Path, seed: Optional[int] = None) -> bool:
         if not ref_audio.exists():
             print(f"[F5-TTS Error] Reference audio '{ref_audio}' does not exist.", file=sys.stderr)
             return False
@@ -1486,13 +1486,14 @@ class F5TTSBackend:
         api_model = self._get_api_model()
         if api_model is not None:
             try:
+                run_seed = seed if seed is not None else random.randint(1, 1000000000)
                 api_model.infer(
                     ref_file=str(prepared_audio),
                     ref_text=prepared_text,
                     gen_text=text,
                     file_wave=str(temp_out),
                     speed=0.75,
-                    seed=42,
+                    seed=run_seed,
                     show_info=lambda *args, **kwargs: None,
                     progress=None
                 )
@@ -1912,9 +1913,14 @@ def generate_corpus(
         progress_bar.start()
         task_id = progress_bar.add_task("Synthesizing training audio...", total=count)
 
+    rng = random.Random(1337)
+    # Uniformly distribute all phrases across the dataset
+    phrase_pool = [phrases[j % len(phrases)] for j in range(count)]
+    rng.shuffle(phrase_pool)
+
     try:
         for i, vspec in enumerate(voices):
-            phrase = random.choice(phrases)
+            phrase = phrase_pool[i]
 
             # Content-addressed cache key encoding deterministic parameters
             cache_key = get_sample_cache_key(backend_name, vspec, phrase)
@@ -1925,7 +1931,7 @@ def generate_corpus(
             else:
                 hit = False
                 if backend_name == "f5_tts" and vspec.household:
-                    ok = backend.synthesize(phrase, vspec.household.audio_path, vspec.household.transcript, cached_file)
+                    ok = backend.synthesize(phrase, vspec.household.audio_path, vspec.household.transcript, cached_file, seed=42 + i)
                 else:
                     ok = backend.synthesize(phrase, vspec.voice_id, cached_file)
                 if not ok:
