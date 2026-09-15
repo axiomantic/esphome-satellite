@@ -19,6 +19,9 @@ const
   HASH_LEGACY_SENSITIVITY* = 4098752856'u32             ## "Speech: Wake Word Sensitivity"
   HASH_LEGACY_WAKE_CHIME_SWITCH* = 3930144138'u32       ## "Audio: Wake Chime Enabled"
   HASH_LEGACY_CANCEL_SOUND_SWITCH* = 483196759'u32       ## "Audio: Cancel Sound Enabled"
+  HASH_SLOT1_VOICE_VOLUME* = 642386628'u32             ## "Slot 1: Voice Volume"
+  HASH_SLOT2_VOICE_VOLUME* = 2515858089'u32            ## "Slot 2: Voice Volume"
+  HASH_AUDIO_MASTER_VOLUME* = 1261298837'u32           ## "Audio: Master Volume"
   NVS_MIGRATION_VERSION_KEY* = 3847291045'u32
 
 # Legacy option arrays for deterministic string-based mapping

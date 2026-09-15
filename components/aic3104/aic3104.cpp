@@ -116,15 +116,14 @@ bool AIC3104::write_volume_() {
   if (!this->is_muted_) {
     if (this->headphone_volume_ <= 0.001f) {
       hp_level = 0x08;
-      lop_level = 0x08;
     } else if (nim_aic3104_compute_hp_levels != nullptr) {
-      nim_aic3104_compute_hp_levels(this->headphone_volume_, &hp_level, &lop_level);
+      uint8_t ignored_lop = 0;
+      nim_aic3104_compute_hp_levels(this->headphone_volume_, &hp_level, &ignored_lop);
     } else {
       uint8_t hp_gain = (nim_aic3104_compute_hp_gain != nullptr)
                             ? nim_aic3104_compute_hp_gain(this->headphone_volume_)
                             : (uint8_t)clamp<float>(this->headphone_volume_ * 9.0f, 0.0f, 9.0f);
       hp_level = (hp_gain << 4) | 0x0D;
-      lop_level = (hp_gain << 4) | 0x0B;
     }
   }
 

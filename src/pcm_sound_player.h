@@ -197,7 +197,6 @@ class PcmSoundPlayer {
     strncpy(pref.value, name.c_str(), sizeof(pref.value) - 1);
     auto p = global_preferences->make_preference<SoundFixedStringPref>(hash);
     p.save(&pref);
-    global_preferences->sync();
   }
 
   void restore_select_option_(
@@ -377,7 +376,7 @@ class PcmSoundPlayer {
   void play_adpcm(const uint8_t *data, size_t length, bool loop = false, float volume = -1.0f, const char *name = "sound") {
     if (this->speaker_ == nullptr || data == nullptr || length == 0) return;
 
-    this->stop_task_();
+    this->interrupt_playback_();
 
     this->data_ = data;
     this->data_len_ = length;
@@ -428,7 +427,7 @@ class PcmSoundPlayer {
   void play_raw_pcm(const uint8_t *data, size_t length, uint32_t sample_rate, uint16_t channels, uint16_t bits, bool loop = false, float volume = -1.0f, const char *name = "raw_pcm") {
     if (this->speaker_ == nullptr || data == nullptr || length == 0) return;
 
-    this->stop_task_();
+    this->interrupt_playback_();
 
     this->data_ = data;
     this->data_len_ = length;
@@ -478,17 +477,25 @@ class PcmSoundPlayer {
   void set_on_finished(std::function<void()> callback) { this->on_finished_ = callback; }
   void set_on_cancel_finished(std::function<void()> callback) { this->on_cancel_finished_ = callback; }
 
-  void stop() {
-    if (!this->is_playing_ && this->task_handle_ == nullptr) return;
-    bool was_cancel = this->is_playing_cancel_;
+  void interrupt_playback_() {
     this->is_playing_ = false;
     this->is_playing_cancel_ = false;
     this->is_loop_ = false;
     nim_dma_stream_abort();
-    this->stop_task_();
+    TaskHandle_t h = this->task_handle_;
+    this->task_handle_ = nullptr;
+    if (h != nullptr) {
+      vTaskDelete(h);
+    }
     if (this->speaker_ != nullptr) {
       this->speaker_->stop();
     }
+  }
+
+  void stop() {
+    if (!this->is_playing_ && this->task_handle_ == nullptr) return;
+    bool was_cancel = this->is_playing_cancel_;
+    this->interrupt_playback_();
     ESP_LOGD(PCM_PLAYER_TAG, "Audio stopped");
     if (this->on_finished_) {
       this->on_finished_();
@@ -551,20 +558,10 @@ class PcmSoundPlayer {
   }
 
   void stop_task_() {
-    this->is_playing_ = false;
-    if (this->task_handle_ != nullptr) {
-      for (int i = 0; i < 40 && this->task_handle_ != nullptr; ++i) {
-        vTaskDelay(pdMS_TO_TICKS(5));
-      }
-      if (this->task_handle_ != nullptr) {
-        vTaskDelete(this->task_handle_);
-        this->task_handle_ = nullptr;
-      }
-    }
+    this->interrupt_playback_();
   }
 
   void run_playback_() {
-    vTaskDelay(pdMS_TO_TICKS(20));
 
     if (this->is_raw_pcm_) {
       while (this->is_playing_) {

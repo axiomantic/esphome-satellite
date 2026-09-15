@@ -3,7 +3,7 @@
 Audio Processing & Transcoding Pipeline for esphome-satellite.
 Standardizes audio files for small-speaker voice satellites:
   1. Downmixes to mono and resamples to 16,000 Hz 16-bit PCM.
-  2. Peak-normalizes to -1.0 dBFS for optimal IMA-ADPCM quantization without clipping.
+  2. Peak-normalizes to -3.5 dBFS for optimal acoustic headroom and small-speaker anti-clipping.
      (Real-time speech compression, makeup boost, and limiting run on-device in Nim DSP).
   3. Generates both 16-bit mono PCM WAV and 128kbps MP3 (for web preview).
   4. Encodes into compact IMA-ADPCM arrays and regenerates src/sound_data.h.
@@ -115,10 +115,10 @@ def process_single_audio(input_path, base_name):
         "-c:a", "pcm_s16le", temp_resampled
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
-    # Step 2: Peak normalize to -1.0 dBFS for clean IMA-ADPCM quantization
+    # Step 2: Peak normalize to -3.5 dBFS for clean acoustic headroom and anti-clipping
     max_db = get_max_volume_db(temp_resampled)
-    # Target peak is -1.0 dBFS
-    gain_db = -1.0 - max_db
+    # Target peak is -3.5 dBFS
+    gain_db = -3.5 - max_db
     # Limit gain boost to max +6dB to avoid over-amplifying background noise
     gain_db = min(6.0, gain_db)
 
@@ -141,7 +141,7 @@ def process_single_audio(input_path, base_name):
     with open(out_mp3, "rb") as fsrc, open(web_mp3, "wb") as fdst:
         fdst.write(fsrc.read())
 
-    # Read PCM samples and encode to IMA-ADPCM
+    # Step 4: Encode to IMA-ADPCM
     pcm_samples = read_wav_pcm16(out_wav)
     adpcm = encode_ima_adpcm(pcm_samples)
 
@@ -149,7 +149,7 @@ def process_single_audio(input_path, base_name):
         os.remove(temp_resampled)
 
     duration = len(pcm_samples) / SAMPLE_RATE
-    print(f"Processed '{base_name}': {duration:.3f}s ({len(pcm_samples)} samples, {len(adpcm)} bytes ADPCM, peak=-1.0dBFS)")
+    print(f"Processed '{base_name}': {duration:.3f}s ({len(pcm_samples)} samples, {len(adpcm)} bytes ADPCM, peak=-3.5dBFS)")
     return adpcm
 
 def regenerate_sound_header(adpcm_dict):
