@@ -92,24 +92,25 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     check foundLopRoute
     check foundLopLevel
 
-  test "AIC3104 volume calculation handles mute, normal, and boost curves":
-    let muted = computeAic3104Volume(0.8'f32, true)
+  test "AIC3104 volume calculation caps speaker analog gain strictly at 0 dB":
+    let muted = computeAic3104Volume(1.0'f32, true)
     check muted.dacVal == 0x80'u8
-    check (muted.hpLevel and 0x08'u8) > 0'u8 or muted.hpLevel == 0x08'u8 # Muted bit set
+    check muted.lopLevel == 0x08'u8
+    check muted.hpLevel == 0x08'u8
 
     let zero = computeAic3104Volume(0.0'f32, false)
     check zero.dacVal == 0x80'u8
+    check zero.lopLevel == 0x08'u8
 
-    let normal = computeAic3104Volume(0.8'f32, false)
-    check normal.dacVal == 0x00'u8  # 0dB digital attenuation
-    check normal.hpLevel == 0x0D'u8 # 0dB analog gain, unmuted, powered up
-    check normal.lopLevel == 0x0B'u8 # 0dB analog gain, unmuted, powered up
+    let mid = computeAic3104Volume(0.5'f32, false)
+    check mid.dacVal == 36'u8 # ~18 dB attenuation
+    check mid.lopLevel == 0x0B'u8 # 0 dB analog gain, unmuted
+    check mid.hpLevel == 0x0D'u8
 
-    let maxBoost = computeAic3104Volume(1.0'f32, false)
-    check maxBoost.dacVal == 0x00'u8
-    check (maxBoost.hpLevel shr 4) == 9'u8 # +9dB analog boost
-    check (maxBoost.hpLevel and 0x0F'u8) == 0x0D'u8 # unmuted, powered up
-    check (maxBoost.lopLevel shr 4) == 9'u8 # +9dB analog boost
+    let maxVol = computeAic3104Volume(1.0'f32, false)
+    check maxVol.dacVal == 0x00'u8 # 0 dB digital attenuation (full scale)
+    check maxVol.lopLevel == 0x0B'u8 # Strictly 0 dB analog gain (0x0B) to protect 1W speaker from rail clipping
+    check maxVol.hpLevel == 0x0D'u8 # Strictly 0 dB analog gain
 
   test "XMOS AIC3104 level commands payload formatting":
     let p1 = makeXmosAic3104LevelPayload(XMOS_CMD_AIC3104_HP_LEVEL, 9'u8)
@@ -124,19 +125,19 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     check computeAic3104HpGain(1.0'f32) == 9'u8
     check computeAic3104HpGain(1.5'f32) == 9'u8
 
-  test "AIC3104 dedicated headphone level register calculation with zero mute":
+  test "AIC3104 dedicated headphone level register calculation leaves lineout capped":
     # 0.0 volume must mute and power down driver (0x08)
     let (hpZero, lopZero) = computeAic3104HpLevel(0.0'f32)
     check hpZero == 0x08'u8
-    check lopZero == 0x08'u8
+    check lopZero == 0x0B'u8 # Lineout remains safe 0 dB unmuted
 
-    # 0.5 volume must set gain to 5 with unmuted/power-up flags (0x5D / 0x5B)
+    # 0.5 volume must set hp gain to 5 with unmuted/power-up flags (0x5D) while lineout stays 0 dB (0x0B)
     let (hpMid, lopMid) = computeAic3104HpLevel(0.5'f32)
     check hpMid == ((5'u8 shl 4) or 0x0D'u8)
-    check lopMid == ((5'u8 shl 4) or 0x0B'u8)
+    check lopMid == 0x0B'u8
 
-    # 1.0 volume must set gain to 9 (0x9D / 0x9B)
+    # 1.0 volume must set hp gain to 9 (0x9D) while lineout stays 0 dB (0x0B)
     let (hpMax, lopMax) = computeAic3104HpLevel(1.0'f32)
     check hpMax == ((9'u8 shl 4) or 0x0D'u8)
-    check lopMax == ((9'u8 shl 4) or 0x0B'u8)
+    check lopMax == 0x0B'u8
 

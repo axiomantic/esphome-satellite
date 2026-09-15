@@ -6,6 +6,12 @@
 import std/math
 
 type
+  BiquadFilter* = object
+    b0*, b1*, b2*: float32
+    a1*, a2*: float32
+    x1*, x2*: float32
+    y1*, y2*: float32
+
   AudioCompressor* = object
     sampleRate*: float32
     thresholdDb*: float32
@@ -16,6 +22,37 @@ type
     makeupGainDb*: float32
     makeupGain*: float32
     envelope*: float32
+    hpf*: BiquadFilter
+
+proc newHighPassFilter*(sampleRate: float32 = 16000.0'f32, cutoffHz: float32 = 180.0'f32, q: float32 = 0.70710678'f32): BiquadFilter =
+  ## 2nd-order Butterworth high-pass rumble filter (12 dB/octave rolloff below cutoffHz)
+  let omega = 2.0'f32 * PI * cutoffHz / sampleRate
+  let alpha = sin(omega) / (2.0'f32 * q)
+  let cosw = cos(omega)
+  let a0 = 1.0'f32 + alpha
+  result.b0 = ((1.0'f32 + cosw) / 2.0'f32) / a0
+  result.b1 = (-(1.0'f32 + cosw)) / a0
+  result.b2 = ((1.0'f32 + cosw) / 2.0'f32) / a0
+  result.a1 = (-2.0'f32 * cosw) / a0
+  result.a2 = (1.0'f32 - alpha) / a0
+  result.x1 = 0.0'f32
+  result.x2 = 0.0'f32
+  result.y1 = 0.0'f32
+  result.y2 = 0.0'f32
+
+proc processSample*(f: var BiquadFilter, x: float32): float32 {.inline.} =
+  let y = f.b0 * x + f.b1 * f.x1 + f.b2 * f.x2 - f.a1 * f.y1 - f.a2 * f.y2
+  f.x2 = f.x1
+  f.x1 = x
+  f.y2 = f.y1
+  f.y1 = y
+  return y
+
+proc reset*(f: var BiquadFilter) =
+  f.x1 = 0.0'f32
+  f.x2 = 0.0'f32
+  f.y1 = 0.0'f32
+  f.y2 = 0.0'f32
 
 proc newAudioCompressor*(
     sampleRate: float32 = 16000.0'f32,
@@ -23,7 +60,8 @@ proc newAudioCompressor*(
     ratio: float32 = 3.0'f32,
     attackMs: float32 = 4.0'f32,
     releaseMs: float32 = 75.0'f32,
-    makeupGainDb: float32 = 5.0'f32
+    makeupGainDb: float32 = 5.0'f32,
+    cutoffHz: float32 = 180.0'f32
 ): AudioCompressor =
   result.sampleRate = sampleRate
   result.thresholdDb = thresholdDb
@@ -34,6 +72,7 @@ proc newAudioCompressor*(
   result.makeupGainDb = makeupGainDb
   result.makeupGain = pow(10.0'f32, makeupGainDb / 20.0'f32)
   result.envelope = 0.0'f32
+  result.hpf = newHighPassFilter(sampleRate, cutoffHz)
 
 proc softClip*(x: float32, limit: float32 = 32767.0'f32): int16 {.inline.} =
   ## Rational soft-saturation curve: strictly bounded within [-limit, limit].
@@ -48,99 +87,136 @@ proc softClip*(x: float32, limit: float32 = 32767.0'f32): int16 {.inline.} =
   else:
     return int16(scaled)
 
-proc process*(comp: var AudioCompressor, samples: ptr int16, count: int) =
+proc process*(comp: var AudioCompressor, samples: ptr int16, count: int, applyVocal: bool = true, applyProtection: bool = true) =
   if samples == nil or count <= 0:
+    return
+  if not applyVocal and not applyProtection:
     return
 
   let arr = cast[ptr UncheckedArray[int16]](samples)
   for i in 0 ..< count:
-    let s = float32(arr[i])
-    let absX = abs(s) / 32768.0'f32
+    var s = float32(arr[i])
+    if applyProtection:
+      s = comp.hpf.processSample(s)
 
-    # Envelope peak follower
-    if absX > comp.envelope:
-      comp.envelope = comp.attackCoeff * comp.envelope + (1.0'f32 - comp.attackCoeff) * absX
+    if applyVocal:
+      let absX = abs(s) / 32768.0'f32
+
+      # Envelope peak follower
+      if absX > comp.envelope:
+        comp.envelope = comp.attackCoeff * comp.envelope + (1.0'f32 - comp.attackCoeff) * absX
+      else:
+        comp.envelope = comp.releaseCoeff * comp.envelope + (1.0'f32 - comp.releaseCoeff) * absX
+
+      # Compute gain reduction
+      var gainReduction: float32 = 1.0'f32
+      if comp.envelope > comp.thresholdLinear and comp.envelope > 1e-6'f32:
+        let envDb = 20.0'f32 * log10(comp.envelope)
+        let compressedDb = comp.thresholdDb + (envDb - comp.thresholdDb) / comp.ratio
+        gainReduction = pow(10.0'f32, (compressedDb - envDb) / 20.0'f32)
+
+      s = s * gainReduction * comp.makeupGain
+
+    if applyProtection:
+      # Soft-knee limiting to eliminate digital clipping
+      arr[i] = softClip(s)
     else:
-      comp.envelope = comp.releaseCoeff * comp.envelope + (1.0'f32 - comp.releaseCoeff) * absX
+      arr[i] = int16(clamp(s, -32767.0'f32, 32767.0'f32))
 
-    # Compute gain reduction
-    var gainReduction: float32 = 1.0'f32
-    if comp.envelope > comp.thresholdLinear and comp.envelope > 1e-6'f32:
-      let envDb = 20.0'f32 * log10(comp.envelope)
-      let compressedDb = comp.thresholdDb + (envDb - comp.thresholdDb) / comp.ratio
-      gainReduction = pow(10.0'f32, (compressedDb - envDb) / 20.0'f32)
-
-    # Apply compression gain reduction and makeup vocal boost
-    let processed = s * gainReduction * comp.makeupGain
-
-    # Soft-knee limiting to eliminate digital clipping
-    arr[i] = softClip(processed)
-
-proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int) =
+proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int, applyVocal: bool = true, applyProtection: bool = true) =
   if samples == nil or count <= 0:
+    return
+  if not applyVocal and not applyProtection:
     return
 
   let arr = cast[ptr UncheckedArray[int32]](samples)
   for i in 0 ..< count:
-    let s = float32(arr[i])
-    let absX = abs(s) / 2147483648.0'f32
+    var s = float32(arr[i])
+    if applyProtection:
+      s = comp.hpf.processSample(s)
 
-    # Envelope peak follower
-    if absX > comp.envelope:
-      comp.envelope = comp.attackCoeff * comp.envelope + (1.0'f32 - comp.attackCoeff) * absX
+    if applyVocal:
+      let absX = abs(s) / 2147483648.0'f32
+
+      # Envelope peak follower
+      if absX > comp.envelope:
+        comp.envelope = comp.attackCoeff * comp.envelope + (1.0'f32 - comp.attackCoeff) * absX
+      else:
+        comp.envelope = comp.releaseCoeff * comp.envelope + (1.0'f32 - comp.releaseCoeff) * absX
+
+      # Compute gain reduction
+      var gainReduction: float32 = 1.0'f32
+      if comp.envelope > comp.thresholdLinear and comp.envelope > 1e-6'f32:
+        let envDb = 20.0'f32 * log10(comp.envelope)
+        let compressedDb = comp.thresholdDb + (envDb - comp.thresholdDb) / comp.ratio
+        gainReduction = pow(10.0'f32, (compressedDb - envDb) / 20.0'f32)
+
+      s = s * gainReduction * comp.makeupGain
+
+    if applyProtection:
+      # Soft-knee limiting for 32-bit
+      let normalized = s / 2147483647.0'f32
+      let saturated = normalized / sqrt(1.0'f32 + normalized * normalized)
+      let scaled = saturated * 2147483647.0'f32
+      arr[i] = int32(clamp(scaled, -2147483647.0'f32, 2147483647.0'f32))
     else:
-      comp.envelope = comp.releaseCoeff * comp.envelope + (1.0'f32 - comp.releaseCoeff) * absX
-
-    # Compute gain reduction
-    var gainReduction: float32 = 1.0'f32
-    if comp.envelope > comp.thresholdLinear and comp.envelope > 1e-6'f32:
-      let envDb = 20.0'f32 * log10(comp.envelope)
-      let compressedDb = comp.thresholdDb + (envDb - comp.thresholdDb) / comp.ratio
-      gainReduction = pow(10.0'f32, (compressedDb - envDb) / 20.0'f32)
-
-    # Apply compression gain reduction and makeup vocal boost
-    let processed = s * gainReduction * comp.makeupGain
-
-    # Soft-knee limiting for 32-bit
-    let normalized = processed / 2147483647.0'f32
-    let saturated = normalized / sqrt(1.0'f32 + normalized * normalized)
-    let scaled = saturated * 2147483647.0'f32
-    arr[i] = int32(clamp(scaled, -2147483647.0'f32, 2147483647.0'f32))
+      arr[i] = int32(clamp(s, -2147483647.0'f32, 2147483647.0'f32))
 
 # Global singleton audio DSP processor for satellite speaker pipeline
 var globalVoiceCompressor = newAudioCompressor()
-var globalAudioDspEnabled* = true
+var globalVocalBoostEnabled* = true
+var globalSpeakerProtectionEnabled* = true
 
+proc nim_audio_dsp_set_vocal_boost*(enabled: bool) {.exportc: "nim_audio_dsp_set_vocal_boost", cdecl.} =
+  globalVocalBoostEnabled = enabled
+
+proc nim_audio_dsp_is_vocal_boost_enabled*(): bool {.exportc: "nim_audio_dsp_is_vocal_boost_enabled", cdecl.} =
+  return globalVocalBoostEnabled
+
+proc nim_audio_dsp_set_speaker_protection*(enabled: bool) {.exportc: "nim_audio_dsp_set_speaker_protection", cdecl.} =
+  globalSpeakerProtectionEnabled = enabled
+
+proc nim_audio_dsp_is_speaker_protection_enabled*(): bool {.exportc: "nim_audio_dsp_is_speaker_protection_enabled", cdecl.} =
+  return globalSpeakerProtectionEnabled
+
+# Legacy aliases for backwards compatibility
 proc nim_audio_dsp_set_enabled*(enabled: bool) {.exportc: "nim_audio_dsp_set_enabled", cdecl.} =
-  globalAudioDspEnabled = enabled
+  nim_audio_dsp_set_vocal_boost(enabled)
 
 proc nim_audio_dsp_is_enabled*(): bool {.exportc: "nim_audio_dsp_is_enabled", cdecl.} =
-  return globalAudioDspEnabled
+  return nim_audio_dsp_is_vocal_boost_enabled()
 
-proc shouldApplyDsp*(): bool {.inline.} =
-  if not globalAudioDspEnabled:
+proc shouldApplyVocalBoost*(): bool {.inline.} =
+  if not globalVocalBoostEnabled:
     return false
   when declared(nim_dma_stream_get_kind):
     let kind = nim_dma_stream_get_kind()
-    # 0 = dskNone (unclassified fallback), 4 = dskTts (dialogue speech).
+    # 0 = dskNone (unclassified fallback / raw TTS stream), 4 = dskTts (dialogue speech).
     # Chimes (1), processing loops (2), cancel cues (3), and media (5) are strictly bypassed.
     return kind == 0 or kind == 4
   else:
     return true
 
+proc shouldApplySpeakerProtection*(): bool {.inline.} =
+  return globalSpeakerProtectionEnabled
+
 proc nim_audio_dsp_process*(samples: ptr UncheckedArray[int16], count: int) {.exportc: "nim_audio_dsp_process", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (16-bit PCM)
   if samples != nil and count > 0:
-    if shouldApplyDsp():
-      globalVoiceCompressor.process(cast[ptr int16](samples), count)
+    let applyVocal = shouldApplyVocalBoost()
+    let applyProtection = shouldApplySpeakerProtection()
+    if applyVocal or applyProtection:
+      globalVoiceCompressor.process(cast[ptr int16](samples), count, applyVocal, applyProtection)
     when declared(nim_dma_stream_feed):
       nim_dma_stream_feed(csize_t(count * sizeof(int16)))
 
 proc nim_audio_dsp_process32*(samples: ptr UncheckedArray[int32], count: int) {.exportc: "nim_audio_dsp_process32", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (32-bit PCM)
   if samples != nil and count > 0:
-    if shouldApplyDsp():
-      globalVoiceCompressor.process32(cast[ptr int32](samples), count)
+    let applyVocal = shouldApplyVocalBoost()
+    let applyProtection = shouldApplySpeakerProtection()
+    if applyVocal or applyProtection:
+      globalVoiceCompressor.process32(cast[ptr int32](samples), count, applyVocal, applyProtection)
     when declared(nim_dma_stream_feed):
       nim_dma_stream_feed(csize_t(count * sizeof(int32)))
 

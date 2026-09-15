@@ -69,22 +69,12 @@ proc computeAic3104Volume*(volumeIn: float32, muted: bool): Aic3104VolumeConfig 
     return Aic3104VolumeConfig(dacVal: 0x80'u8, hpLevel: 0x08'u8, lopLevel: 0x08'u8)
 
   let vol = clamp(volumeIn, 0.0'f32, 1.0'f32)
-  if vol <= 0.8'f32:
-    let norm = vol / 0.8'f32
-    let dacAtten = uint8(clamp(round((1.0'f32 - norm) * 72.0'f32), 0.0'f32, 127.0'f32))
-    return Aic3104VolumeConfig(
-      dacVal: dacAtten,
-      hpLevel: 0x0D'u8,
-      lopLevel: 0x0B'u8
-    )
-  else:
-    let boostNorm = (vol - 0.8'f32) / 0.2'f32
-    let gain = uint8(clamp(round(boostNorm * 9.0'f32), 0.0'f32, 9.0'f32))
-    return Aic3104VolumeConfig(
-      dacVal: 0x00'u8,
-      hpLevel: (gain shl 4) or 0x0D'u8,
-      lopLevel: (gain shl 4) or 0x0B'u8
-    )
+  let dacAtten = uint8(clamp(round((1.0'f32 - vol) * 72.0'f32), 0.0'f32, 127.0'f32))
+  return Aic3104VolumeConfig(
+    dacVal: dacAtten,
+    hpLevel: 0x0D'u8, # 0 dB analog gain, unmuted, powered up
+    lopLevel: 0x0B'u8 # 0 dB analog gain, unmuted, powered up (strictly capped at 0 dB)
+  )
 
 proc computeAic3104HpGain*(volumeIn: float32): uint8 =
   if volumeIn <= 0.001'f32:
@@ -94,10 +84,10 @@ proc computeAic3104HpGain*(volumeIn: float32): uint8 =
 
 proc computeAic3104HpLevel*(volumeIn: float32): tuple[hpLevel: uint8, lopLevel: uint8] =
   if volumeIn <= 0.001'f32:
-    (hpLevel: 0x08'u8, lopLevel: 0x08'u8)
+    (hpLevel: 0x08'u8, lopLevel: 0x0B'u8)
   else:
     let gain = computeAic3104HpGain(volumeIn)
-    (hpLevel: (gain shl 4) or 0x0D'u8, lopLevel: (gain shl 4) or 0x0B'u8)
+    (hpLevel: (gain shl 4) or 0x0D'u8, lopLevel: 0x0B'u8)
 
 proc makeXmosAic3104LevelPayload*(cmd: uint8, level: uint8): array[4, uint8] {.inline.} =
   let lvl = clamp(level, 0'u8, 9'u8)

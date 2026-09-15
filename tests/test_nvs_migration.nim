@@ -13,6 +13,9 @@ suite "NVS Preference Migration & Hash Integrity Suite":
 
   test "New v0.6.0 Slot 1 FNV-1a preference hashes are distinct and reproducible":
     check fnv1aHash("Slot 1: Volume") == 2638310478'u32
+    check fnv1aHash("Slot 1: Voice Volume") == HASH_SLOT1_VOICE_VOLUME
+    check fnv1aHash("Slot 2: Voice Volume") == HASH_SLOT2_VOICE_VOLUME
+    check fnv1aHash("Audio: Master Volume") == HASH_AUDIO_MASTER_VOLUME
     check fnv1aHash("Slot 1: Cancel Sound") == 2237309249'u32
     check fnv1aHash("Slot 1: Wake Chime") == 3715757824'u32
     check fnv1aHash("Slot 1: Processing Sound") == 3151753516'u32
@@ -21,6 +24,7 @@ suite "NVS Preference Migration & Hash Integrity Suite":
     check fnv1aHash("Slot 1: Cancel Sound Enabled") == 33816744'u32
 
     # Verify that slot 1 hashes never collide with legacy hashes
+    check fnv1aHash("Slot 1: Voice Volume") != fnv1aHash("Audio: Voice Volume")
     check fnv1aHash("Slot 1: Volume") != fnv1aHash("Audio: Voice Volume")
     check fnv1aHash("Slot 1: Cancel Sound") != fnv1aHash("Audio: Cancel Sound Sound")
     check fnv1aHash("Slot 1: Sensitivity") != fnv1aHash("Speech: Wake Word Sensitivity")

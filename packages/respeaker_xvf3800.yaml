@@ -37,6 +37,7 @@ esphome:
     - ../src/pcm_sound_player.h
     - ../src/wake_partition_loader.h
     - ../src/nvs_migration.h
+    - ../src/audio_volume_helpers.h
   build_flags:
     - -Wno-write-strings
   on_boot:
@@ -44,7 +45,7 @@ esphome:
       then:
         - lambda: |-
             esphome::migrate_legacy_nvs_preferences(
-                id(slot1_volume), id(slot1_cancel_sound), id(slot1_wake_chime_sound),
+                id(voice_volume), id(slot1_volume), id(slot1_cancel_sound), id(slot1_wake_chime_sound),
                 id(slot1_processing_sound), id(slot1_sensitivity),
                 id(slot1_wake_chime), id(slot1_cancel_sound_switch));
             esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
@@ -53,8 +54,8 @@ esphome:
                 id(slot1_wake_chime_sound), id(slot1_processing_sound), id(slot1_cancel_sound),
                 id(slot2_wake_chime_sound), id(slot2_processing_sound), id(slot2_cancel_sound));
             esphome::get_pcm_sound_player().set_on_finished([]() {
-              float vol = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-              id(board_speaker).set_volume(vol);
+              float slot_pct = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state);
+              id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
             });
             esphome::get_pcm_sound_player().set_on_cancel_finished([]() {
               if (!id(mic_mute_switch).state) {
@@ -65,9 +66,11 @@ esphome:
               id(va).request_stop();
               esphome::get_pcm_sound_player().stop();
             });
-            id(board_speaker).set_volume(id(slot1_volume).state / 100.0f);
+            float init_slot_pct = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state);
+            id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, init_slot_pct));
             id(aic3104_dac).set_headphone_volume(id(headphone_output_volume).state / 100.0f);
-            call_nim_audio_dsp_set_enabled(id(speech_dsp_enhancement_switch).state);
+            call_nim_audio_dsp_set_vocal_boost(id(speech_dsp_enhancement_switch).state);
+            call_nim_audio_dsp_set_speaker_protection(id(speaker_protection_switch).state);
         - lambda: |-
             esphome::wake_loader::get_wake_partition_loader().init(
                 id(mww), id(slot1_wake_word), id(slot2_wake_word));
@@ -173,6 +176,10 @@ safe_mode:
   disabled: true
 
 api:
+  on_client_disconnected:
+    - lambda: |-
+        esphome::get_pcm_sound_player().stop();
+        id(va).request_stop();
   services:
     - service: test_audio_feedback
       variables:
@@ -395,6 +402,8 @@ micro_wake_word:
               ESP_LOGD("satellite", "Wake word '%s' ignored because mic is muted.", wake_word.c_str());
         else:
           - lambda: |-
+              esphome::get_pcm_sound_player().stop();
+              id(board_speaker).stop();
               int slot = esphome::wake_loader::get_wake_partition_loader().get_slot_for_wake_word(wake_word);
               id(previous_assistant_slot) = id(active_assistant_slot);
               id(active_assistant_slot) = slot;
@@ -418,7 +427,7 @@ micro_wake_word:
                     then:
                       - lambda: |-
                           std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-                          float vol = id(wake_chime_volume).state / 100.0f;
+                          float vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
                           esphome::get_pcm_sound_player().play_chime(opt, false, vol);
                       - wait_until:
                           condition:
@@ -460,7 +469,7 @@ voice_assistant:
     - lambda: |-
         call_nim_speech_ended();
         std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
-        float vol = id(processing_sound_volume).state / 100.0f;
+        float vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
         esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
   on_stt_end:
     - lambda: |-
@@ -474,7 +483,7 @@ voice_assistant:
           if (cancel_opt == "Match Wake Chime") {
             cancel_opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
           }
-          float vol = id(cancel_sound_volume).state / 100.0f;
+          float vol = calculate_effective_sound_volume(id(master_volume).state, id(cancel_sound_volume).state);
           bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
           if (enabled && cancel_opt != "Silent") {
             esphome::get_pcm_sound_player().play_cancel_sound(cancel_opt, false, vol);
@@ -499,14 +508,14 @@ voice_assistant:
               opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
             }
             if (opt != "Silent") {
-              float vol = id(cancel_sound_volume).state / 100.0f;
+              float vol = calculate_effective_sound_volume(id(master_volume).state, id(cancel_sound_volume).state);
               esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
               played_cancel = true;
             }
           }
           if (!played_cancel) {
-            float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-            id(board_speaker).set_volume(vol);
+            float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
+            id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
             call_nim_cancel_done(true);
           }
           id(va).request_stop();
@@ -514,15 +523,15 @@ voice_assistant:
           if (std::string(get_satellite_state_name()) != "Thinking") {
             call_nim_speech_ended();
             std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
-            float vol = id(processing_sound_volume).state / 100.0f;
+            float vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
             esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
           }
         }
   on_tts_start:
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
-        float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-        id(board_speaker).set_volume(vol);
+        float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
+        id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
         call_nim_tts_start();
         nim_dma_stream_start(4, 60000, 3000, false);
   on_tts_stream_end:
@@ -546,8 +555,8 @@ voice_assistant:
           if (std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).is_running()) {
             if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
               esphome::get_pcm_sound_player().stop();
-              float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-              id(board_speaker).set_volume(vol);
+              float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
+              id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
             }
             if (!call_nim_is_cancelling()) {
               call_nim_stop_word();
@@ -571,14 +580,14 @@ voice_assistant:
             opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
           }
           if (opt != "Silent") {
-            float vol = id(cancel_sound_volume).state / 100.0f;
+            float vol = calculate_effective_sound_volume(id(master_volume).state, id(cancel_sound_volume).state);
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
             played_cancel = true;
           }
         }
         if (!played_cancel) {
-          float vol = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state) / 100.0f;
-          id(board_speaker).set_volume(vol);
+          float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
+          id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
         }
         call_nim_error(code.c_str());
     - if:
@@ -666,50 +675,6 @@ text_sensor:
       }
       return {};
 
-  - platform: template
-    id: header_slot_1
-    name: "Slot 1: ─── Acoustic Profile ───"
-    icon: "mdi:account-tie"
-    entity_category: config
-    lambda: |-
-      return { "Acoustic Profile" };
-    update_interval: 60s
-
-  - platform: template
-    id: header_slot_2
-    name: "Slot 2: ─── Acoustic Profile ───"
-    icon: "mdi:account-voice"
-    entity_category: config
-    lambda: |-
-      return { "Acoustic Profile" };
-    update_interval: 60s
-
-  - platform: template
-    id: header_hardware_controls
-    name: "Hardware: ─── Device Controls ───"
-    icon: "mdi:tune"
-    entity_category: ""
-    lambda: |-
-      return { "Active" };
-    update_interval: 60s
-
-  - platform: template
-    id: header_voice_pipeline
-    name: "Voice: ─── Pipeline Settings ───"
-    icon: "mdi:microphone-settings"
-    entity_category: ""
-    lambda: |-
-      return { "Active" };
-    update_interval: 60s
-
-  - platform: template
-    id: header_system_maintenance
-    name: "System: ─── Maintenance & Updates ───"
-    icon: "mdi:tools"
-    entity_category: diagnostic
-    lambda: |-
-      return { "System" };
-    update_interval: 60s
 
 select:
   - platform: template
@@ -835,9 +800,8 @@ select:
           if (id(active_assistant_slot) == 1) {
             call_nim_action_set_processing_sound(x.c_str());
           }
-          float vol = id(processing_sound_volume).state / 100.0f;
+          float vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
           esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
-          global_preferences->sync();
 
   - platform: template
     id: slot2_processing_sound
@@ -873,9 +837,8 @@ select:
           if (id(active_assistant_slot) == 2) {
             call_nim_action_set_processing_sound(x.c_str());
           }
-          float vol = id(processing_sound_volume).state / 100.0f;
+          float vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
           esphome::get_pcm_sound_player().play_processing_sound(x, false, vol);
-          global_preferences->sync();
 
   - platform: template
     id: slot1_wake_chime_sound
@@ -911,9 +874,8 @@ select:
           if (id(active_assistant_slot) == 1) {
             call_nim_action_set_chime_sound(x.c_str());
           }
-          float vol = id(wake_chime_volume).state / 100.0f;
+          float vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
           esphome::get_pcm_sound_player().play_chime(x, false, vol);
-          global_preferences->sync();
 
   - platform: template
     id: slot2_wake_chime_sound
@@ -949,9 +911,8 @@ select:
           if (id(active_assistant_slot) == 2) {
             call_nim_action_set_chime_sound(x.c_str());
           }
-          float vol = id(wake_chime_volume).state / 100.0f;
+          float vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
           esphome::get_pcm_sound_player().play_chime(x, false, vol);
-          global_preferences->sync();
 
   - platform: template
     id: slot1_cancel_sound
@@ -987,10 +948,9 @@ select:
           esphome::get_pcm_sound_player().save_slot1_cancel(x);
           if (x != "Silent") {
             std::string opt = (x == "Match Wake Chime") ? id(slot1_wake_chime_sound).current_option() : x;
-            float vol = id(cancel_sound_volume).state / 100.0f;
+            float vol = calculate_effective_sound_volume(id(master_volume).state, id(cancel_sound_volume).state);
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
           }
-          global_preferences->sync();
 
   - platform: template
     id: slot2_cancel_sound
@@ -1026,10 +986,9 @@ select:
           esphome::get_pcm_sound_player().save_slot2_cancel(x);
           if (x != "Silent") {
             std::string opt = (x == "Match Wake Chime") ? id(slot2_wake_chime_sound).current_option() : x;
-            float vol = id(cancel_sound_volume).state / 100.0f;
+            float vol = calculate_effective_sound_volume(id(master_volume).state, id(cancel_sound_volume).state);
             esphome::get_pcm_sound_player().play_cancel_sound(opt, false, vol);
           }
-          global_preferences->sync();
 
   - platform: template
     id: led_pattern
@@ -1050,10 +1009,28 @@ select:
 
 number:
   - platform: template
-    id: slot1_volume
-    name: "Audio: Voice Volume"
+    id: master_volume
+    name: "Audio: Master Volume"
     icon: "mdi:volume-high"
-    entity_category: config
+    entity_category: ""
+    min_value: 0
+    max_value: 100
+    step: 5
+    initial_value: 100
+    restore_value: true
+    optimistic: true
+    mode: slider
+    set_action:
+      - lambda: |-
+          float slot_pct = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state);
+          id(board_speaker).set_volume(calculate_effective_voice_volume(x, id(voice_volume).state, slot_pct));
+          global_preferences->sync();
+
+  - platform: template
+    id: voice_volume
+    name: "Audio: Voice Volume"
+    icon: "mdi:account-voice"
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1063,8 +1040,26 @@ number:
     mode: slider
     set_action:
       - lambda: |-
+          float slot_pct = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state);
+          id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, x, slot_pct));
+          global_preferences->sync();
+
+  - platform: template
+    id: slot1_volume
+    name: "Slot 1: Voice Volume"
+    icon: "mdi:volume-high"
+    entity_category: ""
+    min_value: 0
+    max_value: 100
+    step: 5
+    initial_value: 100
+    restore_value: true
+    optimistic: true
+    mode: slider
+    set_action:
+      - lambda: |-
           if (id(active_assistant_slot) == 1) {
-            id(board_speaker).set_volume(x / 100.0f);
+            id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, x));
           }
           global_preferences->sync();
 
@@ -1072,18 +1067,18 @@ number:
     id: slot2_volume
     name: "Slot 2: Voice Volume"
     icon: "mdi:volume-medium"
-    entity_category: config
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: ${voice_volume_default}
+    initial_value: 100
     restore_value: true
     optimistic: true
     mode: slider
     set_action:
       - lambda: |-
           if (id(active_assistant_slot) == 2) {
-            id(board_speaker).set_volume(x / 100.0f);
+            id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, x));
           }
           global_preferences->sync();
 
@@ -1091,7 +1086,7 @@ number:
     id: wake_chime_volume
     name: "Audio: Wake Chime Volume"
     icon: "mdi:volume-high"
-    entity_category: config
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1102,14 +1097,15 @@ number:
     set_action:
       - lambda: |-
           std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-          esphome::get_pcm_sound_player().play_chime(opt, false, x / 100.0f);
+          float eff_vol = calculate_effective_sound_volume(id(master_volume).state, x);
+          esphome::get_pcm_sound_player().play_chime(opt, false, eff_vol);
           global_preferences->sync();
 
   - platform: template
     id: processing_sound_volume
     name: "Audio: Processing Sound Volume"
     icon: "mdi:volume-medium"
-    entity_category: config
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1120,14 +1116,15 @@ number:
     set_action:
       - lambda: |-
           std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
-          esphome::get_pcm_sound_player().play_processing_sound(opt, false, x / 100.0f);
+          float eff_vol = calculate_effective_sound_volume(id(master_volume).state, x);
+          esphome::get_pcm_sound_player().play_processing_sound(opt, false, eff_vol);
           global_preferences->sync();
 
   - platform: template
     id: cancel_sound_volume
     name: "Audio: Cancel Sound Volume"
     icon: "mdi:volume-low"
-    entity_category: config
+    entity_category: ""
     min_value: 0
     max_value: 100
     step: 5
@@ -1141,7 +1138,8 @@ number:
           if (opt == "Match Wake Chime") {
             opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
           }
-          esphome::get_pcm_sound_player().play_cancel_sound(opt, false, x / 100.0f);
+          float eff_vol = calculate_effective_sound_volume(id(master_volume).state, x);
+          esphome::get_pcm_sound_player().play_cancel_sound(opt, false, eff_vol);
           global_preferences->sync();
 
   - platform: template
@@ -1258,6 +1256,8 @@ switch:
       - lambda: |-
           call_nim_action_set_mute(true);
           esphome::xvf3800::XVF3800Hardware::instance().write_gpo_pin(esphome::xvf3800::PIN_MIC_MUTE, 1);
+          esphome::get_pcm_sound_player().stop();
+          id(board_speaker).stop();
       - voice_assistant.stop:
       - micro_wake_word.stop:
     on_turn_off:
@@ -1328,19 +1328,31 @@ switch:
 
   - platform: template
     id: speech_dsp_enhancement_switch
-    name: "Voice: Speech DSP Enhancement"
+    name: "Audio: Speech Vocal Boost"
     icon: "mdi:equalizer"
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
       - lambda: |-
-          call_nim_audio_dsp_set_enabled(true);
-          global_preferences->sync();
+          call_nim_audio_dsp_set_vocal_boost(true);
     turn_off_action:
       - lambda: |-
-          call_nim_audio_dsp_set_enabled(false);
-          global_preferences->sync();
+          call_nim_audio_dsp_set_vocal_boost(false);
+
+  - platform: template
+    id: speaker_protection_switch
+    name: "Audio: Speaker Protection (HPF & Limiter)"
+    icon: "mdi:shield-check"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - lambda: |-
+          call_nim_audio_dsp_set_speaker_protection(true);
+    turn_off_action:
+      - lambda: |-
+          call_nim_audio_dsp_set_speaker_protection(false);
 
 script:
   - id: connect_and_start_assistant

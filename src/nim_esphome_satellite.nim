@@ -33,6 +33,7 @@ proc setSimulatedMillis*(ms: int64) =
   gSimulatedMillis = ms
 
 include audio_stream_tracker
+include audio_volume
 include audio_dsp
 include xvf3800_hardware
 include wake_partition_loader

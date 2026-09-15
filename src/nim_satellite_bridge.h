@@ -44,6 +44,10 @@ void nim_audio_dsp_process(int16_t *samples, int count);
 void nim_audio_dsp_process32(int32_t *samples, int count);
 void nim_audio_dsp_set_mic_pre_gain(float db);
 void nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count);
+void nim_audio_dsp_set_vocal_boost(bool enabled);
+bool nim_audio_dsp_is_vocal_boost_enabled(void);
+void nim_audio_dsp_set_speaker_protection(bool enabled);
+bool nim_audio_dsp_is_speaker_protection_enabled(void);
 void nim_audio_dsp_set_enabled(bool enabled);
 bool nim_audio_dsp_is_enabled(void);
 
@@ -104,6 +108,18 @@ inline void call_nim_audio_dsp_set_mic_pre_gain(float db) {
 }
 inline void call_nim_audio_dsp_apply_mic_pre_gain32(int32_t *samples, int count) {
   nim_audio_dsp_apply_mic_pre_gain32(samples, count);
+}
+inline void call_nim_audio_dsp_set_vocal_boost(bool enabled) {
+  nim_audio_dsp_set_vocal_boost(enabled);
+}
+inline bool call_nim_audio_dsp_is_vocal_boost_enabled(void) {
+  return nim_audio_dsp_is_vocal_boost_enabled();
+}
+inline void call_nim_audio_dsp_set_speaker_protection(bool enabled) {
+  nim_audio_dsp_set_speaker_protection(enabled);
+}
+inline bool call_nim_audio_dsp_is_speaker_protection_enabled(void) {
+  return nim_audio_dsp_is_speaker_protection_enabled();
 }
 inline void call_nim_audio_dsp_set_enabled(bool enabled) {
   nim_audio_dsp_set_enabled(enabled);

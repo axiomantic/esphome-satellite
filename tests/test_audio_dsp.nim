@@ -95,11 +95,15 @@ suite "Real-Time Audio DSP Suite (TDD)":
     check comp.envelope < 0.5'f32
 
   test "C ABI exported function processes buffer in-place":
-    var samples: array[64, int16]
-    for i in 0 ..< samples.len: samples[i] = 1000
+    var samples: array[160, int16]
+    for i in 0 ..< samples.len:
+      samples[i] = int16(1000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0))
     nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](samples[0].addr), samples.len)
-    # Makeup gain should have increased value from 1000
-    check samples[30] > 1400
+    # Makeup gain should have increased peak value from 1000
+    var peak: int16 = 0
+    for i in 80 ..< samples.len:
+      if abs(samples[i]) > peak: peak = abs(samples[i])
+    check peak > 1400
 
   test "Microphone pre-gain boost and 32-bit audio scaling":
     setMicPreGainDb(6.0'f32) # +6 dB is ~1.995x (approx 2.0x)
@@ -124,22 +128,91 @@ suite "Real-Time Audio DSP Suite (TDD)":
     nim_audio_dsp_apply_mic_pre_gain32(cast[ptr UncheckedArray[int32]](testUnity[0].addr), 1)
     check testUnity[0] == 12345'i32
 
-  test "Audio DSP enable and bypass toggle":
-    check nim_audio_dsp_is_enabled() == true
-    
-    # When disabled, audio passes through completely unchanged (no makeup gain or compression)
-    nim_audio_dsp_set_enabled(false)
-    check nim_audio_dsp_is_enabled() == false
+  test "Audio DSP independent vocal boost and speaker protection toggles":
+    # 1. Both disabled: 100% bit-exact passthrough
+    nim_audio_dsp_set_vocal_boost(false)
+    nim_audio_dsp_set_speaker_protection(false)
+    check nim_audio_dsp_is_vocal_boost_enabled() == false
+    check nim_audio_dsp_is_speaker_protection_enabled() == false
 
-    var rawSamples: array[16, int16]
-    for i in 0 ..< rawSamples.len: rawSamples[i] = 1000
-    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](rawSamples[0].addr), rawSamples.len)
-    # Since DSP is disabled, 1000 must remain exactly 1000!
+    var rawSamples: array[160, int16]
     for i in 0 ..< rawSamples.len:
-      check rawSamples[i] == 1000
-
-    # When re-enabled, vocal boost is applied
-    nim_audio_dsp_set_enabled(true)
-    check nim_audio_dsp_is_enabled() == true
+      rawSamples[i] = int16(1000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0))
+    var origCopy = rawSamples
     nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](rawSamples[0].addr), rawSamples.len)
-    check rawSamples[10] > 1400
+    check rawSamples == origCopy
+
+    # 2. Vocal boost only (speaker protection OFF):
+    # 1000 Hz tone receives makeup gain, but 50 Hz sub-bass is not filtered
+    nim_audio_dsp_set_vocal_boost(true)
+    nim_audio_dsp_set_speaker_protection(false)
+    check nim_audio_dsp_is_vocal_boost_enabled() == true
+    check nim_audio_dsp_is_speaker_protection_enabled() == false
+
+    var vocalOnly: array[160, int16]
+    for i in 0 ..< vocalOnly.len:
+      vocalOnly[i] = int16(1000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0))
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](vocalOnly[0].addr), vocalOnly.len)
+    var peakVocalOnly: int16 = 0
+    for i in 80 ..< vocalOnly.len:
+      if abs(vocalOnly[i]) > peakVocalOnly: peakVocalOnly = abs(vocalOnly[i])
+    check peakVocalOnly > 1400 # Boosted by +5 dB
+
+    # 3. Speaker protection only (vocal boost OFF):
+    # 1000 Hz tone is NOT boosted (+0 dB), but 50 Hz tone is attenuated by HPF
+    nim_audio_dsp_set_vocal_boost(false)
+    nim_audio_dsp_set_speaker_protection(true)
+    check nim_audio_dsp_is_vocal_boost_enabled() == false
+    check nim_audio_dsp_is_speaker_protection_enabled() == true
+
+    var protTone: array[160, int16]
+    for i in 0 ..< protTone.len:
+      protTone[i] = int16(1000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0))
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](protTone[0].addr), protTone.len)
+    var peakProtTone: int16 = 0
+    for i in 80 ..< protTone.len:
+      if abs(protTone[i]) > peakProtTone: peakProtTone = abs(protTone[i])
+    check peakProtTone <= 1050 # No vocal makeup boost!
+
+    # 4. Re-enable both for standard operation
+    nim_audio_dsp_set_vocal_boost(true)
+    nim_audio_dsp_set_speaker_protection(true)
+    check nim_audio_dsp_is_vocal_boost_enabled() == true
+    check nim_audio_dsp_is_speaker_protection_enabled() == true
+
+  test "Biquad high-pass rumble filter attenuates sub-bass and preserves voice frequencies":
+    var hpf = newHighPassFilter(sampleRate = 16000'f32, cutoffHz = 180'f32)
+    
+    # 1. Test DC rejection: constant 5000 offset should decay to near 0
+    var dcSample: float32 = 5000.0'f32
+    var lastY: float32 = 0.0'f32
+    for _ in 0 ..< 500:
+      lastY = hpf.processSample(dcSample)
+    check abs(lastY) < 1.0'f32 # DC completely blocked
+
+    # 2. Test 50 Hz sub-bass rejection: 50 Hz is far below 180 Hz cutoff
+    hpf.reset()
+    var subBassSamples: array[1600, float32]
+    var subBassOut: array[1600, float32]
+    for i in 0 ..< subBassSamples.len:
+      subBassSamples[i] = 10000.0 * sin(2.0 * PI * 50.0 * float(i) / 16000.0)
+      subBassOut[i] = hpf.processSample(subBassSamples[i])
+    
+    # Steady state peak of 50 Hz should be attenuated by at least 15 dB (amplitude < 1800 from 10000)
+    var peak50: float32 = 0.0
+    for i in 800 ..< subBassOut.len:
+      if abs(subBassOut[i]) > peak50: peak50 = abs(subBassOut[i])
+    check peak50 < 1800.0'f32 # ~22.3 dB attenuation of 50 Hz rumble (peak is ~768 from 10000)
+
+    # 3. Test 1000 Hz vocal tone: 1000 Hz is well above 180 Hz cutoff, must have > 95% passband gain
+    hpf.reset()
+    var vocalSamples: array[1600, float32]
+    var vocalOut: array[1600, float32]
+    for i in 0 ..< vocalSamples.len:
+      vocalSamples[i] = 10000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0)
+      vocalOut[i] = hpf.processSample(vocalSamples[i])
+    
+    var peak1000: float32 = 0.0
+    for i in 800 ..< vocalOut.len:
+      if abs(vocalOut[i]) > peak1000: peak1000 = abs(vocalOut[i])
+    check peak1000 > 9500.0'f32 # > 95% transmission
