@@ -10,10 +10,11 @@ jobs:
   test:
     name: Test on Linux
     runs-on: docker
-    container: nimlang/nim:2.2.10
+    container: node:20-bookworm
     steps:
-      - name: Verify Repo Files
+      - name: Check out repo
+        uses: actions/checkout@v4
+      - name: Verify files
         run: |
-          test -f scripts/ci/test.sh
-          test -f src/nim_esphome_satellite.nim
-          test -f packages/respeaker_xvf3800.yaml
+          ls -la
+          test -f scripts/ci/test.sh && echo "Checkout succeeded!"
