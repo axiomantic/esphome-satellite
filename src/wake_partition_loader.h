@@ -218,7 +218,7 @@ class WakePartitionLoader {
     }
 
     if (slot1_select != nullptr) {
-      this->slot1_options_ = {"Mr. Clemens", "Okay Nabu"};
+      this->slot1_options_ = {"Disabled", "Mr. Clemens", "Okay Nabu"};
       for (const auto &name : this->custom_names_) {
         this->slot1_options_.push_back(name);
       }
@@ -265,9 +265,6 @@ class WakePartitionLoader {
         if (leg_idx_pref.load(&idx) && idx < this->slot1_options_.size()) {
           active_s1 = this->slot1_options_[idx];
           ESP_LOGI(TAG, "Migrated Slot 1 Wake Word from index %zu: '%s'", idx, active_s1.c_str());
-        } else if (!this->custom_names_.empty()) {
-          active_s1 = this->custom_names_[0];
-          ESP_LOGI(TAG, "Defaulting Slot 1 Wake Word to installed partition model: '%s'", active_s1.c_str());
         }
       }
 
@@ -336,7 +333,7 @@ class WakePartitionLoader {
     }
 
     auto should_enable = [&](const std::string &name) -> bool {
-      if (name == this->slot1_model_name_) return true;
+      if (this->slot1_model_name_ != "Disabled" && name == this->slot1_model_name_) return true;
       if (this->slot2_model_name_ != "Disabled" && name == this->slot2_model_name_) return true;
       return false;
     };
@@ -408,6 +405,9 @@ class WakePartitionLoader {
       return static_cast<uint8_t>(std::max(1, std::min(255, (int)std::round(override_val * 255.0f))));
     }
     std::string model = (slot == 2) ? this->slot2_model_name_ : this->slot1_model_name_;
+    if (model == "Disabled") {
+      return 255;
+    }
     std::string level = (slot == 2) ? this->slot2_sensitivity_ : this->slot1_sensitivity_;
     uint8_t base = 102;
     if (model == "Okay Nabu") {
@@ -435,16 +435,17 @@ class WakePartitionLoader {
       this->cancel_model_ = cancel;
     }
     auto get_cutoff_for_model = [&](const std::string &model_name, uint8_t base_cutoff) -> uint8_t {
-      float override_val = (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_)
-                              ? this->slot2_cutoff_override_
-                              : this->slot1_cutoff_override_;
+      float override_val = 0.0f;
+      std::string level = "Moderately sensitive";
+      if (this->slot1_model_name_ != "Disabled" && model_name == this->slot1_model_name_) {
+        override_val = this->slot1_cutoff_override_;
+        level = this->slot1_sensitivity_;
+      } else if (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_) {
+        override_val = this->slot2_cutoff_override_;
+        level = this->slot2_sensitivity_;
+      }
       if (override_val >= 0.05f && override_val <= 0.99f) {
         return static_cast<uint8_t>(std::max(1, std::min(255, (int)std::round(override_val * 255.0f))));
-      }
-
-      std::string level = this->slot1_sensitivity_;
-      if (this->slot2_model_name_ != "Disabled" && model_name == this->slot2_model_name_) {
-        level = this->slot2_sensitivity_;
       }
       if (nim_wake_loader_scale_cutoff != nullptr) {
         return nim_wake_loader_scale_cutoff(base_cutoff, level.c_str());
@@ -481,7 +482,7 @@ class WakePartitionLoader {
     if (detected_word == "Cancel" || detected_word == "cancel_keywords") {
       return 3;
     }
-    if (detected_word == this->slot1_model_name_) {
+    if (this->slot1_model_name_ != "Disabled" && detected_word == this->slot1_model_name_) {
       return 1;
     }
     if (this->slot2_model_name_ != "Disabled" && detected_word == this->slot2_model_name_) {
