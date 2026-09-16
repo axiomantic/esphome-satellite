@@ -12,9 +12,8 @@ jobs:
     runs-on: docker
     container: nimlang/nim:2.2.10
     steps:
-      - name: Inspect Workspace
+      - name: Verify Repo Files
         run: |
-          echo "=== Workspace Inspection ==="
-          pwd
-          ls -la
-          git status || true
+          test -f scripts/ci/test.sh
+          test -f src/nim_esphome_satellite.nim
+          test -f packages/respeaker_xvf3800.yaml
