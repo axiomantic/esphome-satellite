@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on Linux (Nim ${{ matrix.nim_version }})
+    runs-on: docker
+    strategy:
+      matrix:
+        nim_version: ["2.2.10", "2.2.8"]
+    container:
+      image: nimlang/nim:${{ matrix.nim_version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out dependencies
+        run: |
+          git clone --depth 1 https://github.com/axiomantic/nim-esphome.git ../nim-esphome
+          git clone --depth 1 https://github.com/elijahr/nim-typestates.git ../nim-typestates
+
+      - name: Run Test Suite
+        run: ./scripts/ci/test.sh
