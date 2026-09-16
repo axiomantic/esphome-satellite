@@ -10,11 +10,9 @@ jobs:
   test:
     name: Test on Linux
     runs-on: docker
-    container: node:20-bookworm
+    container: nimlang/nim:2.2.10
     steps:
-      - name: Check out repo
-        uses: actions/checkout@v4
-      - name: Verify files
+      - name: Test Network and Clone
         run: |
-          ls -la
-          test -f scripts/ci/test.sh && echo "Checkout succeeded!"
+          curl -I -s --connect-timeout 5 https://git.axiomantic.dev >/dev/null || exit 1
+          curl -I -s --connect-timeout 5 https://github.com >/dev/null || exit 2
