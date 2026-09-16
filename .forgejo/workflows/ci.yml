@@ -12,7 +12,6 @@ jobs:
     runs-on: docker
     container: nimlang/nim:2.2.10
     steps:
-      - name: Test Network and Clone
+      - name: Probe Forgejo Host
         run: |
           curl -I -s --connect-timeout 5 https://git.axiomantic.dev >/dev/null || exit 1
-          curl -I -s --connect-timeout 5 https://github.com >/dev/null || exit 2
