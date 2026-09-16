@@ -902,17 +902,23 @@ When submitting PRs or contributing code:
 4. **Strict Test-Driven Development (TDD)**: Every Nim module and Python script must have accompanying unit tests in `tests/`. Always perform anti-green-mirage verification before code changes.
 5. **Zero Emojis**: Keep all documentation, commit messages, code comments, and PR descriptions clear, technical, human, and completely free of emojis.
 
----
+## Continuous Integration & Testing
+
+This project uses a dual-CI architecture with shared execution scripts:
+
+- **Primary CI (Forgejo Actions)**: Hosted on private infrastructure (`https://git.axiomantic.dev/eek/esphome-satellite`) using a Podman-backed Linux runner (`.forgejo/workflows/ci.yml`). Matrix builds validate Nim 2.2.10 and Nim 2.2.8 across all test suites and verify ESP32 cross-compilation syntax.
+- **Shared CI Scripts**: Test logic is extracted into parameterized shell scripts under `scripts/ci/` (e.g. `scripts/ci/test.sh`). Both Forgejo Actions, GitHub Actions, and local development environments execute the exact same scripts.
+- **GitHub Mirror**: The GitHub repository (`axiomantic/esphome-satellite`) acts as a manual mirror target. Push-triggered CI is disabled on GitHub to avoid duplicate runs, though `.github/workflows/ci.yml` remains runnable on-demand via `workflow_dispatch` or on pull requests. GitHub Actions also hosts repository-specific web deployment workflows (such as GitHub Pages builds for the WebSerial installer).
 
 ## Local Host Testing
 
 You do not need an ESP32 connected to run the test suite. All state machine logic and compile-time invariants run locally on macOS or Linux:
 
 ```bash
-# Run unit tests
-./scripts/test.sh
+# Run complete test suite and ESP32 syntax check
+./scripts/ci/test.sh
 
-# Or via Nim directly
+# Or run individual test suites directly
 nim c -r tests/test_fsm.nim
 ```
 
@@ -922,6 +928,7 @@ The test suite validates:
 - **Granular Errors**: `SilentDismiss`, `PipelineError`, `ConnectionError`
 - **Extended Lifecycle**: `Muted`, `FollowUp`, `PlayingMedia`, `Alerting`, `Announcing`, `Updating`
 - **Compile-Time Invariant Enforcement**: Verified using `not compiles(...)` (e.g. verifying that calling `onWakeWord` while `Muted` or `Updating` is rejected by the compiler).
+- **Embedded C++ Transpilation**: Verifies cross-compilation for ESP32 with `-d:danger`, ARC memory management, and C++ ABI bridging.
 
 ---
 
