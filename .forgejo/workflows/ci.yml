@@ -8,10 +8,21 @@ on:
 
 jobs:
   test:
-    name: Test on Linux
+    name: Test on Linux (Nim ${{ matrix.nim_version }})
     runs-on: docker
-    container: nimlang/nim:2.2.10
+    strategy:
+      matrix:
+        nim_version: ["2.2.10", "2.2.8"]
+    container:
+      image: nimlang/nim:${{ matrix.nim_version }}
     steps:
-      - name: Probe Forgejo Host
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out dependencies
         run: |
-          curl -I -s --connect-timeout 5 https://git.axiomantic.dev >/dev/null || exit 1
+          git clone --depth 1 https://github.com/axiomantic/nim-esphome.git ../nim-esphome
+          git clone --depth 1 https://github.com/elijahr/nim-typestates.git ../nim-typestates
+
+      - name: Run Test Suite
+        run: ./scripts/ci/test.sh
