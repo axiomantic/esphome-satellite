@@ -20,6 +20,7 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
   installer.homeAssistantDomain = "esphome"
   installer.chipFamily = "ESP32-S3"
   installer.factoryBinPath = "firmware-factory.bin"
+  installer.newInstallPromptErase = true
 
   # Discrete partition parts (skips NVS partition 0x9000-0xE000 to preserve device state across flashes)
   installer.addBasePart("bootloader.bin", 0x0'u32)
@@ -86,6 +87,7 @@ let satelliteInstaller = esphomeInstaller("esphome-satellite"):
 
 writeFile("web/index.html", satelliteInstaller.generateHtml())
 var manifestObj = parseJson(satelliteInstaller.generateManifest())
+var preservedOta: JsonNode = nil
 if fileExists("web/manifest.json"):
   try:
     let existing = parseJson(readFile("web/manifest.json"))
@@ -95,17 +97,22 @@ if fileExists("web/manifest.json"):
       manifestObj["built_at"] = existing["built_at"]
     if existing.hasKey("version") and existing["version"].getStr().startsWith(currentVersion & "+"):
       manifestObj["version"] = existing["version"]
+    if existing.hasKey("builds") and existing["builds"].len > 0 and existing["builds"][0].hasKey("ota"):
+      preservedOta = existing["builds"][0]["ota"]
   except:
     discard
 
-let md5File = "web/firmware-ota.bin.md5"
-let md5Str = if fileExists(md5File): readFile(md5File).strip() else: "64f30bc73002db3293b4a58d172bec79"
-if manifestObj.hasKey("builds") and manifestObj["builds"].len > 0:
-  var otaObj = newJObject()
-  otaObj["path"] = %"firmware-ota.bin"
-  otaObj["md5"] = %md5Str
-  otaObj["summary"] = %"Official Seeed ReSpeaker XVF3800 firmware release."
-  manifestObj["builds"][0]["ota"] = otaObj
+if preservedOta != nil and manifestObj.hasKey("builds") and manifestObj["builds"].len > 0:
+  manifestObj["builds"][0]["ota"] = preservedOta
+else:
+  let md5File = "web/firmware-ota.bin.md5"
+  let md5Str = if fileExists(md5File): readFile(md5File).strip() else: "065b6214fa1231161409c9a81a43fea8"
+  if manifestObj.hasKey("builds") and manifestObj["builds"].len > 0:
+    var otaObj = newJObject()
+    otaObj["path"] = %"firmware-ota.bin"
+    otaObj["md5"] = %md5Str
+    otaObj["summary"] = %"Official Seeed ReSpeaker XVF3800 firmware release."
+    manifestObj["builds"][0]["ota"] = otaObj
 
 writeFile("web/manifest.json", pretty(manifestObj, indent = 2) & "\n")
 echo "Successfully generated web/index.html and web/manifest.json (v" & currentVersion & ") via nim-esphome DSL!"

@@ -733,6 +733,7 @@ select:
     initial_option: "Mr. Clemens"
     restore_value: true
     options:
+      - "Disabled"
       - "Mr. Clemens"
       - "Okay Nabu"
     set_action:

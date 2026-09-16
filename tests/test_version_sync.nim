@@ -92,3 +92,12 @@ suite "Version Synchronization Invariant Suite":
     check "--flash_size 8MB" in flashScript
     check "--flash_size 16MB" notin flashScript
 
+  test "web/manifest.json and web/index.html enable new_install_prompt_erase to preserve NVS":
+    let jsonText = readFile("web/manifest.json")
+    let parsed = parseJson(jsonText)
+    check parsed.hasKey("new_install_prompt_erase")
+    check parsed["new_install_prompt_erase"].getBool() == true
+
+    let htmlText = readFile("web/index.html")
+    check "new_install_prompt_erase: true" in htmlText
+
