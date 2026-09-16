@@ -12,9 +12,9 @@ jobs:
     runs-on: docker
     container: nimlang/nim:2.2.10
     steps:
-      - name: Diagnostic Step
+      - name: Inspect Workspace
         run: |
-          echo "=== Diagnostic Step ==="
-          echo "User: $(whoami)"
-          echo "Nim: $(nim --version | head -n 1)"
-          echo "Git: $(git --version)"
+          echo "=== Workspace Inspection ==="
+          pwd
+          ls -la
+          git status || true
