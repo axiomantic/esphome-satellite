@@ -767,9 +767,13 @@ class WakePartitionLoader {
       vTaskSuspend(mww_task);
     }
 
-    // Release any active MMAP handle on the target partition before erase
+    // Release any active MMAP handle and disable model on the target partition before erase
     if (slot >= 1 && slot <= static_cast<int>(this->slots_.size())) {
       auto &s = this->slots_[slot - 1];
+      if (s.model != nullptr) {
+        s.model->disable();
+        s.model = nullptr;
+      }
       if (s.map_handle != 0) {
         ESP_LOGI(TAG, "Unmapping active partition mmap handle for slot %d...", slot);
         esp_partition_munmap(s.map_handle);

@@ -29,6 +29,17 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     check payload[5] == 0xFF'u8 # Red
     check payload[6] == 0x00'u8 # Pad
 
+    # Test C ABI export
+    var cBuf: array[51, uint8]
+    let written = nim_xvf3800_make_led_payload(cast[ptr UncheckedArray[uint32]](addr colors[0]), 12, cast[ptr UncheckedArray[uint8]](addr cBuf[0]))
+    check written == 51
+    check cBuf[0] == 20'u8
+    check cBuf[1] == 18'u8
+    check cBuf[2] == 48'u8
+    check cBuf[3] == 0x00'u8
+    check cBuf[4] == 0x88'u8
+    check cBuf[5] == 0xFF'u8
+
   test "LED animation states - Muted produces solid red":
     let colors = computeAnimationColors("Muted", "Off", 1.0'f32, 1000'u32)
     for c in colors:
