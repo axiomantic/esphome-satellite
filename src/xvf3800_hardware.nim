@@ -219,6 +219,14 @@ proc nim_xvf3800_make_gpo_payload*(pin: uint8, val: uint8, outBuf: ptr Unchecked
     let p = makeGpoPayload(pin, val)
     copyMem(addr outBuf[0], unsafeAddr p[0], 5)
 
+proc nim_xvf3800_make_led_payload*(colors: ptr UncheckedArray[uint32], count: csize_t, outBuf: ptr UncheckedArray[uint8]): csize_t {.exportc, cdecl.} =
+  if colors != nil and outBuf != nil:
+    let numColors = min(int(count), 12)
+    let p = makeLedRingPayload(toOpenArray(colors, 0, numColors - 1))
+    copyMem(addr outBuf[0], unsafeAddr p[0], p.len)
+    return csize_t(p.len)
+  return 0
+
 proc nim_xvf3800_update_animation*(
     stateName: cstring,
     patternPref: cstring,

@@ -25,6 +25,7 @@ static const uint8_t PIN_AMP_ENABLE = 31; // 0 = enabled (active low), 1 = disab
 static const uint8_t PIN_LED_POWER = 33; // 1 = power on, 0 = power off
 
 extern "C" size_t nim_xvf3800_get_reboot_payload(uint8_t *outBuf);
+extern "C" size_t nim_xvf3800_make_led_payload(const uint32_t *colors, size_t count, uint8_t *outBuf);
 extern "C" size_t nim_aic3104_get_init_registers(uint8_t *outRegs, uint8_t *outVals);
 extern "C" void nim_aic3104_compute_volume(float vol, bool muted, uint8_t *outDacVal, uint8_t *outHpLevel, uint8_t *outLopLevel);
 extern "C" uint8_t nim_aic3104_compute_hp_gain(float volume);
@@ -141,18 +142,20 @@ class XVF3800Hardware {
     memcpy(this->last_colors_, colors, sizeof(this->last_colors_));
     this->leds_valid_ = true;
 
-    // Payload: [resid (20), cmd (18), len (48), 12 * (B, G, R, 0)]
     uint8_t payload[3 + 48];
-    payload[0] = GPO_SERVICER_RESID;
-    payload[1] = GPO_CMD_LED_RING;
-    payload[2] = 48;
-
-    for (int i = 0; i < 12; i++) {
-      uint32_t c = colors[i];
-      payload[3 + i * 4 + 0] = (uint8_t)(c & 0xFF);         // Blue
-      payload[3 + i * 4 + 1] = (uint8_t)((c >> 8) & 0xFF);  // Green
-      payload[3 + i * 4 + 2] = (uint8_t)((c >> 16) & 0xFF); // Red
-      payload[3 + i * 4 + 3] = 0x00;
+    if (nim_xvf3800_make_led_payload != nullptr) {
+      nim_xvf3800_make_led_payload(colors, 12, payload);
+    } else {
+      payload[0] = GPO_SERVICER_RESID;
+      payload[1] = GPO_CMD_LED_RING;
+      payload[2] = 48;
+      for (int i = 0; i < 12; i++) {
+        uint32_t c = colors[i];
+        payload[3 + i * 4 + 0] = (uint8_t)(c & 0xFF);         // Blue
+        payload[3 + i * 4 + 1] = (uint8_t)((c >> 8) & 0xFF);  // Green
+        payload[3 + i * 4 + 2] = (uint8_t)((c >> 16) & 0xFF); // Red
+        payload[3 + i * 4 + 3] = 0x00;
+      }
     }
 
     i2c::ErrorCode err = this->bus_->write(XVF3800_I2C_ADDR, payload, sizeof(payload));
