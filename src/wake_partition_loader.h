@@ -246,7 +246,7 @@ class WakePartitionLoader {
     }
 
     std::string active_s1 = "Mr. Clemens";
-    std::string active_s2 = "Disabled";
+    std::string active_s2 = this->custom_names_.empty() ? "Disabled" : this->custom_names_[0];
 
     if (global_preferences != nullptr) {
       WakeWordFixedStringPref s1_pref{};

@@ -19,6 +19,7 @@ void nim_satellite_disconnected(void);
 void nim_satellite_connected(void);
 bool nim_satellite_is_cancellation(const char *text, const char *config);
 bool nim_satellite_is_reset_phrase(const char *text);
+int nim_satellite_match_volume_action(const char *text, int *outTargetVol);
 int nim_satellite_get_state(void);
 bool nim_satellite_is_cancelling(void);
 void nim_satellite_register_hardware_abort_cb(void (*cb)(void));
@@ -167,6 +168,9 @@ inline bool call_nim_is_cancellation(const char *text, const char *config = null
 }
 inline bool call_nim_is_reset_phrase(const char *text) {
   return nim_satellite_is_reset_phrase(text);
+}
+inline int call_nim_match_volume_action(const char *text, int *outTargetVol) {
+  return nim_satellite_match_volume_action(text, outTargetVol);
 }
 inline void call_nim_satellite_register_hardware_abort_cb(void (*cb)(void)) {
   nim_satellite_register_hardware_abort_cb(cb);
