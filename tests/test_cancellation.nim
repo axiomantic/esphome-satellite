@@ -83,3 +83,82 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     check nim_satellite_is_reset_phrase("forget everything!".cstring)
     check not nim_satellite_is_reset_phrase("hello".cstring)
     check not nim_satellite_is_reset_phrase(nil)
+
+  test "Satellite Volume Action Matcher Suite":
+    # 1. "your volume down" matches svakDown
+    let d1 = matchSatelliteVolumeAction("turn your volume down")
+    check d1.action == svakDown
+    let d2 = matchSatelliteVolumeAction("turn down your volume please")
+    check d2.action == svakDown
+    let d3 = matchSatelliteVolumeAction("lower your volume")
+    check d3.action == svakDown
+    let d4 = matchSatelliteVolumeAction("decrease your volume")
+    check d4.action == svakDown
+    let d5 = matchSatelliteVolumeAction("your volume down")
+    check d5.action == svakDown
+    let d6 = matchSatelliteVolumeAction("turn your sound down")
+    check d6.action == svakDown
+    let d7 = matchSatelliteVolumeAction("turn your speaker down")
+    check d7.action == svakDown
+    let d8 = matchSatelliteVolumeAction("turn down your speaker")
+    check d8.action == svakDown
+    let d9 = matchSatelliteVolumeAction("turn yourself down")
+    check d9.action == svakDown
+
+    # 2. "your volume up" matches svakUp
+    let u1 = matchSatelliteVolumeAction("turn your volume up")
+    check u1.action == svakUp
+    let u2 = matchSatelliteVolumeAction("turn up your volume")
+    check u2.action == svakUp
+    let u3 = matchSatelliteVolumeAction("raise your volume")
+    check u3.action == svakUp
+    let u4 = matchSatelliteVolumeAction("increase your volume")
+    check u4.action == svakUp
+    let u5 = matchSatelliteVolumeAction("boost your volume")
+    check u5.action == svakUp
+    let u6 = matchSatelliteVolumeAction("your volume up")
+    check u6.action == svakUp
+
+    # 3. Explicit set volume: "set your volume to X"
+    let s1 = matchSatelliteVolumeAction("set your volume to 50%")
+    check s1.action == svakSet
+    check s1.targetPercent == 50
+    let s2 = matchSatelliteVolumeAction("turn your volume to 75 percent")
+    check s2.action == svakSet
+    check s2.targetPercent == 75
+    let s3 = matchSatelliteVolumeAction("put your volume at thirty percent")
+    check s3.action == svakSet
+    check s3.targetPercent == 30
+
+    # 4. Mute / unmute
+    let m1 = matchSatelliteVolumeAction("mute yourself")
+    check m1.action == svakMute
+    let m2 = matchSatelliteVolumeAction("mute your volume")
+    check m2.action == svakMute
+    let um1 = matchSatelliteVolumeAction("unmute yourself")
+    check um1.action == svakUnmute
+    let um2 = matchSatelliteVolumeAction("unmute your volume")
+    check um2.action == svakUnmute
+
+    # 5. Media player volume commands DO NOT match (must route to Home Assistant!)
+    check matchSatelliteVolumeAction("turn the volume down").action == svakNone
+    check matchSatelliteVolumeAction("turn down the volume").action == svakNone
+    check matchSatelliteVolumeAction("lower the volume").action == svakNone
+    check matchSatelliteVolumeAction("turn the volume up").action == svakNone
+    check matchSatelliteVolumeAction("turn up the volume").action == svakNone
+    check matchSatelliteVolumeAction("turn down the living room sonos").action == svakNone
+    check matchSatelliteVolumeAction("set volume to 30%").action == svakNone
+    check matchSatelliteVolumeAction("mute the tv").action == svakNone
+    check matchSatelliteVolumeAction("").action == svakNone
+
+    # 6. C ABI Export
+    var targetVol: cint = 0
+    let actDown = nim_satellite_match_volume_action("turn your volume down".cstring, targetVol.addr)
+    check actDown == 1
+    let actSet = nim_satellite_match_volume_action("set your volume to 40 percent".cstring, targetVol.addr)
+    check actSet == 3
+    check targetVol == 40
+    let actNone = nim_satellite_match_volume_action("turn the volume down".cstring, targetVol.addr)
+    check actNone == 0
+    check nim_satellite_match_volume_action(nil, nil) == 0
+

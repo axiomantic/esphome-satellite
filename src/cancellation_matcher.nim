@@ -142,3 +142,96 @@ proc nim_satellite_is_reset_phrase*(text: cstring): bool {.exportc, cdecl.} =
   if text == nil:
     return false
   return isConversationResetPhrase($text)
+
+type
+  SatelliteVolumeActionKind* = enum
+    svakNone = 0,
+    svakDown = 1,
+    svakUp = 2,
+    svakSet = 3,
+    svakMute = 4,
+    svakUnmute = 5
+
+proc parsePercentage*(cleanText: string): int =
+  result = -1
+  var curNum = 0
+  var foundDigits = false
+  for i in 0 ..< cleanText.len:
+    let c = cleanText[i]
+    if c in {'0'..'9'}:
+      curNum = curNum * 10 + (ord(c) - ord('0'))
+      foundDigits = true
+    elif foundDigits:
+      if curNum >= 0 and curNum <= 100:
+        return curNum
+      curNum = 0
+      foundDigits = false
+  if foundDigits and curNum >= 0 and curNum <= 100:
+    return curNum
+
+  const wordPairs = [
+    ("zero", 0), ("ten", 10), ("twenty", 20), ("twenty five", 25),
+    ("thirty", 30), ("thirty five", 35), ("forty", 40), ("forty five", 45),
+    ("fifty", 50), ("fifty five", 55), ("sixty", 60), ("sixty five", 65),
+    ("seventy", 70), ("seventy five", 75), ("eighty", 80), ("eighty five", 85),
+    ("ninety", 90), ("ninety five", 95), ("one hundred", 100), ("hundred", 100),
+    ("maximum", 100), ("max", 100), ("minimum", 0), ("min", 0)
+  ]
+  for pair in wordPairs:
+    let word = pair[0]
+    let val = pair[1]
+    if cleanText == word or startsWith(cleanText, word & " ") or endsWith(cleanText, " " & word) or containsSub(cleanText, " " & word & " "):
+      return val
+
+proc matchSatelliteVolumeAction*(text: string): tuple[action: SatelliteVolumeActionKind, targetPercent: int] =
+  let cleanText = normalizeText(text)
+  if cleanText.len == 0:
+    return (svakNone, -1)
+
+  let hasSelfRef = containsSub(cleanText, "your volume") or
+                   containsSub(cleanText, "your sound") or
+                   containsSub(cleanText, "your speaker") or
+                   containsSub(cleanText, "your speakers") or
+                   containsSub(cleanText, "yourself") or
+                   containsSub(cleanText, "this satellite") or
+                   containsSub(cleanText, "this board") or
+                   containsSub(cleanText, "this speaker")
+
+  if not hasSelfRef:
+    return (svakNone, -1)
+
+  if containsSub(cleanText, "unmute") or containsSub(cleanText, "un-mute"):
+    return (svakUnmute, -1)
+  if containsSub(cleanText, "mute"):
+    return (svakMute, -1)
+
+  let pct = parsePercentage(cleanText)
+  if pct >= 0 and (containsSub(cleanText, "set") or containsSub(cleanText, "to") or containsSub(cleanText, "at") or containsSub(cleanText, "put")):
+    return (svakSet, pct)
+
+  if containsSub(cleanText, "down") or
+     containsSub(cleanText, "lower") or
+     containsSub(cleanText, "decrease") or
+     containsSub(cleanText, "quieter") or
+     containsSub(cleanText, "drop") or
+     containsSub(cleanText, "soften"):
+    return (svakDown, -1)
+
+  if containsSub(cleanText, "up") or
+     containsSub(cleanText, "raise") or
+     containsSub(cleanText, "increase") or
+     containsSub(cleanText, "louder") or
+     containsSub(cleanText, "boost") or
+     containsSub(cleanText, "higher"):
+    return (svakUp, -1)
+
+  return (svakNone, -1)
+
+proc nim_satellite_match_volume_action*(text: cstring, outTargetVol: ptr cint): cint {.exportc, cdecl.} =
+  if text == nil:
+    return 0
+  let res = matchSatelliteVolumeAction($text)
+  if outTargetVol != nil:
+    outTargetVol[] = cint(res.targetPercent)
+  return cint(ord(res.action))
+

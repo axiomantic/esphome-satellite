@@ -463,6 +463,7 @@ micro_wake_word:
                                 std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
                                 float vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
                                 esphome::get_pcm_sound_player().play_chime(opt, false, vol);
+                            - delay: 50ms
                             - wait_until:
                                 condition:
                                   lambda: |-
@@ -508,6 +509,37 @@ voice_assistant:
         esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
   on_stt_end:
     - lambda: |-
+        int target_vol = 0;
+        int vol_act = call_nim_match_volume_action(x.c_str(), &target_vol);
+        if (vol_act != 0) {
+          ESP_LOGI("voice_assistant", "Satellite volume action matched: %d (target=%d) in '%s'", vol_act, target_vol, x.c_str());
+          id(va).request_stop();
+          esphome::get_pcm_sound_player().stop();
+          call_nim_stop_word();
+          float cur_vol = id(master_volume).state;
+          float new_vol = cur_vol;
+          if (vol_act == 1) { // svakDown
+            new_vol = std::max(0.0f, cur_vol - 10.0f);
+          } else if (vol_act == 2) { // svakUp
+            new_vol = std::min(100.0f, cur_vol + 10.0f);
+          } else if (vol_act == 3) { // svakSet
+            new_vol = clamp(float(target_vol), 0.0f, 100.0f);
+          } else if (vol_act == 4) { // svakMute
+            new_vol = 0.0f;
+          } else if (vol_act == 5) { // svakUnmute
+            new_vol = (cur_vol <= 0.0f) ? 50.0f : cur_vol;
+          }
+          id(master_volume).publish_state(new_vol);
+          float slot_pct = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state);
+          id(board_speaker).set_volume(calculate_effective_voice_volume(new_vol, id(voice_volume).state, slot_pct));
+          global_preferences->sync();
+
+          std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+          float eff_vol = calculate_effective_sound_volume(new_vol, id(wake_chime_volume).state);
+          esphome::get_pcm_sound_player().play_chime(opt, false, eff_vol);
+          return;
+        }
+
         bool is_reset = call_nim_is_reset_phrase(x.c_str());
         if (is_reset) {
           ESP_LOGI("voice_assistant", "Explicit conversation reset requested: '%s'. Clearing conversation history.", x.c_str());

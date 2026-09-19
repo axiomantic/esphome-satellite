@@ -60,7 +60,7 @@ proc newAudioCompressor*(
     ratio: float32 = 3.0'f32,
     attackMs: float32 = 4.0'f32,
     releaseMs: float32 = 75.0'f32,
-    makeupGainDb: float32 = 5.0'f32,
+    makeupGainDb: float32 = 3.2'f32,
     cutoffHz: float32 = 180.0'f32
 ): AudioCompressor =
   result.sampleRate = sampleRate
@@ -75,17 +75,26 @@ proc newAudioCompressor*(
   result.hpf = newHighPassFilter(sampleRate, cutoffHz)
 
 proc softClip*(x: float32, limit: float32 = 32767.0'f32): int16 {.inline.} =
-  ## Rational soft-saturation curve: strictly bounded within [-limit, limit].
-  ## Linear for small amplitudes, smoothly saturating at high levels with zero clipping buzz.
-  let normalized = x / limit
-  let saturated = normalized / sqrt(1.0'f32 + normalized * normalized)
-  let scaled = saturated * limit
-  if scaled >= 32767.0'f32:
+  ## Transparent soft-knee limiter: strictly bounded within safe speaker limits.
+  ## Completely linear below ~21000 for 0% harmonic distortion on normal audio,
+  ## smoothly compressing extreme peaks above 21000 to asymptotically approach targetMax (~28500).
+  let knee: float32 = min(limit * 0.65'f32, 21000.0'f32)
+  let absX = abs(x)
+  if absX <= knee:
+    return int16(clamp(x, -limit, limit))
+  let targetMax: float32 = min(limit * 0.88'f32, 28500.0'f32)
+  let headroom = targetMax - knee
+  let excess = absX - knee
+  let excessNorm = excess / headroom
+  let compressedExcess = headroom * (excessNorm / (1.0'f32 + excessNorm))
+  let clipped = knee + compressedExcess
+  let finalVal = if x < 0.0'f32: -clipped else: clipped
+  if finalVal >= 32767.0'f32:
     return 32767'i16
-  elif scaled <= -32767.0'f32:
+  elif finalVal <= -32767.0'f32:
     return -32767'i16
   else:
-    return int16(scaled)
+    return int16(finalVal)
 
 proc process*(comp: var AudioCompressor, samples: ptr int16, count: int, applyVocal: bool = true, applyProtection: bool = true) =
   if samples == nil or count <= 0:
@@ -154,11 +163,20 @@ proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int, apply
       s = s * gainReduction * comp.makeupGain
 
     if applyProtection:
-      # Soft-knee limiting for 32-bit
-      let normalized = s / 2147483647.0'f32
-      let saturated = normalized / sqrt(1.0'f32 + normalized * normalized)
-      let scaled = saturated * 2147483647.0'f32
-      arr[i] = int32(clamp(scaled, -2147483647.0'f32, 2147483647.0'f32))
+      # Transparent soft-knee limiting for 32-bit
+      const Limit32 = 2147483647.0'f32
+      const Knee32 = Limit32 * 0.85'f32
+      const Headroom32 = Limit32 - Knee32
+      let absS = abs(s)
+      if absS <= Knee32:
+        arr[i] = int32(clamp(s, -Limit32, Limit32))
+      else:
+        let excess = absS - Knee32
+        let excessNorm = excess / Headroom32
+        let compressedExcess = Headroom32 * (excessNorm / (1.0'f32 + excessNorm))
+        let clipped = Knee32 + compressedExcess
+        let finalVal = if s < 0.0'f32: -clipped else: clipped
+        arr[i] = int32(clamp(finalVal, -Limit32, Limit32))
     else:
       arr[i] = int32(clamp(s, -2147483647.0'f32, 2147483647.0'f32))
 

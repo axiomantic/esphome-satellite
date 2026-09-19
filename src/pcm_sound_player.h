@@ -483,9 +483,14 @@ class PcmSoundPlayer {
     this->is_loop_ = false;
     nim_dma_stream_abort();
     TaskHandle_t h = this->task_handle_;
-    this->task_handle_ = nullptr;
     if (h != nullptr) {
-      vTaskDelete(h);
+      for (int i = 0; i < 10 && this->task_handle_ != nullptr; i++) {
+        vTaskDelay(pdMS_TO_TICKS(5));
+      }
+      if (this->task_handle_ != nullptr) {
+        this->task_handle_ = nullptr;
+        vTaskDelete(h);
+      }
     }
     if (this->speaker_ != nullptr) {
       this->speaker_->stop();
@@ -657,6 +662,11 @@ class PcmSoundPlayer {
         }
         call_nim_cancel_done(true);
       }
+    }
+
+    if (this->speaker_ != nullptr) {
+      static const int16_t zero_flush[32] = {0};
+      this->speaker_->play(reinterpret_cast<const uint8_t *>(zero_flush), sizeof(zero_flush), pdMS_TO_TICKS(10));
     }
 
     this->is_playing_ = false;
