@@ -849,6 +849,9 @@ void VoiceAssistant::on_event(const api::VoiceAssistantEventResponse &msg) {
           this->continue_conversation_ = (arg.value == "1");
         }
       }
+      if (this->always_continue_) {
+        this->continue_conversation_ = true;
+      }
       this->defer([this]() { this->intent_end_trigger_.trigger(); });
       break;
     }

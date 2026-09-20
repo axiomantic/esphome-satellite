@@ -953,6 +953,7 @@ proc satelliteLoop*(now: uint32) =
   of rsFollowUp:
     if elapsed >= 5000:
       warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 5s. Returning to Idle.")
+      notifyHardwareAbort()
       ctxIdle = onFollowUpTimeout(ctxFollowUp)
       returnFromIdleToMediaOrIdle()
   of rsSilentDismiss:
