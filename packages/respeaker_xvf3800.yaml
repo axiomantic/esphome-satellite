@@ -65,6 +65,9 @@ esphome:
             nim_satellite_register_hardware_abort_cb([]() {
               id(va).request_stop();
               esphome::get_pcm_sound_player().stop();
+              if (!id(mic_mute_switch).state) {
+                id(mww)->start();
+              }
             });
             float init_slot_pct = (id(active_assistant_slot) == 2 ? id(slot2_volume).state : id(slot1_volume).state);
             id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, init_slot_pct));
@@ -84,6 +87,7 @@ esphome:
                 esphome::wake_loader::get_wake_partition_loader().get_slot1_model_name(),
                 esphome::wake_loader::get_wake_partition_loader().get_slot2_model_name());
             id(va).set_media_player(id(board_media_player));
+            id(va).set_always_continue(id(continuous_conversation_switch).state);
             id(va).add_on_configuration_updated_callback([](const std::string &s1, const std::string &s2) {
               ESP_LOGI("voice_assistant", "HA updated wake words -> Slot 1: '%s', Slot 2: '%s'", s1.c_str(), s2.c_str());
               esphome::wake_loader::get_wake_partition_loader().update_slot_models(
@@ -462,6 +466,10 @@ micro_wake_word:
                       id(va).reset_conversation_id();
                     }
                     call_nim_wake_word(wake_word.c_str(), 0);
+                    std::string ww_to_send = (slot == 2) ? id(slot2_wake_word).current_option() : id(slot1_wake_word).current_option();
+                    id(va).set_wake_word(ww_to_send);
+                    ESP_LOGI("voice_assistant", "Slot %d wake word detected: '%s' -> sending phrase '%s' to HA",
+                             slot, wake_word.c_str(), ww_to_send.c_str());
                 - micro_wake_word.stop:
                 - if:
                     condition:
@@ -490,11 +498,13 @@ micro_wake_word:
                             - lambda: |-
                                 call_nim_chime_done(true);
                       - voice_assistant.start:
-                          wake_word: !lambda return wake_word;
+                          wake_word: !lambda |-
+                            return (id(active_assistant_slot) == 2) ? id(slot2_wake_word).current_option() : id(slot1_wake_word).current_option();
                     else:
                       - script.execute:
                           id: connect_and_start_assistant
-                          ww: !lambda return wake_word;
+                          ww: !lambda |-
+                            return (id(active_assistant_slot) == 2) ? id(slot2_wake_word).current_option() : id(slot1_wake_word).current_option();
 
 voice_assistant:
   id: va
@@ -654,6 +664,11 @@ voice_assistant:
   on_error:
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
+        if (std::string(get_satellite_state_name()) == "Follow Up") {
+          call_nim_silence_timeout();
+          id(va).request_stop();
+          return;
+        }
         bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
         bool played_cancel = false;
         if (enabled) {
@@ -1438,6 +1453,22 @@ switch:
     turn_off_action:
       - lambda: |-
           call_nim_audio_dsp_set_speaker_protection(false);
+
+  - platform: template
+    id: continuous_conversation_switch
+    name: "Voice: Continuous Conversation"
+    icon: "mdi:forum"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - lambda: |-
+          id(va).set_always_continue(true);
+          global_preferences->sync();
+    turn_off_action:
+      - lambda: |-
+          id(va).set_always_continue(false);
+          global_preferences->sync();
 
 script:
   - id: connect_and_start_assistant

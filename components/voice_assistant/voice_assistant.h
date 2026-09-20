@@ -227,6 +227,8 @@ class VoiceAssistant final : public Component {
   void add_on_configuration_updated_callback(std::function<void(const std::string &, const std::string &)> callback) {
     this->configuration_updated_callbacks_.push_back(std::move(callback));
   }
+  void set_always_continue(bool always) { this->always_continue_ = always; }
+  bool is_always_continue() const { return this->always_continue_; }
 
   Trigger<Timer> *get_timer_started_trigger() { return &this->timer_started_trigger_; }
   Trigger<Timer> *get_timer_updated_trigger() { return &this->timer_updated_trigger_; }
@@ -352,6 +354,7 @@ class VoiceAssistant final : public Component {
   std::string slot1_wake_word_name_;
   std::string slot2_wake_word_name_;
   std::vector<std::function<void(const std::string &, const std::string &)>> configuration_updated_callbacks_;
+  bool always_continue_{false};
 
 #ifdef USE_MICRO_WAKE_WORD
   micro_wake_word::MicroWakeWord *micro_wake_word_{nullptr};

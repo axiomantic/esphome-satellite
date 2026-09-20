@@ -182,6 +182,9 @@ inline void call_nim_set_muted(bool muted) {
 inline void call_nim_follow_up(void) {
   nim_satellite_follow_up();
 }
+inline void call_nim_silence_timeout(void) {
+  nim_satellite_silence_timeout();
+}
 inline void call_nim_media_play(void) {
   nim_satellite_media_play();
 }
