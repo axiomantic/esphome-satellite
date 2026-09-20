@@ -394,6 +394,7 @@ speaker:
   - platform: resampler
     id: board_speaker
     output_speaker: i2s_raw_speaker
+    bits_per_sample: 32
 
 media_player:
   - platform: speaker
