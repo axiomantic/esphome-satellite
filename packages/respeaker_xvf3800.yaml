@@ -80,6 +80,21 @@ esphome:
                 id(clemens_model),
                 id(nabu_model),
                 id(cancel_model));
+            id(va).set_slot_wake_words(
+                esphome::wake_loader::get_wake_partition_loader().get_slot1_model_name(),
+                esphome::wake_loader::get_wake_partition_loader().get_slot2_model_name());
+            id(va).set_media_player(id(board_media_player));
+            id(va).add_on_configuration_updated_callback([](const std::string &s1, const std::string &s2) {
+              ESP_LOGI("voice_assistant", "HA updated wake words -> Slot 1: '%s', Slot 2: '%s'", s1.c_str(), s2.c_str());
+              esphome::wake_loader::get_wake_partition_loader().update_slot_models(
+                  s1, s2, id(clemens_model), id(nabu_model), id(cancel_model));
+              if (s1 != "Disabled" && id(slot1_wake_word).current_option() != s1) {
+                id(slot1_wake_word).publish_state(s1);
+              }
+              if (id(slot2_wake_word).current_option() != s2) {
+                id(slot2_wake_word).publish_state(s2);
+              }
+            });
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
                 1, id(slot1_sensitivity).current_option(), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
@@ -122,7 +137,7 @@ external_components:
   - source:
       type: local
       path: ../components
-    components: [aic3104, i2s_audio]
+    components: [aic3104, i2s_audio, voice_assistant]
 
 binary_sensor:
   - platform: gpio
@@ -771,7 +786,8 @@ select:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().update_slot_models(
-              x, id(slot2_wake_word).current_option(), id(clemens_model), id(nabu_model));
+              x, id(slot2_wake_word).current_option(), id(clemens_model), id(nabu_model), id(cancel_model));
+          id(va).set_slot_wake_words(x, id(slot2_wake_word).current_option());
           global_preferences->sync();
 
   - platform: template
@@ -789,7 +805,8 @@ select:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().update_slot_models(
-              id(slot1_wake_word).current_option(), x, id(clemens_model), id(nabu_model));
+              id(slot1_wake_word).current_option(), x, id(clemens_model), id(nabu_model), id(cancel_model));
+          id(va).set_slot_wake_words(id(slot1_wake_word).current_option(), x);
           global_preferences->sync();
 
   - platform: template
@@ -1597,17 +1614,33 @@ interval:
           float brightness = id(led_brightness).state;
           esphome::xvf3800::XVF3800Hardware::instance().update_animation(state_str, pattern_str, brightness);
 
-  # Live microWakeWord inference monitor for Mr. Clemens
+  # Live microWakeWord inference monitor for Slot 1 and Slot 2
   - interval: 250ms
     then:
       - lambda: |-
           if (id(mww).is_running()) {
-            uint8_t cur = esphome::wake_loader::get_wake_partition_loader().get_model_max_prob(id(clemens_model));
-            float avg = esphome::wake_loader::get_wake_partition_loader().get_model_avg_prob(id(clemens_model));
-            if (cur > 15) {
-              ESP_LOGI("clemens_prob", "Live inference -> max: %.2f, avg: %.2f (cutoff: %.2f)",
-                       cur / 255.0f, avg,
-                       esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(1) / 255.0f);
+            auto &loader = esphome::wake_loader::get_wake_partition_loader();
+            auto *s1_mod = loader.get_slot_model(1, id(clemens_model), id(nabu_model));
+            auto *s2_mod = loader.get_slot_model(2, id(clemens_model), id(nabu_model));
+            if (s1_mod != nullptr) {
+              uint8_t cur = loader.get_model_max_prob(s1_mod);
+              float avg = loader.get_model_avg_prob(s1_mod);
+              if (cur > 15) {
+                ESP_LOGI("s1_prob", "Slot 1 (%s) -> max: %.2f, avg: %.2f (cutoff: %.2f)",
+                         loader.get_slot1_model_name().c_str(),
+                         cur / 255.0f, avg,
+                         loader.get_active_cutoff_for_slot(1) / 255.0f);
+              }
+            }
+            if (s2_mod != nullptr) {
+              uint8_t cur = loader.get_model_max_prob(s2_mod);
+              float avg = loader.get_model_avg_prob(s2_mod);
+              if (cur > 15) {
+                ESP_LOGI("s2_prob", "Slot 2 (%s) -> max: %.2f, avg: %.2f (cutoff: %.2f)",
+                         loader.get_slot2_model_name().c_str(),
+                         cur / 255.0f, avg,
+                         loader.get_active_cutoff_for_slot(2) / 255.0f);
+              }
             }
           }
 

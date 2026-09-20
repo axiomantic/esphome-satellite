@@ -491,6 +491,21 @@ class WakePartitionLoader {
     return 1;
   }
 
+  micro_wake_word::WakeWordModel *get_slot_model(
+      int slot,
+      micro_wake_word::WakeWordModel *clemens,
+      micro_wake_word::WakeWordModel *nabu
+  ) {
+    std::string name = (slot == 2) ? this->slot2_model_name_ : this->slot1_model_name_;
+    if (name == "Disabled") return nullptr;
+    if (name == "Mr. Clemens") return clemens;
+    if (name == "Okay Nabu") return nabu;
+    for (auto &s : this->slots_) {
+      if (s.name == name) return s.model;
+    }
+    return nullptr;
+  }
+
   uint8_t get_model_max_prob(micro_wake_word::WakeWordModel *model) {
     return StreamingModelWindowAccessor::get_max_recent_prob(model);
   }
