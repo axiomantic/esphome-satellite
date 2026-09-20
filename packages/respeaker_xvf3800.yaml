@@ -645,7 +645,7 @@ voice_assistant:
   on_end:
     - lambda: |-
         if (!esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
-          if (std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).is_running()) {
+          if (std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).has_buffered_data()) {
             if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
               esphome::get_pcm_sound_player().stop();
               float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
@@ -659,7 +659,7 @@ voice_assistant:
     - if:
         condition:
           lambda: |-
-            return !esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va)) && !id(mic_mute_switch).state && std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).is_running();
+            return !esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va)) && !id(mic_mute_switch).state && std::string(get_satellite_state_name()) != "Replying" && !id(board_speaker).has_buffered_data();
         then:
           - micro_wake_word.start:
   on_error:
@@ -1714,7 +1714,7 @@ interval:
             }
           } else if (s == "Replying") {
             // Keep resetting timeout while speaker is actively streaming audio
-            if (id(board_speaker).is_running()) {
+            if (id(board_speaker).has_buffered_data()) {
               active_start_ms = millis();
             } else if (active_start_ms == 0) {
               active_start_ms = millis();

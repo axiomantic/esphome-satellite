@@ -502,7 +502,7 @@ void VoiceAssistant::loop() {
           this->write_speaker_();
           break;
         }
-        if (this->speaker_->has_buffered_data() || this->speaker_->is_running()) {
+        if (this->speaker_->has_buffered_data()) {
           break;
         }
         ESP_LOGD(TAG, "Speaker has finished outputting all audio");
