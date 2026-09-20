@@ -188,7 +188,29 @@ proc matchSatelliteVolumeAction*(text: string): tuple[action: SatelliteVolumeAct
   if cleanText.len == 0:
     return (svakNone, -1)
 
+  # Check for direct speech volume commands
+  if containsSub(cleanText, "speak softer") or
+     containsSub(cleanText, "talk softer") or
+     containsSub(cleanText, "speak quieter") or
+     containsSub(cleanText, "talk quieter") or
+     containsSub(cleanText, "be quieter") or
+     containsSub(cleanText, "you are too loud") or
+     containsSub(cleanText, "youre too loud") or
+     cleanText == "too loud" or startsWith(cleanText, "too loud ") or endsWith(cleanText, " too loud") or containsSub(cleanText, " too loud "):
+    return (svakDown, -1)
+
+  if containsSub(cleanText, "speak louder") or
+     containsSub(cleanText, "talk louder") or
+     containsSub(cleanText, "speak up") or
+     containsSub(cleanText, "talk up") or
+     containsSub(cleanText, "you are too quiet") or
+     containsSub(cleanText, "youre too quiet") or
+     cleanText == "too quiet" or startsWith(cleanText, "too quiet ") or endsWith(cleanText, " too quiet") or containsSub(cleanText, " too quiet ") or
+     containsSub(cleanText, "cant hear you"):
+    return (svakUp, -1)
+
   let hasSelfRef = containsSub(cleanText, "your volume") or
+                   containsSub(cleanText, "your voice") or
                    containsSub(cleanText, "your sound") or
                    containsSub(cleanText, "your speaker") or
                    containsSub(cleanText, "your speakers") or

@@ -140,6 +140,25 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     let um2 = matchSatelliteVolumeAction("unmute your volume")
     check um2.action == svakUnmute
 
+    # Direct speech volume controls
+    check matchSatelliteVolumeAction("speak softer").action == svakDown
+    check matchSatelliteVolumeAction("talk softer").action == svakDown
+    check matchSatelliteVolumeAction("speak quieter").action == svakDown
+    check matchSatelliteVolumeAction("be quieter").action == svakDown
+    check matchSatelliteVolumeAction("you are too loud").action == svakDown
+    check matchSatelliteVolumeAction("you're too loud").action == svakDown
+    check matchSatelliteVolumeAction("too loud").action == svakDown
+    check matchSatelliteVolumeAction("turn down your voice").action == svakDown
+
+    check matchSatelliteVolumeAction("speak louder").action == svakDown or matchSatelliteVolumeAction("speak louder").action == svakUp
+    check matchSatelliteVolumeAction("speak louder").action == svakUp
+    check matchSatelliteVolumeAction("talk louder").action == svakUp
+    check matchSatelliteVolumeAction("speak up").action == svakUp
+    check matchSatelliteVolumeAction("you are too quiet").action == svakUp
+    check matchSatelliteVolumeAction("you're too quiet").action == svakUp
+    check matchSatelliteVolumeAction("too quiet").action == svakUp
+    check matchSatelliteVolumeAction("I can't hear you").action == svakUp
+
     # 5. Media player volume commands DO NOT match (must route to Home Assistant!)
     check matchSatelliteVolumeAction("turn the volume down").action == svakNone
     check matchSatelliteVolumeAction("turn down the volume").action == svakNone

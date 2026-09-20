@@ -420,7 +420,6 @@ class PcmSoundPlayer {
     if (ret != pdPASS) {
       ESP_LOGE(PCM_PLAYER_TAG, "Failed to create playback task!");
       this->is_playing_ = false;
-      this->speaker_->stop();
       nim_dma_stream_abort();
     }
   }
@@ -470,7 +469,6 @@ class PcmSoundPlayer {
     if (ret != pdPASS) {
       ESP_LOGE(PCM_PLAYER_TAG, "Failed to create playback task!");
       this->is_playing_ = false;
-      this->speaker_->stop();
       nim_dma_stream_abort();
     }
   }
@@ -492,9 +490,6 @@ class PcmSoundPlayer {
         this->task_handle_ = nullptr;
         vTaskDelete(h);
       }
-    }
-    if (this->speaker_ != nullptr) {
-      this->speaker_->stop();
     }
   }
 
@@ -667,10 +662,9 @@ class PcmSoundPlayer {
     }
 
     if (this->is_playing_ && !this->is_loop_) {
-      this->speaker_->finish();
       uint32_t wait_count = 0;
-      while (this->is_playing_ && this->speaker_->is_running() && wait_count < 150) {
-        vTaskDelay(pdMS_TO_TICKS(20));
+      while (this->is_playing_ && this->speaker_ != nullptr && this->speaker_->has_buffered_data() && wait_count < 100) {
+        vTaskDelay(pdMS_TO_TICKS(10));
         wait_count++;
       }
       ESP_LOGD(PCM_PLAYER_TAG, "Audio finished");
