@@ -370,7 +370,7 @@ speaker:
     dac_type: external
     channel: stereo
     audio_dac: aic3104_dac
-    timeout: 500ms
+    timeout: never
 
   - platform: resampler
     id: board_speaker
