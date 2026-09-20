@@ -244,8 +244,9 @@ void I2SAudioSpeakerBase::stop_(bool wait_on_empty) {
 
   if (!this->timeout_.has_value()) {
     // When timeout is 'never', keep I2S clocks and DMA streaming digital silence continuously.
-    // Reset the ring buffer so audio ceases immediately, but do NOT stop the driver or task.
-    if (this->audio_ring_buffer_.use_count() > 0) {
+    // If graceful stop requested (wait_on_empty == true), allow the speaker task to drain naturally.
+    // Only reset the ring buffer if an immediate abort is requested (!wait_on_empty).
+    if (!wait_on_empty && this->audio_ring_buffer_.use_count() > 0) {
       std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->audio_ring_buffer_.lock();
       if (temp_ring_buffer != nullptr) {
         temp_ring_buffer->reset();

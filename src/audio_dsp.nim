@@ -23,6 +23,8 @@ type
     makeupGain*: float32
     envelope*: float32
     hpf*: BiquadFilter
+    hpf32Left*: BiquadFilter
+    hpf32Right*: BiquadFilter
     fadeInRemaining*: int
     fadeInTotal*: int
     consecutiveSilenceSamples*: int
@@ -76,14 +78,16 @@ proc newAudioCompressor*(
   result.makeupGain = pow(10.0'f32, makeupGainDb / 20.0'f32)
   result.envelope = 0.0'f32
   result.hpf = newHighPassFilter(sampleRate, cutoffHz)
+  result.hpf32Left = newHighPassFilter(48000.0'f32, cutoffHz)
+  result.hpf32Right = newHighPassFilter(48000.0'f32, cutoffHz)
   result.fadeInRemaining = 0
   result.fadeInTotal = 0
   result.consecutiveSilenceSamples = 0
 
-proc triggerFadeIn*(comp: var AudioCompressor, durationMs: float32 = 3.5'f32) =
-  ## Arms a soft linear fade-in ramp of durationMs (default 3.5ms, ~56 samples at 16kHz)
-  ## to prevent speaker DC step pop/click on audio startup.
-  let samples = max(1, int(comp.sampleRate * (durationMs / 1000.0'f32)))
+proc triggerFadeIn*(comp: var AudioCompressor, durationMs: float32 = 3.5'f32, effectiveSampleRate: float32 = 0.0'f32) =
+  ## Arms a soft linear fade-in ramp of durationMs to prevent speaker DC step pop/click on audio startup.
+  let sr = if effectiveSampleRate > 0.0'f32: effectiveSampleRate else: comp.sampleRate
+  let samples = max(1, int(sr * (durationMs / 1000.0'f32)))
   comp.fadeInTotal = samples
   comp.fadeInRemaining = samples
 
@@ -172,27 +176,25 @@ proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int, apply
 
   let arr = cast[ptr UncheckedArray[int32]](samples)
   const SilenceThreshold32 = 2097152'i32
-  # 250ms of silence in stereo (2 channels) before re-arming soft fade-in
-  let silenceReArmSamples = int(comp.sampleRate * 0.25'f32 * 2.0'f32)
+  # 350ms of silence in 48kHz stereo (2 channels = 96k samples/s) before re-arming soft fade-in
+  let silenceReArmSamples = int(48000.0'f32 * 0.35'f32 * 2.0'f32)
 
   for i in 0 ..< count:
     let raw = arr[i]
     if abs(raw) <= SilenceThreshold32:
       inc comp.consecutiveSilenceSamples
-      if comp.consecutiveSilenceSamples == silenceReArmSamples:
-        comp.hpf.reset()
-        comp.envelope = 0.0'f32
     else:
       if comp.consecutiveSilenceSamples >= silenceReArmSamples and comp.fadeInRemaining == 0:
-        comp.triggerFadeIn(3.5'f32)
-        comp.hpf.reset()
-        comp.envelope = 0.0'f32
+        comp.triggerFadeIn(1.5'f32, 48000.0'f32 * 2.0'f32)
       comp.consecutiveSilenceSamples = 0
 
     var s = float32(raw)
 
     if applyProtection:
-      s = comp.hpf.processSample(s)
+      if (i and 1) == 0:
+        s = comp.hpf32Left.processSample(s)
+      else:
+        s = comp.hpf32Right.processSample(s)
 
     if applyVocal:
       let absX = abs(s) / 2147483648.0'f32
@@ -294,7 +296,7 @@ proc nim_audio_dsp_process32*(samples: ptr UncheckedArray[int32], count: int) {.
   if samples != nil and count > 0:
     let applyVocal = shouldApplyVocalBoost()
     let applyProtection = shouldApplySpeakerProtection()
-    let needsProcessing = applyVocal or applyProtection or globalVoiceCompressor.fadeInRemaining > 0 or globalVoiceCompressor.consecutiveSilenceSamples >= int(globalVoiceCompressor.sampleRate * 0.25'f32 * 2.0'f32)
+    let needsProcessing = applyVocal or applyProtection or globalVoiceCompressor.fadeInRemaining > 0 or globalVoiceCompressor.consecutiveSilenceSamples >= int(48000.0'f32 * 0.35'f32 * 2.0'f32)
     if needsProcessing:
       globalVoiceCompressor.process32(cast[ptr int32](samples), count, applyVocal, applyProtection)
     when declared(nim_dma_stream_feed):

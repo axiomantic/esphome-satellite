@@ -624,7 +624,7 @@ voice_assistant:
         float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
         id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
         call_nim_tts_start();
-        nim_dma_stream_start(4, 60000, 3000, false);
+        nim_dma_stream_start(4, 120000, 10000, false);
   on_tts_stream_end:
     - lambda: |-
         nim_dma_stream_finish();
@@ -1696,10 +1696,12 @@ interval:
           if (s == "Idle") {
             active_start_ms = 0;
             if (id(va).is_running()) {
-              if (va_orphan_start_ms == 0) {
+              if (id(board_speaker).has_buffered_data() || id(i2s_raw_speaker).has_buffered_data()) {
                 va_orphan_start_ms = millis();
-              } else if (millis() - va_orphan_start_ms > 3000) {
-                ESP_LOGW("satellite", "Watchdog: Terminating orphaned voice assistant in Idle state after 3s.");
+              } else if (va_orphan_start_ms == 0) {
+                va_orphan_start_ms = millis();
+              } else if (millis() - va_orphan_start_ms > 5000) {
+                ESP_LOGW("satellite", "Watchdog: Terminating orphaned voice assistant in Idle state after 5s.");
                 id(va).request_stop();
                 va_orphan_start_ms = 0;
               }
