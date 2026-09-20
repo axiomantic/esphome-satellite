@@ -433,7 +433,6 @@ micro_wake_word:
                     ESP_LOGI("satellite", "Local cancellation wake word detected: '%s'. Executing instant interrupt.", wake_word.c_str());
                     id(va).request_stop();
                     esphome::get_pcm_sound_player().stop();
-                    id(board_speaker).stop();
                     call_nim_stop_word();
                     bool enabled = (id(active_assistant_slot) == 2) ? id(slot2_cancel_sound_switch).state : id(slot1_cancel_sound_switch).state;
                     bool played_cancel = false;
@@ -457,7 +456,6 @@ micro_wake_word:
               else:
                 - lambda: |-
                     esphome::get_pcm_sound_player().stop();
-                    id(board_speaker).stop();
                     int slot = esphome::wake_loader::get_wake_partition_loader().get_slot_for_wake_word(wake_word);
                     id(previous_assistant_slot) = id(active_assistant_slot);
                     id(active_assistant_slot) = slot;
@@ -541,7 +539,6 @@ voice_assistant:
           ESP_LOGI("voice_assistant", "Satellite volume action matched: %d (target=%d) in '%s'", vol_act, target_vol, x.c_str());
           id(va).request_stop();
           esphome::get_pcm_sound_player().stop();
-          call_nim_stop_word();
           float cur_vol = id(master_volume).state;
           float new_vol = cur_vol;
           if (vol_act == 1) { // svakDown
@@ -563,6 +560,7 @@ voice_assistant:
           std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
           float eff_vol = calculate_effective_sound_volume(new_vol, id(wake_chime_volume).state);
           esphome::get_pcm_sound_player().play_chime(opt, false, eff_vol);
+          call_nim_cancel_done(true);
           return;
         }
 
