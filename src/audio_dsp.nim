@@ -172,7 +172,8 @@ proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int, apply
 
   let arr = cast[ptr UncheckedArray[int32]](samples)
   const SilenceThreshold32 = 2097152'i32
-  let silenceReArmSamples = int(comp.sampleRate * 0.05'f32)
+  # 250ms of silence in stereo (2 channels) before re-arming soft fade-in
+  let silenceReArmSamples = int(comp.sampleRate * 0.25'f32 * 2.0'f32)
 
   for i in 0 ..< count:
     let raw = arr[i]
@@ -293,7 +294,7 @@ proc nim_audio_dsp_process32*(samples: ptr UncheckedArray[int32], count: int) {.
   if samples != nil and count > 0:
     let applyVocal = shouldApplyVocalBoost()
     let applyProtection = shouldApplySpeakerProtection()
-    let needsProcessing = applyVocal or applyProtection or globalVoiceCompressor.fadeInRemaining > 0 or globalVoiceCompressor.consecutiveSilenceSamples >= int(globalVoiceCompressor.sampleRate * 0.05'f32)
+    let needsProcessing = applyVocal or applyProtection or globalVoiceCompressor.fadeInRemaining > 0 or globalVoiceCompressor.consecutiveSilenceSamples >= int(globalVoiceCompressor.sampleRate * 0.25'f32 * 2.0'f32)
     if needsProcessing:
       globalVoiceCompressor.process32(cast[ptr int32](samples), count, applyVocal, applyProtection)
     when declared(nim_dma_stream_feed):
