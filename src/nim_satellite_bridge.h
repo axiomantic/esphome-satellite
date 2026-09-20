@@ -51,6 +51,7 @@ void nim_audio_dsp_set_speaker_protection(bool enabled);
 bool nim_audio_dsp_is_speaker_protection_enabled(void);
 void nim_audio_dsp_set_enabled(bool enabled);
 bool nim_audio_dsp_is_enabled(void);
+void nim_audio_dsp_trigger_fade_in(float duration_ms);
 
 // Hardware & Animation Nim Hooks
 void nim_xvf3800_make_gpo_payload(uint8_t pin, uint8_t val, uint8_t *outBuf);
@@ -239,6 +240,9 @@ inline void call_nim_action_set_chime_sound(const char *sound) {
 }
 inline void call_nim_action_set_chime_volume(float volume) {
   nim_action_set_chime_volume(volume);
+}
+inline void call_nim_audio_dsp_trigger_fade_in(float duration_ms = 3.5f) {
+  nim_audio_dsp_trigger_fade_in(duration_ms);
 }
 
 inline const char* get_satellite_state_name() {

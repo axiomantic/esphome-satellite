@@ -115,6 +115,8 @@ proc nim_dma_stream_start_at*(
                      dskNone
   gPlayingState = startStream(gIdleState, streamKind, max_duration_ms, inactivity_timeout_ms, is_loop, now_ms)
   gTrackerState = tskPlaying
+  when declared(nim_audio_dsp_trigger_fade_in):
+    nim_audio_dsp_trigger_fade_in(3.5'f32)
   result = true
 
 proc nim_dma_stream_feed_at*(bytes: csize_t, now_ms: uint32) =
