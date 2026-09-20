@@ -47,6 +47,7 @@ int nim_dma_stream_tick(uint32_t now_ms);
 bool nim_dma_stream_is_active(void);
 int nim_dma_stream_get_kind(void);
 uint32_t nim_dma_stream_get_elapsed_ms(uint32_t now_ms);
+void nim_audio_dsp_trigger_fade_in(float duration_ms);
 }
 
 struct CustomSoundItem {
@@ -567,6 +568,7 @@ class PcmSoundPlayer {
   }
 
   void run_playback_() {
+    bool first_chunk = true;
 
     if (this->is_raw_pcm_) {
       while (this->is_playing_) {
@@ -580,6 +582,18 @@ class PcmSoundPlayer {
 
         size_t bytes_to_send = std::min((size_t)512, this->data_len_ - this->read_offset_);
         const uint8_t *ptr = this->data_ + this->read_offset_;
+        int16_t ramp_buf[256];
+        if (first_chunk && bytes_to_send >= sizeof(int16_t)) {
+          first_chunk = false;
+          size_t samples_to_ramp = std::min((size_t)256, bytes_to_send / sizeof(int16_t));
+          memcpy(ramp_buf, ptr, samples_to_ramp * sizeof(int16_t));
+          size_t ramp_len = std::min((size_t)56, samples_to_ramp);
+          for (size_t r = 0; r < ramp_len; r++) {
+            float fade_gain = float(r) / float(ramp_len);
+            ramp_buf[r] = static_cast<int16_t>(ramp_buf[r] * fade_gain);
+          }
+          ptr = reinterpret_cast<const uint8_t *>(ramp_buf);
+        }
 
         while (bytes_to_send > 0 && this->is_playing_) {
           size_t written = this->speaker_->play(ptr, bytes_to_send, pdMS_TO_TICKS(50));
@@ -625,6 +639,15 @@ class PcmSoundPlayer {
           this->read_offset_ += bytes_to_decode;
         } else {
           break;
+        }
+
+        if (first_chunk && samples > 0) {
+          first_chunk = false;
+          size_t ramp_len = std::min((size_t)56, samples);
+          for (size_t r = 0; r < ramp_len; r++) {
+            float fade_gain = float(r) / float(ramp_len);
+            pcm_buf[r] = static_cast<int16_t>(pcm_buf[r] * fade_gain);
+          }
         }
 
         size_t total_bytes = samples * sizeof(int16_t);

@@ -216,3 +216,54 @@ suite "Real-Time Audio DSP Suite (TDD)":
     for i in 800 ..< vocalOut.len:
       if abs(vocalOut[i]) > peak1000: peak1000 = abs(vocalOut[i])
     check peak1000 > 9500.0'f32 # > 95% transmission
+
+  test "Soft fade-in ramp attenuates first samples smoothly and starts at exact zero":
+    var comp = newAudioCompressor(sampleRate = 16000'f32, makeupGainDb = 0.0'f32)
+    comp.triggerFadeIn(3.5'f32) # 3.5ms at 16kHz = 56 samples
+    check comp.fadeInTotal == 56
+    check comp.fadeInRemaining == 56
+
+    # Test full-scale step at sample 0 (e.g. constant 10000)
+    var stepSamples: array[100, int16]
+    for i in 0 ..< stepSamples.len:
+      stepSamples[i] = 10000'i16
+
+    comp.process(stepSamples[0].addr, stepSamples.len, applyVocal = false, applyProtection = false)
+
+    # First sample must be scaled by 0 / 56 == 0!
+    check stepSamples[0] == 0'i16
+    # Second sample scaled by 1 / 56
+    check stepSamples[1] >= 170'i16 and stepSamples[1] <= 185'i16
+    # Sample 28 (midway) scaled by 28 / 56 == ~5000
+    check stepSamples[28] >= 4950'i16 and stepSamples[28] <= 5050'i16
+    # Sample 55 (near end of ramp)
+    check stepSamples[55] >= 9700'i16 and stepSamples[55] <= 9900'i16
+    # Sample 56+ (ramp finished, unity gain)
+    check stepSamples[56] == 10000'i16
+    check stepSamples[99] == 10000'i16
+    check comp.fadeInRemaining == 0
+
+  test "Soft fade-in auto-triggers after silence":
+    var comp = newAudioCompressor(sampleRate = 16000'f32, makeupGainDb = 0.0'f32)
+    # Feed 60ms of silence (960 zero samples)
+    var silence: array[960, int16]
+    comp.process(silence[0].addr, silence.len, applyVocal = false, applyProtection = false)
+    check comp.consecutiveSilenceSamples >= 800
+
+    # Now a sudden non-zero step arrives
+    var step: array[100, int16]
+    for i in 0 ..< step.len: step[i] = 10000'i16
+    comp.process(step[0].addr, step.len, applyVocal = false, applyProtection = false)
+
+    # First sample of step must be faded from 0
+    check step[0] == 0'i16
+    check step[28] >= 4950'i16 and step[28] <= 5050'i16
+    check step[56] == 10000'i16
+
+  test "C ABI exported nim_audio_dsp_trigger_fade_in function":
+    nim_audio_dsp_trigger_fade_in(4.0'f32) # 4ms at 16kHz = 64 samples
+    var buf: array[100, int16]
+    for i in 0 ..< buf.len: buf[i] = 8000'i16
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](buf[0].addr), buf.len)
+    check buf[0] == 0'i16 # Faded in from 0
+
