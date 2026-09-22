@@ -182,7 +182,8 @@ nim:
 
 wifi:
   power_save_mode: NONE
-  fast_connect: true
+  fast_connect: false
+  reboot_timeout: 0s
   ap:
     ssid: "Satellite Fallback Hotspot"
 
@@ -196,6 +197,7 @@ safe_mode:
   disabled: true
 
 api:
+  reboot_timeout: 0s
   on_client_disconnected:
     - lambda: |-
         esphome::get_pcm_sound_player().stop();
@@ -1477,9 +1479,6 @@ script:
     then:
       - micro_wake_word.stop:
       - lambda: |-
-          std::string opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
-          float vol = id(processing_sound_volume).state / 100.0f;
-          esphome::get_pcm_sound_player().play_processing_sound(opt, true, vol);
           if (wifi::global_wifi_component != nullptr && !wifi::global_wifi_component->is_connected()) {
             ESP_LOGI("satellite", "Wake word detected while offline. Initiating Wi-Fi connection...");
             wifi::global_wifi_component->retry_connect();
@@ -1489,9 +1488,7 @@ script:
       - wait_until:
           condition:
             api.connected:
-          timeout: 8s
-      - lambda: |-
-          esphome::get_pcm_sound_player().stop();
+          timeout: 2s
       - if:
           condition:
             api.connected:
