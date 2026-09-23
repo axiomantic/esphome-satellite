@@ -416,6 +416,9 @@ var
   ctxUpdating: Updating
   mediaWasPlaying: bool = false
   micWasMuted: bool = false
+  speechActive*: bool = false
+  lastSpeechActivityMs*: uint32 = 0
+  speechStartMs*: uint32 = 0
   lastHeartbeatMs*: uint32 = 0
   lastObservedState*: RuntimeState = rsIdle
   stateEnteredMs*: uint32 = 0
@@ -613,11 +616,33 @@ proc nim_satellite_chime_done*(ok: bool) {.exportc, cdecl.} =
     if ok:
       ctxListening = onChimeFinished(ctxWoken)
       currentState = rsListening
+      speechActive = false
+      speechStartMs = 0
+      lastSpeechActivityMs = satelliteNowMs()
     else:
       ctxDismiss = onChimeFailed(ctxWoken)
       currentState = rsSilentDismiss
 
+proc nim_satellite_speech_start*() {.exportc, cdecl.} =
+  if currentState in {rsListening, rsFollowUp}:
+    speechActive = true
+    let now = satelliteNowMs()
+    lastSpeechActivityMs = now
+    if speechStartMs == 0:
+      speechStartMs = now
+    info("SatelliteFSM", "Speech started in state " & $currentState)
+
+proc nim_satellite_listening_active*() {.exportc, cdecl.} =
+  if currentState in {rsListening, rsFollowUp}:
+    speechActive = false
+    lastSpeechActivityMs = satelliteNowMs()
+    speechStartMs = 0
+    info("SatelliteFSM", "Microphone listening active in state " & $currentState)
+
 proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
+  speechActive = false
+  speechStartMs = 0
+  lastSpeechActivityMs = satelliteNowMs()
   if currentState == rsListening:
     ctxThinking = onSpeechEnded(ctxListening)
     currentState = rsThinking
@@ -628,6 +653,9 @@ proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
     satellitePipeline.startProcessingLoop(configuredProcessingStyle)
 
 proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
+  speechActive = false
+  speechStartMs = 0
+  lastSpeechActivityMs = satelliteNowMs()
   if currentState == rsListening:
     ctxDismiss = onSilenceTimeout(ctxListening)
     currentState = rsSilentDismiss
@@ -637,16 +665,25 @@ proc nim_satellite_silence_timeout*() {.exportc, cdecl.} =
 
 proc nim_satellite_tts_start*() {.exportc, cdecl.} =
   satellitePipeline.stopProcessingLoop()
+  speechActive = false
+  speechStartMs = 0
+  lastSpeechActivityMs = satelliteNowMs()
   if currentState == rsThinking:
     ctxReplying = onTtsStarted(ctxThinking)
     currentState = rsReplying
 
 proc nim_satellite_tts_end*() {.exportc, cdecl.} =
+  speechActive = false
+  speechStartMs = 0
+  lastSpeechActivityMs = satelliteNowMs()
   if currentState == rsReplying:
     ctxIdle = onTtsFinished(ctxReplying)
     returnFromIdleToMediaOrIdle()
 
 proc nim_satellite_follow_up*() {.exportc, cdecl.} =
+  speechActive = false
+  speechStartMs = 0
+  lastSpeechActivityMs = satelliteNowMs()
   if currentState == rsReplying:
     ctxFollowUp = onFollowUpRequested(ctxReplying)
     currentState = rsFollowUp
@@ -873,6 +910,9 @@ proc nim_satellite_reset_for_test*() =
   ctxIdle = Idle(SatelliteContext())
   mediaWasPlaying = false
   micWasMuted = false
+  speechActive = false
+  lastSpeechActivityMs = 0
+  speechStartMs = 0
   lastHeartbeatMs = 0
   lastObservedState = rsIdle
   stateEnteredMs = 0
@@ -886,6 +926,9 @@ proc satelliteLoop*(now: uint32) =
   if currentState != lastObservedState:
     lastObservedState = currentState
     stateEnteredMs = now
+    lastSpeechActivityMs = now
+    speechActive = false
+    speechStartMs = 0
 
   if satellitePipeline != nil:
     satellitePipeline.tick(now)
@@ -926,10 +969,17 @@ proc satelliteLoop*(now: uint32) =
       ctxPipelineErr = onChimeTimeout(ctxWoken)
       currentState = rsPipelineError
   of rsListening:
-    if elapsed >= 10000:
-      warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s. Returning to Idle.")
-      notifyHardwareAbort()
-      nim_satellite_silence_timeout()
+    if speechActive:
+      if diffMs(now, speechStartMs) >= 30000:
+        warn("SatelliteFSM", "Watchdog: Listening speech exceeded 30s limit. Triggering speech ended.")
+        notifyHardwareAbort()
+        nim_satellite_speech_ended()
+    else:
+      let silenceElapsed = diffMs(now, lastSpeechActivityMs)
+      if silenceElapsed >= 10000:
+        warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s of silence. Returning to Idle.")
+        notifyHardwareAbort()
+        nim_satellite_silence_timeout()
   of rsThinking:
     if elapsed >= 20000:
       warn("SatelliteFSM", "Watchdog: Thinking state timed out after 20s. Triggering PipelineError.")
@@ -951,11 +1001,18 @@ proc satelliteLoop*(now: uint32) =
       ctxIdle = onCancelTimeout(ctxCancelling)
       returnFromCancelFlow()
   of rsFollowUp:
-    if elapsed >= 5000:
-      warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 5s. Returning to Idle.")
-      notifyHardwareAbort()
-      ctxIdle = onFollowUpTimeout(ctxFollowUp)
-      returnFromIdleToMediaOrIdle()
+    if speechActive:
+      if diffMs(now, speechStartMs) >= 30000:
+        warn("SatelliteFSM", "Watchdog: FollowUp speech exceeded 30s limit. Triggering speech ended.")
+        notifyHardwareAbort()
+        nim_satellite_speech_ended()
+    else:
+      let silenceElapsed = diffMs(now, lastSpeechActivityMs)
+      if silenceElapsed >= 12000:
+        warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 12s of silence. Returning to Idle.")
+        notifyHardwareAbort()
+        ctxIdle = onFollowUpTimeout(ctxFollowUp)
+        returnFromIdleToMediaOrIdle()
   of rsSilentDismiss:
     if elapsed >= 500:
       returnFromSilentDismiss()
@@ -984,6 +1041,9 @@ proc satelliteLoop*(now: uint32) =
   if currentState != lastObservedState:
     lastObservedState = currentState
     stateEnteredMs = now
+    lastSpeechActivityMs = now
+    speechActive = false
+    speechStartMs = 0
 
   if diffMs(now, lastHeartbeatMs) >= 10000:
     lastHeartbeatMs = now
