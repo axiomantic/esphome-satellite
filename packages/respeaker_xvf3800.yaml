@@ -517,6 +517,7 @@ voice_assistant:
         std::string st = get_satellite_state_name();
         if (st == "Follow Up") {
           ESP_LOGI("satellite", "Continuous dialogue start: active listening in Follow Up state.");
+          call_nim_listening_active();
         } else {
           call_nim_chime_done(true);
         }
@@ -526,6 +527,10 @@ voice_assistant:
         if (st == "Woken") {
           call_nim_chime_done(true);
         }
+        call_nim_listening_active();
+  on_stt_vad_start:
+    - lambda: |-
+        call_nim_speech_start();
   on_stt_vad_end:
     - lambda: |-
         call_nim_speech_ended();

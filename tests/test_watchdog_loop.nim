@@ -237,3 +237,87 @@ suite "Satellite Watchdog Loop & Typestate Integration (TDD)":
     satelliteLoop(4000'u32)
     check nim_satellite_get_state() == ord(rsIdle)
     check gTestAbortTriggered
+
+  test "FollowUp 12s silence timeout triggers abort and returns to rsIdle":
+    nim_satellite_wake_word("assistant", 0)
+    satelliteLoop(1000'u32)
+    nim_satellite_chime_done(true)
+    satelliteLoop(1100'u32)
+    nim_satellite_speech_ended()
+    satelliteLoop(1200'u32)
+    nim_satellite_tts_start()
+    satelliteLoop(1300'u32)
+    nim_satellite_follow_up()
+    check nim_satellite_get_state() == ord(rsFollowUp)
+    satelliteLoop(2000'u32)
+    check not gTestAbortTriggered
+
+    # At 13999ms (11999ms elapsed since entering FollowUp at 2000ms)
+    satelliteLoop(13999'u32)
+    check nim_satellite_get_state() == ord(rsFollowUp)
+    check not gTestAbortTriggered
+
+    # At 14000ms (12000ms elapsed), silence timeout fires
+    satelliteLoop(14000'u32)
+    check nim_satellite_get_state() == ord(rsIdle)
+    check gTestAbortTriggered
+
+  test "FollowUp active speech prevents silence timeout and transitions to rsThinking on speech end":
+    nim_satellite_wake_word("assistant", 0)
+    satelliteLoop(1000'u32)
+    nim_satellite_chime_done(true)
+    satelliteLoop(1100'u32)
+    nim_satellite_speech_ended()
+    satelliteLoop(1200'u32)
+    nim_satellite_tts_start()
+    satelliteLoop(1300'u32)
+    nim_satellite_follow_up()
+    check nim_satellite_get_state() == ord(rsFollowUp)
+    satelliteLoop(2000'u32)
+
+    # User starts speaking 5 seconds later at 7000ms
+    setSimulatedMillis(7000)
+    nim_satellite_speech_start()
+    satelliteLoop(7000'u32)
+    check nim_satellite_get_state() == ord(rsFollowUp)
+    check not gTestAbortTriggered
+
+    # At 16000ms (14s since entering FollowUp, but user is speaking)
+    satelliteLoop(16000'u32)
+    check nim_satellite_get_state() == ord(rsFollowUp)
+    check not gTestAbortTriggered
+
+    # At 18000ms, user finishes speaking
+    setSimulatedMillis(18000)
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == ord(rsThinking)
+    satelliteLoop(18000'u32)
+    check not gTestAbortTriggered
+
+  test "Listening active speech prevents 10s silence timeout":
+    nim_satellite_wake_word("assistant", 0)
+    satelliteLoop(1000'u32)
+    nim_satellite_chime_done(true)
+    check nim_satellite_get_state() == ord(rsListening)
+    satelliteLoop(2000'u32)
+
+    # User starts speaking 5 seconds later at 7000ms
+    setSimulatedMillis(7000)
+    nim_satellite_speech_start()
+    satelliteLoop(7000'u32)
+    check nim_satellite_get_state() == ord(rsListening)
+    check not gTestAbortTriggered
+
+    # At 13000ms (11s elapsed since entering Listening at 2000ms)
+    satelliteLoop(13000'u32)
+    check nim_satellite_get_state() == ord(rsListening)
+    check not gTestAbortTriggered
+
+    # User finishes speaking at 15000ms
+    setSimulatedMillis(15000)
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == ord(rsThinking)
+    satelliteLoop(15000'u32)
+    check not gTestAbortTriggered
+
+

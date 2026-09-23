@@ -9,6 +9,8 @@ extern "C" {
 void nim_satellite_wake_word(const char *word, int angle);
 void nim_satellite_chime_done(bool ok);
 void nim_satellite_cancel_done(bool ok);
+void nim_satellite_speech_start(void);
+void nim_satellite_listening_active(void);
 void nim_satellite_speech_ended(void);
 void nim_satellite_silence_timeout(void);
 void nim_satellite_tts_start(void);
@@ -181,6 +183,12 @@ inline void call_nim_set_muted(bool muted) {
 }
 inline void call_nim_follow_up(void) {
   nim_satellite_follow_up();
+}
+inline void call_nim_speech_start(void) {
+  nim_satellite_speech_start();
+}
+inline void call_nim_listening_active(void) {
+  nim_satellite_listening_active();
 }
 inline void call_nim_silence_timeout(void) {
   nim_satellite_silence_timeout();
