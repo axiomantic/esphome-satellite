@@ -140,7 +140,7 @@ external_components:
   - source:
       type: local
       path: ../components
-    components: [aic3104, i2s_audio, voice_assistant]
+    components: [aic3104, i2s_audio, voice_assistant, resampler]
 
 binary_sensor:
   - platform: gpio
