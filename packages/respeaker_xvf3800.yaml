@@ -86,7 +86,6 @@ esphome:
             id(va).set_slot_wake_words(
                 esphome::wake_loader::get_wake_partition_loader().get_slot1_model_name(),
                 esphome::wake_loader::get_wake_partition_loader().get_slot2_model_name());
-            id(va).set_media_player(id(board_media_player));
             id(va).set_always_continue(id(continuous_conversation_switch).state);
             id(va).add_on_configuration_updated_callback([](const std::string &s1, const std::string &s2) {
               ESP_LOGI("voice_assistant", "HA updated wake words -> Slot 1: '%s', Slot 2: '%s'", s1.c_str(), s2.c_str());
