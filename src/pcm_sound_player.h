@@ -396,24 +396,25 @@ class PcmSoundPlayer {
     this->speaker_->start();
 
     uint32_t max_dur = 5000;
-    uint32_t inact_to = 2000;
+    uint32_t inact_to = 4000;
     if (this->current_stream_kind_ == 2) {
       max_dur = 25000;
-      inact_to = 3000;
+      inact_to = 5000;
     } else if (this->current_stream_kind_ == 3) {
       max_dur = 3000;
-      inact_to = 1500;
+      inact_to = 3000;
     }
     nim_dma_stream_start(this->current_stream_kind_, max_dur, inact_to, loop);
 
-    ESP_LOGD(PCM_PLAYER_TAG, "Playing ADPCM audio: %s (%zu bytes, loop=%d, vol=%.2f)", name, length, (int)loop, volume);
+    ESP_LOGI(PCM_PLAYER_TAG, "Playing ADPCM audio: %s (%zu bytes, loop=%d, vol=%.2f, spkr_running=%d)",
+             name, length, (int)loop, volume, this->speaker_ ? this->speaker_->is_running() : -1);
 
     BaseType_t ret = xTaskCreatePinnedToCore(
         playback_task_entry_,
         "pcm_playback",
         4096,
         this,
-        5,
+        2,
         &this->task_handle_,
         1
     );
@@ -497,7 +498,7 @@ class PcmSoundPlayer {
     if (!this->is_playing_ && this->task_handle_ == nullptr) return;
     bool was_cancel = this->is_playing_cancel_;
     this->interrupt_playback_();
-    ESP_LOGD(PCM_PLAYER_TAG, "Audio stopped");
+    ESP_LOGI(PCM_PLAYER_TAG, "Audio stopped (was_cancel=%d)", was_cancel);
     if (this->on_finished_) {
       this->on_finished_();
     }
@@ -564,6 +565,8 @@ class PcmSoundPlayer {
 
   void run_playback_() {
     bool first_chunk = true;
+    ESP_LOGI(PCM_PLAYER_TAG, "run_playback_ started: speaker=%p, is_running=%d",
+             this->speaker_, this->speaker_ ? this->speaker_->is_running() : -1);
 
     if (this->is_raw_pcm_) {
       while (this->is_playing_) {
@@ -590,6 +593,7 @@ class PcmSoundPlayer {
           ptr = reinterpret_cast<const uint8_t *>(ramp_buf);
         }
 
+        uint32_t zero_retries = 0;
         while (bytes_to_send > 0 && this->is_playing_) {
           size_t written = this->speaker_->play(ptr, bytes_to_send, pdMS_TO_TICKS(50));
           if (written > 0) {
@@ -597,8 +601,14 @@ class PcmSoundPlayer {
             ptr += written;
             this->read_offset_ += written;
             bytes_to_send -= written;
+            zero_retries = 0;
           } else {
-            vTaskDelay(pdMS_TO_TICKS(5));
+            zero_retries++;
+            if (zero_retries % 20 == 1) {
+              ESP_LOGW(PCM_PLAYER_TAG, "Raw PCM play blocked: written=0, spkr_running=%d, retry=%u",
+                       this->speaker_ ? this->speaker_->is_running() : -1, (unsigned)zero_retries);
+            }
+            vTaskDelay(pdMS_TO_TICKS(10));
           }
         }
       }
@@ -648,14 +658,21 @@ class PcmSoundPlayer {
         size_t total_bytes = samples * sizeof(int16_t);
         const uint8_t *ptr = reinterpret_cast<const uint8_t *>(pcm_buf);
 
+        uint32_t zero_retries = 0;
         while (total_bytes > 0 && this->is_playing_) {
           size_t written = this->speaker_->play(ptr, total_bytes, pdMS_TO_TICKS(50));
           if (written > 0) {
             nim_dma_stream_feed(written);
             ptr += written;
             total_bytes -= written;
+            zero_retries = 0;
           } else {
-            vTaskDelay(pdMS_TO_TICKS(5));
+            zero_retries++;
+            if (zero_retries % 20 == 1) {
+              ESP_LOGW(PCM_PLAYER_TAG, "ADPCM play blocked: written=0, spkr_running=%d, retry=%u",
+                       this->speaker_ ? this->speaker_->is_running() : -1, (unsigned)zero_retries);
+            }
+            vTaskDelay(pdMS_TO_TICKS(10));
           }
         }
       }
@@ -667,7 +684,7 @@ class PcmSoundPlayer {
         vTaskDelay(pdMS_TO_TICKS(10));
         wait_count++;
       }
-      ESP_LOGD(PCM_PLAYER_TAG, "Audio finished");
+      ESP_LOGI(PCM_PLAYER_TAG, "Audio finished (read_offset=%zu, wait_count=%u)", this->read_offset_, wait_count);
       nim_dma_stream_finish();
       bool was_cancel = this->is_playing_cancel_;
       if (this->on_finished_) {
