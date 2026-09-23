@@ -91,7 +91,7 @@ esphome:
               ESP_LOGI("voice_assistant", "HA updated wake words -> Slot 1: '%s', Slot 2: '%s'", s1.c_str(), s2.c_str());
               esphome::wake_loader::get_wake_partition_loader().update_slot_models(
                   s1, s2, id(clemens_model), id(nabu_model), id(cancel_model));
-              if (s1 != "Disabled" && id(slot1_wake_word).current_option() != s1) {
+              if (id(slot1_wake_word).current_option() != s1) {
                 id(slot1_wake_word).publish_state(s1);
               }
               if (id(slot2_wake_word).current_option() != s2) {
@@ -794,6 +794,7 @@ select:
   - platform: template
     id: slot1_wake_word
     name: "Slot 1: Wake Word"
+    internal: true
     icon: "mdi:microphone"
     entity_category: config
     optimistic: true
@@ -813,6 +814,7 @@ select:
   - platform: template
     id: slot2_wake_word
     name: "Slot 2: Wake Word"
+    internal: true
     icon: "mdi:microphone-outline"
     entity_category: config
     optimistic: true
