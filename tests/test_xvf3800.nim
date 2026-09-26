@@ -15,6 +15,21 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     check p2[3] == 31'u8
     check p2[4] == 0'u8
 
+  test "Amp enable and standby GPO payload generation":
+    let pEnable = makeGpoPayload(PIN_AMP_ENABLE, 0'u8) # active low = enabled
+    check pEnable[0] == GPO_SERVICER_RESID
+    check pEnable[1] == GPO_CMD_WRITE_VALUE
+    check pEnable[2] == 2'u8
+    check pEnable[3] == 31'u8
+    check pEnable[4] == 0'u8
+
+    let pStandby = makeGpoPayload(PIN_AMP_ENABLE, 1'u8) # 1 = shutdown/standby
+    check pStandby[0] == GPO_SERVICER_RESID
+    check pStandby[1] == GPO_CMD_WRITE_VALUE
+    check pStandby[2] == 2'u8
+    check pStandby[3] == 31'u8
+    check pStandby[4] == 1'u8
+
   test "LED ring payload formatting":
     var colors: array[12, uint32]
     colors[0] = 0x00FF8800'u32 # Orange (R=FF, G=88, B=00)

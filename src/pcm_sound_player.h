@@ -6,6 +6,7 @@
 #include "esphome/components/speaker/speaker.h"
 #include "esphome/components/select/select.h"
 #include "sound_data.h"
+#include "xvf3800_hardware.h"
 #include <esp_partition.h>
 #include <string>
 #include <vector>
@@ -399,6 +400,7 @@ class PcmSoundPlayer {
     if (volume >= 0.0f) {
       this->speaker_->set_volume(volume);
     }
+    xvf3800::XVF3800Hardware::instance().set_amp_power(true);
     this->speaker_->start();
 
     uint32_t max_dur = 5000;
@@ -448,6 +450,7 @@ class PcmSoundPlayer {
     if (volume >= 0.0f) {
       this->speaker_->set_volume(volume);
     }
+    xvf3800::XVF3800Hardware::instance().set_amp_power(true);
     this->speaker_->start();
 
     uint32_t max_dur = 5000;
