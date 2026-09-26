@@ -72,7 +72,7 @@ typestate SatelliteFSM:
   consumeOnTransition = false
   states Idle, Woken, Listening, Thinking, Replying, Cancelling, SilentDismiss, PipelineError, ConnectionError, Muted, FollowUp, PlayingMedia, Alerting, Announcing, Updating
   transitions:
-    Idle -> (Woken | ConnectionError | Muted | PlayingMedia | Alerting | Announcing | Updating) as IdleResult
+    Idle -> (Woken | Listening | ConnectionError | Muted | PlayingMedia | Alerting | Announcing | Updating) as IdleResult
     Woken -> (Listening | Cancelling | SilentDismiss | PipelineError | ConnectionError) as WokenResult
     Listening -> (Thinking | Cancelling | SilentDismiss | PipelineError | ConnectionError | Idle) as ListenResult
     Thinking -> (Replying | Cancelling | SilentDismiss | PipelineError | ConnectionError | Idle) as ThinkResult
@@ -83,8 +83,8 @@ typestate SatelliteFSM:
     PipelineError -> (Idle | PlayingMedia) as PipeErrResult
     ConnectionError -> (Idle | Muted | Updating) as ConnErrResult
     Muted -> (Idle | ConnectionError | Updating) as MutedResult
-    PlayingMedia -> (Idle | Woken | Alerting | Announcing | ConnectionError | Updating) as MediaResult
-    Alerting -> (Idle | Woken | ConnectionError) as AlertResult
+    PlayingMedia -> (Idle | Woken | Listening | Alerting | Announcing | ConnectionError | Updating) as MediaResult
+    Alerting -> (Idle | Woken | Listening | ConnectionError) as AlertResult
     Announcing -> (Idle | ConnectionError) as AnnounceResult
     Updating -> Idle
 
@@ -104,6 +104,21 @@ proc onWakeWordDuringAlert*(s: Alerting, word: string, angle: int): Woken {.tran
   var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: false)
   info("SatelliteFSM", "State: ALERTING -> WOKEN (dismissing alert, wake_word: " & word & ")")
   result = Woken(ctx)
+
+proc onWakeWordDirect*(s: Idle, word: string, angle: int): Listening {.transition.} =
+  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: false)
+  info("SatelliteFSM", "State: IDLE -> LISTENING (direct wake, wake_word: " & word & ")")
+  result = Listening(ctx)
+
+proc onWakeWordDirectFromMedia*(s: PlayingMedia, word: string, angle: int): Listening {.transition.} =
+  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: true)
+  info("SatelliteFSM", "State: PLAYING_MEDIA -> LISTENING (ducking audio, direct wake, wake_word: " & word & ")")
+  result = Listening(ctx)
+
+proc onWakeWordDirectDuringAlert*(s: Alerting, word: string, angle: int): Listening {.transition.} =
+  var ctx = SatelliteContext(wakeWord: word, beamAngle: angle, wasPlayingMedia: false)
+  info("SatelliteFSM", "State: ALERTING -> LISTENING (dismissing alert, direct wake, wake_word: " & word & ")")
+  result = Listening(ctx)
 
 proc onChimeFinished*(s: Woken): Listening {.transition.} =
   info("SatelliteFSM", "State: WOKEN -> LISTENING (chime finished, mic active)")
@@ -380,6 +395,12 @@ verifyTypestates()
 # --- Runtime C API Bridge for ESPHome ---
 
 type
+  AcousticFeedbackMode* = enum
+    afmPostUtterance = 0
+    afmImmediateNonBlocking = 1
+    afmLegacyBlocking = 2
+    afmVisualOnly = 3
+
   RuntimeState* = enum
     rsIdle = 0
     rsWoken = 1
@@ -398,24 +419,25 @@ type
     rsCancelling = 14
 
 var
-  currentState: RuntimeState = rsIdle
-  ctxIdle: Idle = Idle(SatelliteContext())
-  ctxWoken: Woken
-  ctxListening: Listening
-  ctxThinking: Thinking
-  ctxReplying: Replying
-  ctxCancelling: Cancelling
-  ctxDismiss: SilentDismiss
-  ctxPipelineErr: PipelineError
-  ctxConnErr: ConnectionError
-  ctxMuted: Muted
-  ctxFollowUp: FollowUp
-  ctxMedia: PlayingMedia
-  ctxAlerting: Alerting
-  ctxAnnouncing: Announcing
-  ctxUpdating: Updating
-  mediaWasPlaying: bool = false
-  micWasMuted: bool = false
+  currentState*: RuntimeState = rsIdle
+  ctxIdle*: Idle = Idle(SatelliteContext())
+  ctxWoken*: Woken
+  ctxListening*: Listening
+  ctxThinking*: Thinking
+  ctxReplying*: Replying
+  ctxCancelling*: Cancelling
+  ctxDismiss*: SilentDismiss
+  ctxPipelineErr*: PipelineError
+  ctxConnErr*: ConnectionError
+  ctxMuted*: Muted
+  ctxFollowUp*: FollowUp
+  ctxMedia*: PlayingMedia
+  ctxAlerting*: Alerting
+  ctxAnnouncing*: Announcing
+  ctxUpdating*: Updating
+  mediaWasPlaying*: bool = false
+  micWasMuted*: bool = false
+  configuredFeedbackMode*: AcousticFeedbackMode = afmLegacyBlocking
   speechActive*: bool = false
   lastSpeechActivityMs*: uint32 = 0
   speechStartMs*: uint32 = 0
@@ -596,18 +618,47 @@ proc nim_satellite_cancel_done*(ok: bool) {.exportc, cdecl.} =
 proc nim_satellite_is_cancelling*(): bool {.exportc, cdecl.} =
   result = (currentState == rsCancelling)
 
+proc nim_set_acoustic_feedback_mode*(mode: cint) {.exportc, cdecl.} =
+  if mode >= 0 and mode <= 3:
+    configuredFeedbackMode = AcousticFeedbackMode(mode)
+    info("Satellite", "Acoustic feedback mode set to: " & $configuredFeedbackMode)
+
+proc nim_get_acoustic_feedback_mode*(): cint {.exportc, cdecl.} =
+  result = cint(configuredFeedbackMode)
+
 proc nim_satellite_wake_word*(word: cstring, angle: cint) {.exportc, cdecl.} =
   case currentState
   of rsIdle:
-    ctxWoken = onWakeWord(ctxIdle, $word, int(angle))
-    currentState = rsWoken
+    if configuredFeedbackMode in {afmPostUtterance, afmImmediateNonBlocking, afmVisualOnly}:
+      ctxListening = onWakeWordDirect(ctxIdle, $word, int(angle))
+      currentState = rsListening
+      speechActive = false
+      speechStartMs = 0
+      lastSpeechActivityMs = satelliteNowMs()
+    else:
+      ctxWoken = onWakeWord(ctxIdle, $word, int(angle))
+      currentState = rsWoken
   of rsPlayingMedia:
     mediaWasPlaying = true
-    ctxWoken = onWakeWordFromMedia(ctxMedia, $word, int(angle))
-    currentState = rsWoken
+    if configuredFeedbackMode in {afmPostUtterance, afmImmediateNonBlocking, afmVisualOnly}:
+      ctxListening = onWakeWordDirectFromMedia(ctxMedia, $word, int(angle))
+      currentState = rsListening
+      speechActive = false
+      speechStartMs = 0
+      lastSpeechActivityMs = satelliteNowMs()
+    else:
+      ctxWoken = onWakeWordFromMedia(ctxMedia, $word, int(angle))
+      currentState = rsWoken
   of rsAlerting:
-    ctxWoken = onWakeWordDuringAlert(ctxAlerting, $word, int(angle))
-    currentState = rsWoken
+    if configuredFeedbackMode in {afmPostUtterance, afmImmediateNonBlocking, afmVisualOnly}:
+      ctxListening = onWakeWordDirectDuringAlert(ctxAlerting, $word, int(angle))
+      currentState = rsListening
+      speechActive = false
+      speechStartMs = 0
+      lastSpeechActivityMs = satelliteNowMs()
+    else:
+      ctxWoken = onWakeWordDuringAlert(ctxAlerting, $word, int(angle))
+      currentState = rsWoken
   else:
     warn("SatelliteFSM", "Wake word ignored: satellite in state " & $currentState)
 
@@ -918,6 +969,7 @@ proc nim_satellite_reset_for_test*() =
   stateEnteredMs = 0
   gSimulatedMillis = -1
   gHardwareAbortCb = nil
+  configuredFeedbackMode = afmLegacyBlocking
   nim_dma_stream_reset()
   if satellitePipeline != nil:
     satellitePipeline.stopProcessingLoop()

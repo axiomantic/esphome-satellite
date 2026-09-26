@@ -25,6 +25,8 @@ int nim_satellite_match_volume_action(const char *text, int *outTargetVol);
 int nim_satellite_get_state(void);
 bool nim_satellite_is_cancelling(void);
 void nim_satellite_register_hardware_abort_cb(void (*cb)(void));
+void nim_set_acoustic_feedback_mode(int mode);
+int nim_get_acoustic_feedback_mode(void);
 
 // Extended State Functions
 void nim_satellite_set_muted(bool muted);
