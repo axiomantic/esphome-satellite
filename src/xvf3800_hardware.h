@@ -48,8 +48,10 @@ class XVF3800Hardware {
     // 1. Enable LED Power (X0D33 = 1)
     write_gpo_pin(PIN_LED_POWER, 1);
 
-    // 2. Enable Speaker Amplifier (X0D31 = 0, active low)
-    write_gpo_pin(PIN_AMP_ENABLE, 0);
+    // 2. Put Speaker Amplifier into standby by default (X0D31 = 1, disabled)
+    // Amp will be dynamically energized when audio playback begins.
+    this->amp_enabled_ = false;
+    write_gpo_pin(PIN_AMP_ENABLE, 1);
 
     // 3. Ensure Mic Mute LED/Line is unmuted on XMOS (X0D30 = 0)
     write_gpo_pin(PIN_MIC_MUTE, 0);
@@ -62,6 +64,15 @@ class XVF3800Hardware {
     for (int i = 0; i < 12; i++) boot_colors[i] = 0x001F00; // soft green
     set_leds(boot_colors);
   }
+
+  void set_amp_power(bool enabled) {
+    if (this->amp_enabled_ == enabled) return;
+    this->amp_enabled_ = enabled;
+    write_gpo_pin(PIN_AMP_ENABLE, enabled ? 0 : 1);
+    ESP_LOGI(TAG, "Speaker amplifier power: %s (GPO pin 31 = %d)", enabled ? "ENABLED" : "STANDBY/MUTED", enabled ? 0 : 1);
+  }
+
+  bool is_amp_enabled() const { return this->amp_enabled_; }
 
   void write_gpo_pin(uint8_t pin, uint8_t val) {
     if (!this->bus_) return;
@@ -184,6 +195,7 @@ class XVF3800Hardware {
   i2c::I2CBus *bus_{nullptr};
   uint32_t last_colors_[12]{};
   bool leds_valid_{false};
+  bool amp_enabled_{false};
 };
 
 }  // namespace xvf3800

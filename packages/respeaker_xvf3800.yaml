@@ -650,6 +650,7 @@ voice_assistant:
         }
   on_tts_start:
     - lambda: |-
+        esphome::xvf3800::XVF3800Hardware::instance().set_amp_power(true);
         esphome::get_pcm_sound_player().stop();
         float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
         id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
@@ -1426,6 +1427,23 @@ switch:
             - micro_wake_word.start:
 
   - platform: template
+    id: speaker_auto_mute_switch
+    name: "Hardware: Speaker Power Standby"
+    icon: "mdi:power-sleep"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - lambda: |-
+          ESP_LOGI("speaker", "Speaker Power Standby enabled: Amp will power down after 1s of silence.");
+          global_preferences->sync();
+    on_turn_off:
+      - lambda: |-
+          ESP_LOGI("speaker", "Speaker Power Standby disabled: Amp will stay continuously powered.");
+          esphome::xvf3800::XVF3800Hardware::instance().set_amp_power(true);
+          global_preferences->sync();
+
+  - platform: template
     id: slot1_wake_chime
     name: "Slot 1: Wake Chime Enabled"
     icon: "mdi:bell"
@@ -1702,6 +1720,27 @@ interval:
           std::string pattern_str = id(led_pattern).current_option();
           float brightness = id(led_brightness).state;
           esphome::xvf3800::XVF3800Hardware::instance().update_animation(state_str, pattern_str, brightness);
+
+          // Dynamic speaker amplifier power management (auto-standby to eliminate quiescent hiss)
+          bool auto_standby = id(speaker_auto_mute_switch).state;
+          static uint32_t last_audio_active_ms = 0;
+          bool is_audio_active = (
+            esphome::get_pcm_sound_player().is_playing() ||
+            id(board_speaker).has_buffered_data() ||
+            id(i2s_raw_speaker).has_buffered_data() ||
+            nim_dma_stream_is_active() ||
+            (id(board_media_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING)
+          );
+          if (is_audio_active) {
+            last_audio_active_ms = millis();
+            esphome::xvf3800::XVF3800Hardware::instance().set_amp_power(true);
+          } else if (auto_standby) {
+            if (millis() - last_audio_active_ms >= 1000) {
+              esphome::xvf3800::XVF3800Hardware::instance().set_amp_power(false);
+            }
+          } else {
+            esphome::xvf3800::XVF3800Hardware::instance().set_amp_power(true);
+          }
 
   # Live microWakeWord inference monitor for Slot 1 and Slot 2
   - interval: 250ms
