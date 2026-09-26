@@ -563,16 +563,16 @@ void VoiceAssistant::client_subscription(api::APIConnection *client, bool subscr
     return;
   }
 
-  if (this->api_client_ != nullptr) {
+  if (this->api_client_ != nullptr && this->api_client_ != client) {
     char current_peername[socket::SOCKADDR_STR_LEN];
     char new_peername[socket::SOCKADDR_STR_LEN];
-    ESP_LOGE(TAG,
-             "Multiple API Clients attempting to connect to Voice Assistant\n"
-             "  Current client: %s (%s)\n"
+    ESP_LOGW(TAG,
+             "Replacing previous API Client with new API Client\n"
+             "  Previous client: %s (%s)\n"
              "  New client: %s (%s)",
              this->api_client_->get_name(), this->api_client_->get_peername_to(current_peername), client->get_name(),
              client->get_peername_to(new_peername));
-    return;
+    this->client_disconnected_trigger_.trigger();
   }
 
   this->api_client_ = client;
@@ -1206,6 +1206,21 @@ const Configuration &VoiceAssistant::get_configuration() {
           this->config_.active_wake_words.push_back(id);
           if (this->config_.active_wake_words.size() >= 2) break;
         }
+      }
+    }
+
+    // Append all available wake words so Home Assistant's AssistSatelliteWakeWordSelect
+    // never forcibly resets the user's configured option to NO_WAKE_WORD upon connection.
+    for (const auto &ww : this->config_.available_wake_words) {
+      bool found = false;
+      for (const auto &active_id : this->config_.active_wake_words) {
+        if (active_id == ww.id) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        this->config_.active_wake_words.push_back(ww.id);
       }
     }
   } else {
