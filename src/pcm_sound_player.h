@@ -343,6 +343,12 @@ class PcmSoundPlayer {
     this->play_sound(name, loop, volume);
   }
 
+  void play_chime_then_processing(const std::string &chime_name, const std::string &processing_name, float chime_vol = -1.0f, float proc_vol = -1.0f) {
+    this->play_chime(chime_name, false, chime_vol);
+    this->pending_processing_name_ = processing_name;
+    this->pending_processing_vol_ = proc_vol;
+  }
+
   void play_cancel_sound(const std::string &name, bool loop = false, float volume = -1.0f) {
     if (name == "Silent") {
       this->stop();
@@ -478,6 +484,7 @@ class PcmSoundPlayer {
   void set_on_cancel_finished(std::function<void()> callback) { this->on_cancel_finished_ = callback; }
 
   void interrupt_playback_() {
+    this->pending_processing_name_.clear();
     this->is_playing_ = false;
     this->is_playing_cancel_ = false;
     this->is_loop_ = false;
@@ -495,6 +502,7 @@ class PcmSoundPlayer {
   }
 
   void stop() {
+    this->pending_processing_name_.clear();
     if (!this->is_playing_ && this->task_handle_ == nullptr) return;
     bool was_cancel = this->is_playing_cancel_;
     this->interrupt_playback_();
@@ -523,6 +531,8 @@ class PcmSoundPlayer {
   volatile bool is_playing_cancel_{false};
   bool is_loop_{false};
   bool is_raw_pcm_{false};
+  std::string pending_processing_name_;
+  float pending_processing_vol_{-1.0f};
   std::function<void()> on_finished_{nullptr};
   std::function<void()> on_cancel_finished_{nullptr};
   TaskHandle_t task_handle_{nullptr};
@@ -687,6 +697,10 @@ class PcmSoundPlayer {
       ESP_LOGI(PCM_PLAYER_TAG, "Audio finished (read_offset=%zu, wait_count=%u)", this->read_offset_, wait_count);
       nim_dma_stream_finish();
       bool was_cancel = this->is_playing_cancel_;
+      std::string next_proc = this->pending_processing_name_;
+      float next_proc_vol = this->pending_processing_vol_;
+      this->pending_processing_name_.clear();
+
       if (this->on_finished_) {
         this->on_finished_();
       }
@@ -695,6 +709,10 @@ class PcmSoundPlayer {
           this->on_cancel_finished_();
         }
         call_nim_cancel_done(true);
+      } else if (!next_proc.empty()) {
+        ESP_LOGI(PCM_PLAYER_TAG, "Chime finished, transitioning directly to processing sound: '%s'", next_proc.c_str());
+        this->play_processing_sound(next_proc, true, next_proc_vol);
+        return;
       }
     }
 

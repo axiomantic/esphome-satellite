@@ -454,7 +454,7 @@ class WakePartitionLoader {
     };
 
     if (clemens) {
-      uint8_t c = get_cutoff_for_model("Mr. Clemens", 102);
+      uint8_t c = get_cutoff_for_model("Mr. Clemens", 64);
       clemens->set_probability_cutoff(c);
       ESP_LOGI(TAG, "Applied Clemens cutoff %u (%s)", c,
                (this->slot2_model_name_ == "Mr. Clemens" ? this->slot2_sensitivity_.c_str() : this->slot1_sensitivity_.c_str()));
