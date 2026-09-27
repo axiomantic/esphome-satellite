@@ -31,6 +31,9 @@ extern "C" void nim_aic3104_compute_volume(float vol, bool muted, uint8_t *outDa
 extern "C" uint8_t nim_aic3104_compute_hp_gain(float volume);
 extern "C" void nim_aic3104_compute_hp_levels(float volume, uint8_t *outHpLevel, uint8_t *outLopLevel);
 extern "C" size_t nim_xmos_make_level_payload(uint8_t cmd, uint8_t level, uint8_t *outBuf);
+extern "C" void nim_audio_dsp_register_playback_cb(void (*cb)(void));
+
+void on_dsp_audio_playback();
 
 class XVF3800Hardware {
  public:
@@ -63,6 +66,11 @@ class XVF3800Hardware {
     uint32_t boot_colors[12];
     for (int i = 0; i < 12; i++) boot_colors[i] = 0x001F00; // soft green
     set_leds(boot_colors);
+
+    // 6. Register real-time DSP playback hook to energize amplifier on ANY audio
+    if (nim_audio_dsp_register_playback_cb != nullptr) {
+      nim_audio_dsp_register_playback_cb(on_dsp_audio_playback);
+    }
   }
 
   void set_amp_power(bool enabled) {
@@ -197,6 +205,10 @@ class XVF3800Hardware {
   bool leds_valid_{false};
   bool amp_enabled_{false};
 };
+
+inline void on_dsp_audio_playback() {
+  XVF3800Hardware::instance().set_amp_power(true);
+}
 
 }  // namespace xvf3800
 }  // namespace esphome

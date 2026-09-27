@@ -280,9 +280,16 @@ proc shouldApplySpeakerProtection*(): bool {.inline.} =
 proc nim_audio_dsp_trigger_fade_in*(durationMs: cfloat = 3.5'f32) {.exportc: "nim_audio_dsp_trigger_fade_in", cdecl.} =
   globalVoiceCompressor.triggerFadeIn(float32(durationMs))
 
+var gAudioPlaybackCb*: proc() {.cdecl.} = nil
+
+proc nim_audio_dsp_register_playback_cb*(cb: proc() {.cdecl.}) {.exportc: "nim_audio_dsp_register_playback_cb", cdecl.} =
+  gAudioPlaybackCb = cb
+
 proc nim_audio_dsp_process*(samples: ptr UncheckedArray[int16], count: int) {.exportc: "nim_audio_dsp_process", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (16-bit PCM)
   if samples != nil and count > 0:
+    if gAudioPlaybackCb != nil:
+      gAudioPlaybackCb()
     let applyVocal = shouldApplyVocalBoost()
     let applyProtection = shouldApplySpeakerProtection()
     let needsProcessing = applyVocal or applyProtection or globalVoiceCompressor.fadeInRemaining > 0 or globalVoiceCompressor.consecutiveSilenceSamples >= int(globalVoiceCompressor.sampleRate * 0.05'f32)
@@ -294,6 +301,8 @@ proc nim_audio_dsp_process*(samples: ptr UncheckedArray[int16], count: int) {.ex
 proc nim_audio_dsp_process32*(samples: ptr UncheckedArray[int32], count: int) {.exportc: "nim_audio_dsp_process32", cdecl.} =
   ## C ABI entry point called directly by ESPHome I2S speaker DMA task (32-bit PCM)
   if samples != nil and count > 0:
+    if gAudioPlaybackCb != nil:
+      gAudioPlaybackCb()
     let applyVocal = shouldApplyVocalBoost()
     let applyProtection = shouldApplySpeakerProtection()
     let needsProcessing = applyVocal or applyProtection or globalVoiceCompressor.fadeInRemaining > 0 or globalVoiceCompressor.consecutiveSilenceSamples >= int(48000.0'f32 * 0.35'f32 * 2.0'f32)
