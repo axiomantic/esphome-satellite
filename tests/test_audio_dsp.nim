@@ -267,3 +267,21 @@ suite "Real-Time Audio DSP Suite (TDD)":
     nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](buf[0].addr), buf.len)
     check buf[0] == 0'i16 # Faded in from 0
 
+  test "Audio playback callback triggers immediately upon DSP processing":
+    var callbackFiredCount = 0
+    proc testCb() {.cdecl.} =
+      inc callbackFiredCount
+
+    nim_audio_dsp_register_playback_cb(testCb)
+    var buf: array[64, int16]
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](buf[0].addr), buf.len)
+    check callbackFiredCount == 1
+
+    var buf32: array[64, int32]
+    nim_audio_dsp_process32(cast[ptr UncheckedArray[int32]](buf32[0].addr), buf32.len)
+    check callbackFiredCount == 2
+
+    nim_audio_dsp_register_playback_cb(nil)
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](buf[0].addr), buf.len)
+    check callbackFiredCount == 2
+
