@@ -535,6 +535,7 @@ extern "C" void nim_dma_stream_feed(size_t bytes);
 
 void VoiceAssistant::write_speaker_() {
   if ((this->speaker_ != nullptr) && (this->speaker_buffer_ != nullptr)) {
+    this->speaker_->set_audio_stream_info(audio::AudioStreamInfo(16, 1, SAMPLE_RATE_HZ));
     if (this->speaker_buffer_size_ > 0) {
       size_t write_chunk = std::min<size_t>(this->speaker_buffer_size_, 4 * 1024);
       size_t written = this->speaker_->play(this->speaker_buffer_, write_chunk);
@@ -878,6 +879,7 @@ void VoiceAssistant::on_event(const api::VoiceAssistantEventResponse &msg) {
         this->tts_start_trigger_.trigger(text);
 #ifdef USE_SPEAKER
         if (this->speaker_ != nullptr) {
+          this->speaker_->set_audio_stream_info(audio::AudioStreamInfo(16, 1, SAMPLE_RATE_HZ));
           this->speaker_->start();
         }
 #endif
@@ -962,6 +964,7 @@ void VoiceAssistant::on_event(const api::VoiceAssistantEventResponse &msg) {
     case api::enums::VOICE_ASSISTANT_TTS_STREAM_START: {
 #ifdef USE_SPEAKER
       if (this->speaker_ != nullptr) {
+        this->speaker_->set_audio_stream_info(audio::AudioStreamInfo(16, 1, SAMPLE_RATE_HZ));
         this->wait_for_stream_end_ = true;
         ESP_LOGD(TAG, "TTS stream start");
         this->defer([this] { this->tts_stream_start_trigger_.trigger(); });

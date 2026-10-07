@@ -60,6 +60,17 @@ class ResamplerSpeaker final : public Component, public speaker::Speaker {
 
   void set_buffer_duration(uint32_t buffer_duration_ms) { this->buffer_duration_ms_ = buffer_duration_ms; }
 
+  void set_audio_stream_info(const audio::AudioStreamInfo &audio_stream_info) {
+    if (this->audio_stream_info_.get_sample_rate() != audio_stream_info.get_sample_rate() ||
+        this->audio_stream_info_.get_channels() != audio_stream_info.get_channels() ||
+        this->audio_stream_info_.get_bits_per_sample() != audio_stream_info.get_bits_per_sample()) {
+      if (this->state_ != speaker::STATE_STOPPED) {
+        this->stop();
+      }
+      this->audio_stream_info_ = audio_stream_info;
+    }
+  }
+
  protected:
   /// @brief Starts the output speaker after setting the resampled stream info. If resampling is required, it starts the
   /// task.
