@@ -218,7 +218,7 @@ class WakePartitionLoader {
     }
 
     if (slot1_select != nullptr) {
-      this->slot1_options_ = {"Disabled", "Mr. Clemens", "Okay Nabu"};
+      this->slot1_options_ = {"Disabled", "Mr. Clemens"};
       for (const auto &name : this->custom_names_) {
         this->slot1_options_.push_back(name);
       }
@@ -232,7 +232,7 @@ class WakePartitionLoader {
     }
 
     if (slot2_select != nullptr) {
-      this->slot2_options_ = {"Disabled", "Mr. Clemens", "Okay Nabu"};
+      this->slot2_options_ = {"Disabled", "Mr. Clemens"};
       for (const auto &name : this->custom_names_) {
         this->slot2_options_.push_back(name);
       }
@@ -245,8 +245,8 @@ class WakePartitionLoader {
       ESP_LOGI(TAG, "Populated Slot 2 Wake Word select with %zu options", this->slot2_options_.size());
     }
 
-    std::string active_s1 = this->custom_names_.empty() ? "Mr. Clemens" : this->custom_names_[0];
-    std::string active_s2 = this->custom_names_.empty() ? "Disabled" : "Mr. Clemens";
+    std::string active_s1 = "Mr. Clemens";
+    std::string active_s2 = this->custom_names_.empty() ? "Disabled" : this->custom_names_[0];
 
     if (global_preferences != nullptr) {
       WakeWordFixedStringPref s1_pref{};
@@ -307,7 +307,7 @@ class WakePartitionLoader {
       const std::string &slot1_choice,
       const std::string &slot2_choice,
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu,
+      micro_wake_word::WakeWordModel *nabu = nullptr,
       micro_wake_word::WakeWordModel *cancel = nullptr
   ) {
     if (cancel != nullptr) {
@@ -371,7 +371,7 @@ class WakePartitionLoader {
       int slot,
       const std::string &level,
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu
+      micro_wake_word::WakeWordModel *nabu = nullptr
   ) {
     ESP_LOGI(TAG, "Setting Slot %d sensitivity to '%s'", slot, level.c_str());
     if (slot == 1) {
@@ -388,7 +388,7 @@ class WakePartitionLoader {
       int slot,
       float val,
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu
+      micro_wake_word::WakeWordModel *nabu = nullptr
   ) {
     ESP_LOGI(TAG, "Setting Slot %d cutoff override to %.2f", slot, val);
     if (slot == 1) {
@@ -428,7 +428,7 @@ class WakePartitionLoader {
 
   void apply_all_sensitivities(
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu,
+      micro_wake_word::WakeWordModel *nabu = nullptr,
       micro_wake_word::WakeWordModel *cancel = nullptr
   ) {
     if (cancel != nullptr) {
@@ -494,7 +494,7 @@ class WakePartitionLoader {
   micro_wake_word::WakeWordModel *get_slot_model(
       int slot,
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu
+      micro_wake_word::WakeWordModel *nabu = nullptr
   ) {
     std::string name = (slot == 2) ? this->slot2_model_name_ : this->slot1_model_name_;
     if (name == "Disabled") return nullptr;
@@ -517,7 +517,7 @@ class WakePartitionLoader {
   void set_sliding_window(
       size_t window,
       micro_wake_word::WakeWordModel *clemens,
-      micro_wake_word::WakeWordModel *nabu,
+      micro_wake_word::WakeWordModel *nabu = nullptr,
       micro_wake_word::WakeWordModel *cancel = nullptr
   ) {
     if (cancel != nullptr) {
@@ -550,11 +550,11 @@ class WakePartitionLoader {
   }
 
   // Backward compatibility helpers
-  void handle_active_wake_word_change(const std::string &opt, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+  void handle_active_wake_word_change(const std::string &opt, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu = nullptr) {
     this->update_slot_models(opt, this->slot2_model_name_, clemens, nabu);
   }
 
-  void handle_sensitivity_change(const std::string &level, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu) {
+  void handle_sensitivity_change(const std::string &level, micro_wake_word::WakeWordModel *clemens, micro_wake_word::WakeWordModel *nabu = nullptr) {
     this->set_slot_sensitivity(1, level, clemens, nabu);
   }
 

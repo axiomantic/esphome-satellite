@@ -21,6 +21,7 @@ void nim_satellite_error(const char *code);
 void nim_satellite_disconnected(void);
 void nim_satellite_connected(void);
 bool nim_satellite_is_cancellation(const char *text, const char *config);
+bool nim_satellite_verify_wake_word(const char *text, const char *wake_word);
 bool nim_satellite_is_reset_phrase(const char *text);
 int nim_satellite_match_volume_action(const char *text, int *outTargetVol);
 int nim_satellite_get_state(void);
@@ -171,6 +172,9 @@ inline void call_nim_disconnected(void) {
 }
 inline bool call_nim_is_cancellation(const char *text, const char *config = nullptr) {
   return nim_satellite_is_cancellation(text, config);
+}
+inline bool call_nim_verify_wake_word(const char *text, const char *wake_word) {
+  return nim_satellite_verify_wake_word(text, wake_word);
 }
 inline bool call_nim_is_reset_phrase(const char *text) {
   return nim_satellite_is_reset_phrase(text);

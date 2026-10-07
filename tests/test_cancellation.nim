@@ -181,3 +181,37 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     check actNone == 0
     check nim_satellite_match_volume_action(nil, nil) == 0
 
+  test "Wake Word Verification Suite":
+    # Mr. Clemens tests
+    check verifyWakeWordPhrase("mr clemens what time is it", "Mr. Clemens")
+    check verifyWakeWordPhrase("Mister Clemens turn on lights", "Mr. Clemens")
+    check verifyWakeWordPhrase("clemens how is the weather", "Mr. Clemens")
+    check verifyWakeWordPhrase("Mr. Clement please stop", "Mr. Clemens")
+    check verifyWakeWordPhrase("Mark Twain tell me a story", "Mr. Clemens")
+    check verifyWakeWordPhrase("Clemens.", "Mr. Clemens")
+
+    # Initial-contraction wake words (e.g. Hey Jay Dee)
+    check verifyWakeWordPhrase("hey jd what's the weather", "Hey Jay Dee")
+    check verifyWakeWordPhrase("jd what time is it", "Hey Jay Dee")
+    check verifyWakeWordPhrase("hey jay dee turn off light", "Hey Jay Dee")
+
+    # Custom multi-word wake words
+    check verifyWakeWordPhrase("hey jarvis turn on the ac", "Jarvis")
+    check verifyWakeWordPhrase("marvin play music", "Marvin")
+
+    # False wakes must REJECT
+    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Mr. Clemens")
+    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Hey Jay Dee")
+    check not verifyWakeWordPhrase("turn on the kitchen lights", "Mr. Clemens")
+    check not verifyWakeWordPhrase("turn on the kitchen lights", "Hey Jay Dee")
+    check not verifyWakeWordPhrase("commercial about car insurance", "Mr. Clemens")
+    check not verifyWakeWordPhrase("today is a nice day", "Hey Jay Dee")
+    check not verifyWakeWordPhrase("", "Mr. Clemens")
+    check not verifyWakeWordPhrase("hello", "")
+
+    # C ABI export
+    check nim_satellite_verify_wake_word("mr clemens hello".cstring, "Mr. Clemens".cstring)
+    check not nim_satellite_verify_wake_word("I'm sorry, Jake".cstring, "Mr. Clemens".cstring)
+    check not nim_satellite_verify_wake_word(nil, "Mr. Clemens".cstring)
+    check not nim_satellite_verify_wake_word("mr clemens".cstring, nil)
+
