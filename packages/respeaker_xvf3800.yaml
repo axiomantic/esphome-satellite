@@ -528,6 +528,10 @@ voice_assistant:
   conversation_timeout: 300s
   on_start:
     - lambda: |-
+        if (id(board_media_player).state != media_player::MEDIA_PLAYER_STATE_IDLE &&
+            id(board_media_player).state != media_player::MEDIA_PLAYER_STATE_OFF) {
+          id(board_media_player).make_call().set_command(esphome::media_player::MEDIA_PLAYER_COMMAND_STOP).perform();
+        }
         std::string st = get_satellite_state_name();
         if (st == "Follow Up") {
           ESP_LOGI("satellite", "Continuous dialogue start: active listening in Follow Up state.");
@@ -652,6 +656,11 @@ voice_assistant:
     - lambda: |-
         esphome::xvf3800::XVF3800Hardware::instance().set_amp_power(true);
         esphome::get_pcm_sound_player().stop();
+        if (id(board_media_player).state != media_player::MEDIA_PLAYER_STATE_IDLE &&
+            id(board_media_player).state != media_player::MEDIA_PLAYER_STATE_OFF) {
+          id(board_media_player).make_call().set_command(esphome::media_player::MEDIA_PLAYER_COMMAND_STOP).perform();
+        }
+        id(board_speaker).set_audio_stream_info(audio::AudioStreamInfo(16, 1, 16000));
         float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
         id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
         call_nim_tts_start();
