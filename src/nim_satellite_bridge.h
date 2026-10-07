@@ -15,6 +15,7 @@ void nim_satellite_speech_ended(void);
 void nim_satellite_silence_timeout(void);
 void nim_satellite_tts_start(void);
 void nim_satellite_tts_end(void);
+void nim_satellite_pipeline_end(void);
 void nim_satellite_stop_word(void);
 void nim_satellite_error(const char *code);
 void nim_satellite_disconnected(void);
@@ -276,6 +277,12 @@ inline const char* get_satellite_state_name() {
     case 12: return "Announcing";
     case 13: return "Updating";
     case 14: return "Cancelling";
+    case 15: return "Replying Barge-In Attempted";
+    case 16: return "Replying Barge-In Ignored";
+    case 17: return "Barged In";
+    case 18: return "Intent Complete No TTS";
+    case 19: return "Action Success";
+    case 20: return "Pipeline Error Evaluating";
     default: return "Unknown";
   }
 }

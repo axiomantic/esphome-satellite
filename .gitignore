@@ -22,4 +22,7 @@ scripts/generate_web
 scripts/transcode_sounds
 scratch/
 data/
-
+tests/test_acoustic_feedback
+tests/test_watchdog_loop
+.vine.json
+.envrc
