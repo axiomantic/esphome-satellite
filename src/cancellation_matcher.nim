@@ -257,3 +257,61 @@ proc nim_satellite_match_volume_action*(text: cstring, outTargetVol: ptr cint): 
     outTargetVol[] = cint(res.targetPercent)
   return cint(ord(res.action))
 
+proc containsWord*(s, target: string): bool =
+  if s == target: return true
+  if startsWith(s, target & " "): return true
+  if endsWith(s, " " & target): return true
+  if containsSub(s, " " & target & " "): return true
+  return false
+
+const WakeWordStopWords*: seq[string] = @[
+  "hey", "hi", "hello", "ok", "okay", "the", "a", "an", "for", "with", "and"
+]
+
+proc verifyWakeWordPhrase*(transcript: string, wakeWord: string): bool =
+  let cleanText = normalizeText(transcript)
+  let cleanWw = normalizeText(wakeWord)
+  if cleanText.len == 0 or cleanWw.len == 0:
+    return false
+
+  # 1. Full phrase or multi-word match
+  if containsSub(cleanText, cleanWw):
+    return true
+
+  # 2. Phonetic expansions for Clemens / Twain
+  if containsSub(cleanWw, "clemens") or containsSub(cleanWw, "twain"):
+    const clemensVariants: array[7, string] = [
+      "clemens", "clement", "clements", "cleman", "clemon", "twain", "mark twain"
+    ]
+    for v in clemensVariants:
+      if containsWord(cleanText, v):
+        return true
+
+  # 3. Contraction / phonetic variants for initials (e.g. KT / Kay Tee)
+  if containsSub(cleanWw, "kay tee") or containsSub(cleanWw, "kt"):
+    const ktVariants: array[4, string] = ["kt", "k t", "kay tee", "kaytee"]
+    for v in ktVariants:
+      if containsWord(cleanText, v):
+        return true
+
+  # 4. Token-level matching with word boundaries
+  var curWord = ""
+  for c in cleanWw:
+    if c == ' ':
+      if curWord.len >= 3 and curWord notin WakeWordStopWords:
+        if containsWord(cleanText, curWord):
+          return true
+      curWord = ""
+    else:
+      curWord.add(c)
+  if curWord.len >= 3 and curWord notin WakeWordStopWords:
+    if containsWord(cleanText, curWord):
+      return true
+
+  return false
+
+proc nim_satellite_verify_wake_word*(text: cstring, wakeWord: cstring): bool {.exportc, cdecl.} =
+  if text == nil or wakeWord == nil:
+    return false
+  return verifyWakeWordPhrase($text, $wakeWord)
+
