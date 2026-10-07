@@ -850,7 +850,6 @@ select:
     options:
       - "Disabled"
       - "Mr. Clemens"
-      - "Mr. Clemens"
       - "Okay Nabu"
     set_action:
       - lambda: |-
@@ -866,11 +865,10 @@ select:
     icon: "mdi:microphone-outline"
     entity_category: config
     optimistic: true
-    initial_option: "Mr. Clemens"
+    initial_option: "Okay Nabu"
     restore_value: true
     options:
       - "Disabled"
-      - "Mr. Clemens"
       - "Mr. Clemens"
       - "Okay Nabu"
     set_action:
