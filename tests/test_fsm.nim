@@ -63,13 +63,25 @@ suite "Satellite Typestate FSM - Granular Error Handling":
     check dismissed is SilentDismiss
     check dismissed.onDismiss() is Idle
 
-  test "PipelineError on STT or intent failure":
+  test "PipelineErrorEvaluating on STT or intent failure":
     var idle = Idle(SatelliteContext())
     var listening = idle.onWakeWord("assistant", 0).onChimeFinished()
-    var pErr = listening.onPipelineErrorFromListening("intent-failed")
-    check pErr is PipelineError
-    check SatelliteContext(pErr).errorCode == "intent-failed"
+    var pEval = listening.onPipelineErrorFromListening("intent-failed")
+    check pEval is PipelineErrorEvaluating
+    check SatelliteContext(pEval).errorCode == "intent-failed"
+
+    # Evaluation transitions explicitly to ActionableError
+    var pErr = pEval.onClassifyActionableError()
+    check pErr is ActionableError
     check pErr.onResetPipelineError() is Idle
+
+  test "PipelineErrorEvaluating benign error transitions to SilentDismissing":
+    var idle = Idle(SatelliteContext())
+    var listening = idle.onWakeWord("assistant", 0).onChimeFinished()
+    var pEval = listening.onPipelineErrorFromListening("stt-no-text-recognized")
+    var silent = pEval.onClassifySilentError()
+    check silent is SilentDismissing
+    check silent.onDismiss() is Idle
 
   test "ConnectionError disconnects from Idle and blocks wake words":
     var idle = Idle(SatelliteContext())
@@ -138,6 +150,42 @@ suite "Satellite Typestate FSM - Extended Lifecycle States":
     check updating is Updating
     var done = updating.onOtaComplete()
     check done is Idle
+
+suite "Satellite Typestate FSM - Reified Barge-In Architecture":
+  test "Wake word during Replying enters ReplyingBargeInAttempted and confirms Stop":
+    var idle = Idle(SatelliteContext())
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var attempt = replying.onWakeWordDuringReplying("Stop", 0)
+    check attempt is ReplyingBargeInAttempted
+
+    var barged = attempt.onBargeInConfirm()
+    check barged is BargedIn
+    check barged.onResetBargedIn() is Idle
+
+  test "Non-stop wake word during Replying is ignored and resumes playback":
+    var idle = Idle(SatelliteContext())
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var attempt = replying.onWakeWordDuringReplying("assistant", 0)
+    check attempt is ReplyingBargeInAttempted
+
+    var ignored = attempt.onBargeInIgnore()
+    check ignored is ReplyingBargeInIgnored
+    var resumed = ignored.onResumeReplying()
+    check resumed is Replying
+    check resumed.onTtsFinished() is Idle
+
+suite "Satellite Typestate FSM - Non-TTS Intent Completion (Thinking Deadlock Resolution)":
+  test "Processing transitions through IntentCompleteNoTts and ActionSuccess to Idle":
+    var idle = Idle(SatelliteContext())
+    var processing = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    check processing is Processing
+
+    var noTts = processing.onIntentCompleteNoTts()
+    check noTts is IntentCompleteNoTts
+
+    var success = noTts.onActionSuccess()
+    check success is ActionSuccess
+    check success.onResetActionSuccess() is Idle
 
 suite "Compile-Time Invariant Checking (Illegal Error Transitions Rejected)":
   test "Cannot trigger wake word when in ConnectionError":
@@ -263,6 +311,42 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_ota_start()
     check nim_satellite_get_state() == 13 # Updating
     nim_satellite_ota_end(true)
+    check nim_satellite_get_state() == 0 # Idle
+
+  test "Non-TTS intent completion resolves thinking deadlock via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 3 # Processing (Thinking)
+
+    # on_end fires without TTS
+    nim_satellite_pipeline_end()
+    check nim_satellite_get_state() == 0 # Successfully recovered to Idle
+
+  test "Barge-in with stop word during TTS aborts to Idle via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_speech_ended()
+    nim_satellite_tts_start()
+    check nim_satellite_get_state() == 4 # Replying
+
+    # User says "Stop" while replying
+    nim_satellite_wake_word("Stop", 0)
+    check nim_satellite_get_state() == 0 # Cleanly aborted to Idle via BargedIn
+
+  test "Wake word echo during TTS is ignored and remains in Replying via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_speech_ended()
+    nim_satellite_tts_start()
+    check nim_satellite_get_state() == 4 # Replying
+
+    # Wake word echo detected (not stop)
+    nim_satellite_wake_word("assistant", 0)
+    check nim_satellite_get_state() == 4 # Retained in Replying
+
+    # Normal finish
+    nim_satellite_tts_end()
     check nim_satellite_get_state() == 0 # Idle
 
   test "Processing sound loop and Home Assistant controls":
