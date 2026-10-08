@@ -739,7 +739,7 @@ voice_assistant:
     - if:
         condition:
           lambda: |-
-            return !id(mic_mute_switch).state;
+            return !id(mic_mute_switch).state && std::string(get_satellite_state_name()) == "Idle";
         then:
           - micro_wake_word.start:
   on_client_connected:
@@ -1375,7 +1375,7 @@ number:
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.40
+    initial_value: 0.52
     restore_value: true
     optimistic: true
     mode: slider
@@ -1393,7 +1393,7 @@ number:
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.40
+    initial_value: 0.45
     restore_value: true
     optimistic: true
     mode: slider
