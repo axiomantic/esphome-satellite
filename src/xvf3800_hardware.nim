@@ -125,12 +125,13 @@ proc computeAnimationColors*(
     for i in 0 ..< 12:
       result[i] = red
   of "Woken", "Listening":
-    let pulse = 0.6'f32 + 0.4'f32 * sin(now * 0.008'f32)
-    let g = uint32(uint8(clamp(200.0'f32 * pulse * brightness, 0.0'f32, 255.0'f32))) shl 8
+    let pulse = 0.80'f32 + 0.20'f32 * sin(now * 0.009'f32)
+    let r = uint32(uint8(clamp(70.0'f32 * pulse * brightness, 0.0'f32, 255.0'f32))) shl 16
+    let g = uint32(uint8(clamp(220.0'f32 * pulse * brightness, 0.0'f32, 255.0'f32))) shl 8
     let b = uint32(uint8(clamp(255.0'f32 * pulse * brightness, 0.0'f32, 255.0'f32)))
-    let cyan = g or b
+    let electricAzure = r or g or b
     for i in 0 ..< 12:
-      result[i] = cyan
+      result[i] = electricAzure
   of "Follow Up":
     # Conversational mode active listening: distinctive breathing emerald-teal wave
     let pulse = 0.55'f32 + 0.45'f32 * sin(now * 0.007'f32)
