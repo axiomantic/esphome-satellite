@@ -278,30 +278,7 @@ proc verifyWakeWordPhrase*(transcript: string, wakeWord: string): bool =
   if containsSub(cleanText, cleanWw):
     return true
 
-  # 2. Phonetic expansions for Clemens / Twain
-  if containsSub(cleanWw, "clemens") or containsSub(cleanWw, "twain"):
-    const clemensVariants: array[7, string] = [
-      "clemens", "clement", "clements", "cleman", "clemon", "twain", "mark twain"
-    ]
-    for v in clemensVariants:
-      if containsWord(cleanText, v):
-        return true
-
-  # 3. Contraction / phonetic variants for initials (e.g. KT / Kay Tee)
-  if containsSub(cleanWw, "kay tee") or containsSub(cleanWw, "kt"):
-    const ktVariants: array[4, string] = ["kt", "k t", "kay tee", "kaytee"]
-    for v in ktVariants:
-      if containsWord(cleanText, v):
-        return true
-
-  # 4. Phonetic expansions for Nabu
-  if containsSub(cleanWw, "nabu"):
-    const nabuVariants: array[3, string] = ["nabu", "ok nabu", "okay nabu"]
-    for v in nabuVariants:
-      if containsWord(cleanText, v):
-        return true
-
-  # 4. Token-level matching with word boundaries
+  # 2. Token-level matching with word boundaries
   var curWord = ""
   for c in cleanWw:
     if c == ' ':

@@ -182,20 +182,12 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     check nim_satellite_match_volume_action(nil, nil) == 0
 
   test "Wake Word Verification Suite":
-    # Mr. Clemens tests
+    # Clemens tests (exact name / tokens)
     check verifyWakeWordPhrase("mr clemens what time is it", "Mr. Clemens")
-    check verifyWakeWordPhrase("Mister Clemens turn on lights", "Mr. Clemens")
     check verifyWakeWordPhrase("clemens how is the weather", "Mr. Clemens")
-    check verifyWakeWordPhrase("Mr. Clement please stop", "Mr. Clemens")
-    check verifyWakeWordPhrase("Mark Twain tell me a story", "Mr. Clemens")
     check verifyWakeWordPhrase("Clemens.", "Mr. Clemens")
 
-    # Initial-contraction wake words (e.g. Hey Kay Tee)
-    check verifyWakeWordPhrase("hey kt what's the weather", "Hey Kay Tee")
-    check verifyWakeWordPhrase("kt what time is it", "Hey Kay Tee")
-    check verifyWakeWordPhrase("hey kay tee turn off light", "Hey Kay Tee")
-
-    # Custom multi-word wake words
+    # Generic custom wake words
     check verifyWakeWordPhrase("hey jarvis turn on the ac", "Jarvis")
     check verifyWakeWordPhrase("marvin play music", "Marvin")
 
@@ -203,15 +195,13 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     check verifyWakeWordPhrase("okay nabu turn on the lights", "Okay Nabu")
     check verifyWakeWordPhrase("ok nabu what time is it", "Okay Nabu")
     check verifyWakeWordPhrase("nabu set a timer", "Okay Nabu")
-    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Okay Nabu")
 
     # False wakes must REJECT
+    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Okay Nabu")
     check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Mr. Clemens")
-    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Hey Kay Tee")
     check not verifyWakeWordPhrase("turn on the kitchen lights", "Mr. Clemens")
-    check not verifyWakeWordPhrase("turn on the kitchen lights", "Hey Kay Tee")
     check not verifyWakeWordPhrase("commercial about car insurance", "Mr. Clemens")
-    check not verifyWakeWordPhrase("today is a nice day", "Hey Kay Tee")
+    check not verifyWakeWordPhrase("today is a nice day", "Jarvis")
     check not verifyWakeWordPhrase("", "Mr. Clemens")
     check not verifyWakeWordPhrase("hello", "")
 
