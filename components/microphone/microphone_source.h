@@ -47,7 +47,7 @@ class MicrophoneSource final {
 
   template<typename F> void add_data_callback(F &&data_callback) {
     this->mic_->add_data_callback([this, data_callback](const std::vector<uint8_t> &data) {
-      if (this->enabled_ || this->passive_) {
+      if (this->enabled_ || this->passive_ || this->listen_in_idle_) {
         if (this->processed_samples_ == nullptr) {
           // Create vector if its unused
           this->processed_samples_ = std::make_shared<std::vector<uint8_t>>();
@@ -73,6 +73,8 @@ class MicrophoneSource final {
   void stop();
   bool is_passive() const { return this->passive_; }
   void set_passive(bool passive) { this->passive_ = passive; }
+  bool is_listen_in_idle() const { return this->listen_in_idle_; }
+  void set_listen_in_idle(bool listen) { this->listen_in_idle_ = listen; }
   bool is_running() const { return (this->mic_->is_running() && (this->enabled_ || this->passive_)); }
   bool is_stopped() const { return !this->is_running(); };
 
@@ -87,6 +89,7 @@ class MicrophoneSource final {
   int32_t gain_factor_;
   bool enabled_{false};
   bool passive_;  // Only pass audio if ``mic_`` is already running
+  bool listen_in_idle_{false};  // Pass audio to callback when mic is running even if enabled_ is false
 };
 
 }  // namespace esphome::microphone

@@ -39,7 +39,7 @@ VoiceAssistant::VoiceAssistant() { global_voice_assistant = this; }
 void VoiceAssistant::setup() {
   this->preroll_buffer_ = ring_buffer::RingBuffer::create(PREROLL_BUFFER_SIZE);
   if (this->mic_source_ != nullptr) {
-    this->mic_source_->set_passive(true);
+    this->mic_source_->set_listen_in_idle(true);
   }
   this->mic_source_->add_data_callback([this](const std::vector<uint8_t> &data) {
     if (this->preroll_buffer_ != nullptr) {
