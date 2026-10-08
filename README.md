@@ -107,6 +107,7 @@ Once the board has rebooted into ESPHome, connect using either method:
   - [Dual-Assistant Profiles & Independent Feedback](#dual-assistant-profiles--independent-feedback)
   - [5-Minute Conversation Memory & Context Isolation](#5-minute-conversation-memory--context-isolation)
   - [Dynamic Partition Loader for Custom Models](#dynamic-partition-loader-for-custom-models)
+  - [Semantic Wake Word Verification (LLM Prompt Rider)](#semantic-wake-word-verification-llm-prompt-rider)
 - [Acoustic Tuning & Female Voice Equalization](#acoustic-tuning--female-voice-equalization)
   - [Microphone Pre-Gain Boost](#microphone-pre-gain-boost)
   - [Sliding Window Size Tuning](#sliding-window-size-tuning)
@@ -172,6 +173,35 @@ Voice interactions often span multi-turn dialogue where context should persist a
 
 ### Dynamic Partition Loader for Custom Models
 Using [`src/wake_partition_loader.nim`](src/wake_partition_loader.nim), users can flash up to 3 custom microWakeWord `.tflite` models into dedicated flash partitions (`wake_model`, `wake_model_2`, `wake_model_3` at `0x510000`, `0x550000`, `0x590000`). At boot time, the partition loader validates 64-byte `WAKE` headers, extracts tensor arena sizes and probability cutoffs, memory-maps the weights directly from SPI flash (avoiding heap allocation), and dynamically registers them into the active detection pool.
+
+### Semantic Wake Word Verification (LLM Prompt Rider)
+
+In far-field acoustic environments, television dialogue, background chatter, or momentary acoustic spikes can cause false wake events. Traditional voice systems attempt rigid on-device string matching against the Speech-to-Text (STT) transcript. However, rigid string matching frequently drops valid voice commands because:
+1. **Whisper STT phonetic drift**: Fast speech or accents cause Whisper to transcribe phonetically rather than orthographically (e.g., *"Mr. Clemens"* commonly transcribes as *"Mr. Clement"*, *"Mister Clements"*, *"Mr. Clemence"*, or *"Mister Clemens"*).
+2. **Buffer boundary jitter**: The audio buffer may capture leading breath, conversational fillers like *"uh"* or *"well"*, or clip the very first phoneme.
+
+#### Continuous 2.0-Second Pre-Roll Audio
+`esphome-satellite` eliminates the clipped-audio problem by maintaining a continuous 2.0-second circular audio buffer in memory while idle. When an on-device microWakeWord model triggers:
+- The firmware automatically prepends the 2.0 seconds of pre-roll audio containing the spoken wake word into the stream sent to Home Assistant's STT engine.
+- Whisper receives and transcribes both the wake word phrase and the subsequent user command in full.
+
+#### Standard Prompt Rider
+Rather than discarding valid requests on-device with brittle string checks, `esphome-satellite` defaults rigid on-device verification to OFF (`Voice: Wake Word Verification` switch set to `RESTORE_DEFAULT_OFF`) and delegates secondary verification semantically to the Home Assistant Conversation Agent (LLM).
+
+Append the following standard **38-Word Prompt Rider** to the system prompt of your Home Assistant LLM Conversation Agent (in **Settings > Voice Assistants > Assist > Conversation Agent**):
+
+```text
+WAKE VERIFICATION: Input includes 2s pre-roll audio. The opening words must roughly match or phonetically approximate "<WAKE_PHRASE>" (speech-to-text often mishears spoken names, e.g. "clement", filler like "uh", or mid-phrase clips). If matched, strip it and respond; otherwise (e.g. TV dialogue, bystander talk, unaddressed commands with no wake word), you must execute no tools and output strictly nothing (0 characters).
+```
+
+*(Replace `<WAKE_PHRASE>` with your slot's trigger phrase, e.g., `Mr. Clemens`, `OK Computer`, or `Hey Jarvis`.)*
+
+#### Silent Drop Contract
+When an accidental trigger or background conversation reaches the pipeline:
+1. The LLM evaluates the STT transcript and determines that the wake phrase is absent or unaddressed.
+2. The LLM outputs strictly **0 characters** (`""`) and executes zero tool calls.
+3. Home Assistant recognizes the empty response and completely suppresses Text-to-Speech synthesis.
+4. The satellite receives an empty TTS stream and transitions cleanly back to `rsIdle` without playing chime, error tones, or voice output.
 
 ---
 
