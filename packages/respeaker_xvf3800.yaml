@@ -1597,7 +1597,10 @@ switch:
     icon: "mdi:shield-check"
     entity_category: config
     optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
+    # Default OFF: Semantic wake word verification is handled upstream by the
+    # LLM Conversation Agent using the 2s pre-roll prompt rider, eliminating
+    # brittle on-device string drops on phonetic STT mishearings.
+    restore_mode: RESTORE_DEFAULT_OFF
 
 script:
   - id: connect_and_start_assistant

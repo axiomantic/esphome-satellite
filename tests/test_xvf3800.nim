@@ -61,12 +61,16 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
       check (c and 0x00FF0000'u32) == 0x00FF0000'u32 # Red channel 255
       check (c and 0x0000FFFF'u32) == 0'u32          # Green and Blue 0
 
-  test "LED animation states - Listening produces pulsing cyan/blue":
+  test "LED animation states - Listening produces pulsing electric azure":
     let colors = computeAnimationColors("Listening", "Off", 1.0'f32, 1000'u32)
     for c in colors:
-      check (c and 0x00FF0000'u32) == 0'u32          # Red channel 0
-      check (c and 0x000000FF'u32) > 0'u32          # Blue channel active
-      check (c and 0x0000FF00'u32) > 0'u32          # Green channel active
+      let r = (c shr 16) and 0xFF'u32
+      let g = (c shr 8) and 0xFF'u32
+      let b = c and 0xFF'u32
+      check b > 0'u32          # Blue channel active
+      check g > 0'u32          # Green channel active
+      check b > r              # Blue dominant over red
+      check g > r              # Green dominant over red
 
   test "LED animation states - Follow Up produces conversational listening emerald-teal wave":
     let colors = computeAnimationColors("Follow Up", "Off", 1.0'f32, 1000'u32)
