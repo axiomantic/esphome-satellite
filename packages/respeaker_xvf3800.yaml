@@ -90,7 +90,7 @@ esphome:
                 esphome::wake_loader::get_wake_partition_loader().get_slot1_model_name(),
                 esphome::wake_loader::get_wake_partition_loader().get_slot2_model_name(),
                 id(clemens_model),
-                nullptr,
+                id(nabu_model),
                 id(cancel_model));
             id(va).set_slot_wake_words(
                 esphome::wake_loader::get_wake_partition_loader().get_slot1_model_name(),
@@ -99,7 +99,7 @@ esphome:
             id(va).add_on_configuration_updated_callback([](const std::string &s1, const std::string &s2) {
               ESP_LOGI("voice_assistant", "HA updated wake words -> Slot 1: '%s', Slot 2: '%s'", s1.c_str(), s2.c_str());
               esphome::wake_loader::get_wake_partition_loader().update_slot_models(
-                  s1, s2, id(clemens_model), nullptr, id(cancel_model));
+                  s1, s2, id(clemens_model), id(nabu_model), id(cancel_model));
               if (id(slot1_wake_word).current_option() != s1) {
                 id(slot1_wake_word).publish_state(s1);
               }
@@ -108,15 +108,15 @@ esphome:
               }
             });
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-                1, id(slot1_sensitivity).current_option(), id(clemens_model));
+                1, id(slot1_sensitivity).current_option(), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-                2, id(slot2_sensitivity).current_option(), id(clemens_model));
+                2, id(slot2_sensitivity).current_option(), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
-                1, id(slot1_cutoff).state, id(clemens_model));
+                1, id(slot1_cutoff).state, id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
-                2, id(slot2_cutoff).state, id(clemens_model));
+                2, id(slot2_cutoff).state, id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_sliding_window(
-                static_cast<size_t>(id(wake_window_size).state), id(clemens_model), nullptr, id(cancel_model));
+                static_cast<size_t>(id(wake_window_size).state), id(clemens_model), id(nabu_model), id(cancel_model));
             esphome::wake_loader::get_wake_partition_loader().set_mic_pre_gain(
                 id(mic_pre_gain_boost).state);
         - micro_wake_word.start:
@@ -422,6 +422,8 @@ micro_wake_word:
   models:
     - model: ../assets/models/clemens.json
       id: clemens_model
+    - model: okay_nabu
+      id: nabu_model
     - model: ../assets/models/cancel.json
       id: cancel_model
   on_wake_word_detected:
@@ -657,7 +659,8 @@ voice_assistant:
               id(is_woken_from_wakeword) = false;
               id(va).request_stop();
               esphome::get_pcm_sound_player().stop();
-              call_nim_silence_timeout();
+              call_nim_stop_word();
+              call_nim_cancel_done(true);
               if (id(mic_mute_switch).state == false) {
                 id(mww).start();
               }
@@ -883,10 +886,11 @@ select:
     options:
       - "Disabled"
       - "Mr. Clemens"
+      - "Okay Nabu"
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().update_slot_models(
-              x, id(slot2_wake_word).current_option(), id(clemens_model), nullptr, id(cancel_model));
+              x, id(slot2_wake_word).current_option(), id(clemens_model), id(nabu_model), id(cancel_model));
           id(va).set_slot_wake_words(x, id(slot2_wake_word).current_option());
           global_preferences->sync();
 
@@ -897,15 +901,16 @@ select:
     icon: "mdi:microphone-outline"
     entity_category: config
     optimistic: true
-    initial_option: "Disabled"
+    initial_option: "Okay Nabu"
     restore_value: true
     options:
       - "Disabled"
       - "Mr. Clemens"
+      - "Okay Nabu"
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().update_slot_models(
-              id(slot1_wake_word).current_option(), x, id(clemens_model), nullptr, id(cancel_model));
+              id(slot1_wake_word).current_option(), x, id(clemens_model), id(nabu_model), id(cancel_model));
           id(va).set_slot_wake_words(id(slot1_wake_word).current_option(), x);
           global_preferences->sync();
 
@@ -925,7 +930,7 @@ select:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-              1, x, id(clemens_model));
+              1, x, id(clemens_model), id(nabu_model));
           float p = esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(1) / 255.0f;
           id(slot1_cutoff).publish_state(p);
           global_preferences->sync();
@@ -946,7 +951,7 @@ select:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-              2, x, id(clemens_model));
+              2, x, id(clemens_model), id(nabu_model));
           float p = esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(2) / 255.0f;
           id(slot2_cutoff).publish_state(p);
           global_preferences->sync();
@@ -1358,7 +1363,7 @@ number:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_sliding_window(
-              static_cast<size_t>(x), id(clemens_model), nullptr, id(cancel_model));
+              static_cast<size_t>(x), id(clemens_model), id(nabu_model), id(cancel_model));
           global_preferences->sync();
 
   - platform: template
@@ -1394,7 +1399,7 @@ number:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
-              1, x, id(clemens_model));
+              1, x, id(clemens_model), id(nabu_model));
           global_preferences->sync();
 
   - platform: template
@@ -1412,7 +1417,7 @@ number:
     set_action:
       - lambda: |-
           esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
-              2, x, id(clemens_model));
+              2, x, id(clemens_model), id(nabu_model));
           global_preferences->sync();
 
   - platform: template
@@ -1492,7 +1497,7 @@ switch:
     icon: "mdi:bell-outline"
     entity_category: config
     optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
+    restore_mode: RESTORE_DEFAULT_OFF
     on_turn_on:
       - lambda: |-
           global_preferences->sync();
@@ -1785,8 +1790,8 @@ interval:
       - lambda: |-
           if (id(mww).is_running()) {
             auto &loader = esphome::wake_loader::get_wake_partition_loader();
-            auto *s1_mod = loader.get_slot_model(1, id(clemens_model));
-            auto *s2_mod = loader.get_slot_model(2, id(clemens_model));
+            auto *s1_mod = loader.get_slot_model(1, id(clemens_model), id(nabu_model));
+            auto *s2_mod = loader.get_slot_model(2, id(clemens_model), id(nabu_model));
             if (s1_mod != nullptr) {
               uint8_t cur = loader.get_model_max_prob(s1_mod);
               float avg = loader.get_model_avg_prob(s1_mod);

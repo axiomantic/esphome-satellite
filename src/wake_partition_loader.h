@@ -217,8 +217,13 @@ class WakePartitionLoader {
       this->custom_names_.push_back(slot.name);
     }
 
+    bool has_custom = !this->custom_names_.empty();
+
     if (slot1_select != nullptr) {
       this->slot1_options_ = {"Disabled", "Mr. Clemens"};
+      if (!has_custom) {
+        this->slot1_options_.push_back("Okay Nabu");
+      }
       for (const auto &name : this->custom_names_) {
         this->slot1_options_.push_back(name);
       }
@@ -233,6 +238,9 @@ class WakePartitionLoader {
 
     if (slot2_select != nullptr) {
       this->slot2_options_ = {"Disabled", "Mr. Clemens"};
+      if (!has_custom) {
+        this->slot2_options_.push_back("Okay Nabu");
+      }
       for (const auto &name : this->custom_names_) {
         this->slot2_options_.push_back(name);
       }
@@ -246,7 +254,7 @@ class WakePartitionLoader {
     }
 
     std::string active_s1 = "Mr. Clemens";
-    std::string active_s2 = this->custom_names_.empty() ? "Disabled" : this->custom_names_[0];
+    std::string active_s2 = has_custom ? this->custom_names_[0] : "Okay Nabu";
 
     if (global_preferences != nullptr) {
       WakeWordFixedStringPref s1_pref{};
