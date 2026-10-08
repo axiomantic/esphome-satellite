@@ -345,6 +345,10 @@ class PcmSoundPlayer {
   }
 
   void play_chime_then_processing(const std::string &chime_name, const std::string &processing_name, float chime_vol = -1.0f, float proc_vol = -1.0f) {
+    if (chime_name == "Silent") {
+      this->play_processing_sound(processing_name, true, proc_vol);
+      return;
+    }
     this->play_chime(chime_name, false, chime_vol);
     this->pending_processing_name_ = processing_name;
     this->pending_processing_vol_ = proc_vol;
