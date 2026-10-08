@@ -19,9 +19,6 @@ globals:
   - id: previous_assistant_slot
     type: int
     initial_value: '1'
-  - id: is_woken_from_wakeword
-    type: bool
-    initial_value: 'false'
 
 preferences:
   flash_write_interval: 2s
@@ -465,7 +462,6 @@ micro_wake_word:
                 - micro_wake_word.start:
               else:
                 - lambda: |-
-                    id(is_woken_from_wakeword) = true;
                     esphome::get_pcm_sound_player().stop();
                     int slot = esphome::wake_loader::get_wake_partition_loader().get_slot_for_wake_word(wake_word);
                     id(previous_assistant_slot) = id(active_assistant_slot);
@@ -539,7 +535,6 @@ voice_assistant:
         std::string st = get_satellite_state_name();
         if (st == "Follow Up") {
           ESP_LOGI("satellite", "Continuous dialogue start: active listening in Follow Up state.");
-          id(is_woken_from_wakeword) = false;
           call_nim_listening_active();
         } else {
           call_nim_chime_done(true);
@@ -556,22 +551,19 @@ voice_assistant:
         call_nim_speech_start();
   on_stt_vad_end:
     - lambda: |-
-        bool verification_pending = id(is_woken_from_wakeword) && id(wake_word_verification_switch).state;
-        if (!verification_pending) {
-          call_nim_speech_ended();
-          std::string mode = id(acoustic_feedback_mode).current_option();
-          std::string proc_opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
-          float proc_vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
+        call_nim_speech_ended();
+        std::string mode = id(acoustic_feedback_mode).current_option();
+        std::string proc_opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
+        float proc_vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
 
-          bool chime_enabled = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime).state : id(slot1_wake_chime).state;
-          std::string chime_opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
-          float chime_vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
+        bool chime_enabled = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime).state : id(slot1_wake_chime).state;
+        std::string chime_opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+        float chime_vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
 
-          if (mode == "Post-Utterance Cue" && chime_enabled && chime_opt != "Silent") {
-            esphome::get_pcm_sound_player().play_chime_then_processing(chime_opt, proc_opt, chime_vol, proc_vol);
-          } else {
-            esphome::get_pcm_sound_player().play_processing_sound(proc_opt, true, proc_vol);
-          }
+        if (mode == "Post-Utterance Cue" && chime_enabled && chime_opt != "Silent") {
+          esphome::get_pcm_sound_player().play_chime_then_processing(chime_opt, proc_opt, chime_vol, proc_vol);
+        } else {
+          esphome::get_pcm_sound_player().play_processing_sound(proc_opt, true, proc_vol);
         }
   on_stt_end:
     - lambda: |-
@@ -653,28 +645,6 @@ voice_assistant:
           }
           id(va).request_stop();
         } else {
-          if (id(is_woken_from_wakeword) && id(wake_word_verification_switch).state) {
-            std::string active_ww = (id(active_assistant_slot) == 2) ? id(slot2_wake_word).current_option() : id(slot1_wake_word).current_option();
-            bool verified = call_nim_verify_wake_word(x.c_str(), active_ww.c_str());
-            if (!verified) {
-              ESP_LOGW("voice_assistant", "STT Wake Word Verification REJECTED false wake: '%s' does not match '%s'",
-                       x.c_str(), active_ww.c_str());
-              id(is_woken_from_wakeword) = false;
-              id(va).request_stop();
-              esphome::get_pcm_sound_player().stop();
-              call_nim_stop_word();
-              call_nim_cancel_done(true);
-              if (id(mic_mute_switch).state == false) {
-                id(mww).start();
-              }
-              return;
-            } else {
-              ESP_LOGI("voice_assistant", "STT Wake Word Verification PASSED: '%s' matches '%s'",
-                       x.c_str(), active_ww.c_str());
-            }
-          }
-          id(is_woken_from_wakeword) = false;
-
           if (std::string(get_satellite_state_name()) != "Thinking") {
             call_nim_speech_ended();
             std::string mode = id(acoustic_feedback_mode).current_option();
@@ -742,7 +712,6 @@ voice_assistant:
           - micro_wake_word.start:
   on_error:
     - lambda: |-
-        id(is_woken_from_wakeword) = false;
         esphome::get_pcm_sound_player().stop();
         if (std::string(get_satellite_state_name()) == "Follow Up") {
           call_nim_silence_timeout();
@@ -1590,17 +1559,6 @@ switch:
       - lambda: |-
           id(va).set_always_continue(false);
           global_preferences->sync();
-
-  - platform: template
-    id: wake_word_verification_switch
-    name: "Voice: Wake Word Verification"
-    icon: "mdi:shield-check"
-    entity_category: config
-    optimistic: true
-    # Default OFF: Semantic wake word verification is handled upstream by the
-    # LLM Conversation Agent using the 2s pre-roll prompt rider, eliminating
-    # brittle on-device string drops on phonetic STT mishearings.
-    restore_mode: RESTORE_DEFAULT_OFF
 
 script:
   - id: connect_and_start_assistant

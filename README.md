@@ -186,7 +186,7 @@ In far-field acoustic environments, television dialogue, background chatter, or 
 - Whisper receives and transcribes both the wake word phrase and the subsequent user command in full.
 
 #### Standard Prompt Rider
-Rather than discarding valid requests on-device with brittle string checks, `esphome-satellite` defaults rigid on-device verification to OFF (`Voice: Wake Word Verification` switch set to `RESTORE_DEFAULT_OFF`) and delegates secondary verification semantically to the Home Assistant Conversation Agent (LLM).
+Rather than discarding valid requests on-device with brittle string checks, `esphome-satellite` completely eliminates on-device string matching and delegates secondary verification semantically to the Home Assistant Conversation Agent (LLM).
 
 Append the following standard **38-Word Prompt Rider** to the system prompt of your Home Assistant LLM Conversation Agent (in **Settings > Voice Assistants > Assist > Conversation Agent**):
 
