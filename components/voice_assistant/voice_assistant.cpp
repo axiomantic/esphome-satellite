@@ -337,12 +337,19 @@ void VoiceAssistant::loop() {
         if (temp_ring_buffer != nullptr) {
           size_t avail = this->preroll_buffer_->available();
           if (avail > 0) {
-            std::vector<uint8_t> preroll_data(avail);
-            size_t read_bytes = this->preroll_buffer_->read(preroll_data.data(), avail);
-            if (read_bytes > 0) {
-              temp_ring_buffer->write(preroll_data.data(), read_bytes);
+            uint8_t chunk[1024];
+            size_t total_read = 0;
+            while (avail > 0) {
+              size_t to_read = std::min(avail, sizeof(chunk));
+              size_t read_bytes = this->preroll_buffer_->read(chunk, to_read);
+              if (read_bytes == 0) break;
+              temp_ring_buffer->write(chunk, read_bytes);
+              total_read += read_bytes;
+              avail -= read_bytes;
+            }
+            if (total_read > 0) {
               ESP_LOGI(TAG, "Prepended %zu bytes (%.2fs) of pre-roll wake word audio into stream",
-                       read_bytes, (float) read_bytes / (SAMPLE_RATE_HZ * sizeof(int16_t)));
+                       total_read, (float) total_read / (SAMPLE_RATE_HZ * sizeof(int16_t)));
             }
           }
         }
