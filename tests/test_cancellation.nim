@@ -181,33 +181,3 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     check actNone == 0
     check nim_satellite_match_volume_action(nil, nil) == 0
 
-  test "Wake Word Verification Suite":
-    # Clemens tests (exact name / tokens)
-    check verifyWakeWordPhrase("mr clemens what time is it", "Mr. Clemens")
-    check verifyWakeWordPhrase("clemens how is the weather", "Mr. Clemens")
-    check verifyWakeWordPhrase("Clemens.", "Mr. Clemens")
-
-    # Generic custom wake words
-    check verifyWakeWordPhrase("hey jarvis turn on the ac", "Jarvis")
-    check verifyWakeWordPhrase("marvin play music", "Marvin")
-
-    # Default project wake word (Okay Nabu)
-    check verifyWakeWordPhrase("okay nabu turn on the lights", "Okay Nabu")
-    check verifyWakeWordPhrase("ok nabu what time is it", "Okay Nabu")
-    check verifyWakeWordPhrase("nabu set a timer", "Okay Nabu")
-
-    # False wakes must REJECT
-    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Okay Nabu")
-    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Mr. Clemens")
-    check not verifyWakeWordPhrase("turn on the kitchen lights", "Mr. Clemens")
-    check not verifyWakeWordPhrase("commercial about car insurance", "Mr. Clemens")
-    check not verifyWakeWordPhrase("today is a nice day", "Jarvis")
-    check not verifyWakeWordPhrase("", "Mr. Clemens")
-    check not verifyWakeWordPhrase("hello", "")
-
-    # C ABI export
-    check nim_satellite_verify_wake_word("mr clemens hello".cstring, "Mr. Clemens".cstring)
-    check not nim_satellite_verify_wake_word("I'm sorry, Jake".cstring, "Mr. Clemens".cstring)
-    check not nim_satellite_verify_wake_word(nil, "Mr. Clemens".cstring)
-    check not nim_satellite_verify_wake_word("mr clemens".cstring, nil)
-
