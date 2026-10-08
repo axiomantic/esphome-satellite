@@ -316,7 +316,7 @@ class VoiceAssistantAccessor {
  public:
   static bool is_continuing(const VoiceAssistant *va) {
     if (!va) return false;
-    return (va->*get_member(VoiceAssistantContinueConversationTag{})) || va->is_continuous();
+    return (va->*get_member(VoiceAssistantContinueConversationTag{}));
   }
 };
 
