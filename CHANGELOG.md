@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Semantic Wake Word Verification Prompt Rider**: Standardized LLM prompt directive and silent drop contract (0-character response suppresses TTS synthesis and returns satellite to idle), eliminating brittle on-device drops on Whisper phonetic drift.
+- **Continuous 2.0-Second Pre-Roll Audio Buffer**: Continuous circular audio ring buffer in memory streaming 2.0 seconds of pre-wake speech directly to Whisper STT.
+- **Electric Azure LED Animation**: High-visibility electric azure animation during active listening and conversational emerald-teal breathing wave during follow-up turns.
+
+### Changed
+- **Default Acoustic Presets**: Configured Slot 1 processing sound to `Typewriter`, Slot 2 processing sound to `Silent`, and set all wake chimes and cancel sounds to disabled (`restore_mode: RESTORE_DEFAULT_OFF`).
+- **Immediate Processing Sound Initiation**: Satellite transitions cleanly and instantaneously to `Thinking` and begins the processing audio loop as soon as VAD detects speech end.
+
+### Removed
+- **Rigid On-Device Wake Word Verification**: Completely purged `verifyWakeWordPhrase`, phonetic match heuristics, `nim_satellite_verify_wake_word`, `call_nim_verify_wake_word`, and the `Voice: Wake Word Verification` switch entity.
+
 ## [0.6.1] - 2026-09-14
 
 ### Added
