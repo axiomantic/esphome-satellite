@@ -692,14 +692,14 @@ voice_assistant:
           - micro_wake_word.start:
   on_end:
     - lambda: |-
-        if (!esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
-          std::string st = get_satellite_state_name();
-          if (st == "Thinking") {
-            esphome::get_pcm_sound_player().stop();
-            call_nim_pipeline_end();
-            float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
-            id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
-          } else if (st != "Replying" && !id(board_speaker).has_buffered_data()) {
+        std::string st = get_satellite_state_name();
+        if (st == "Thinking") {
+          esphome::get_pcm_sound_player().stop();
+          call_nim_pipeline_end();
+          float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
+          id(board_speaker).set_volume(calculate_effective_voice_volume(id(master_volume).state, id(voice_volume).state, slot_pct));
+        } else if (!esphome::voice_assistant::VoiceAssistantAccessor::is_continuing(id(va))) {
+          if (st != "Replying" && !id(board_speaker).has_buffered_data()) {
             if (!esphome::get_pcm_sound_player().is_playing_cancel()) {
               esphome::get_pcm_sound_player().stop();
               float slot_pct = ((id(active_assistant_slot) == 2) ? id(slot2_volume).state : id(slot1_volume).state);
@@ -1381,7 +1381,7 @@ number:
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.52
+    initial_value: 0.68
     restore_value: true
     optimistic: true
     mode: slider
