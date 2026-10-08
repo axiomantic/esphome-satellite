@@ -157,6 +157,9 @@ inline void call_nim_tts_start(void) {
 inline void call_nim_tts_end(void) {
   nim_satellite_tts_end();
 }
+inline void call_nim_pipeline_end(void) {
+  nim_satellite_pipeline_end();
+}
 inline void call_nim_stop_word(void) {
   nim_satellite_stop_word();
 }
