@@ -294,6 +294,13 @@ proc verifyWakeWordPhrase*(transcript: string, wakeWord: string): bool =
       if containsWord(cleanText, v):
         return true
 
+  # 4. Phonetic expansions for Nabu
+  if containsSub(cleanWw, "nabu"):
+    const nabuVariants: array[3, string] = ["nabu", "ok nabu", "okay nabu"]
+    for v in nabuVariants:
+      if containsWord(cleanText, v):
+        return true
+
   # 4. Token-level matching with word boundaries
   var curWord = ""
   for c in cleanWw:

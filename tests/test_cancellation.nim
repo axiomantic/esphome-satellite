@@ -199,6 +199,12 @@ suite "Cancellation Phrase Matcher Suite (TDD)":
     check verifyWakeWordPhrase("hey jarvis turn on the ac", "Jarvis")
     check verifyWakeWordPhrase("marvin play music", "Marvin")
 
+    # Default project wake word (Okay Nabu)
+    check verifyWakeWordPhrase("okay nabu turn on the lights", "Okay Nabu")
+    check verifyWakeWordPhrase("ok nabu what time is it", "Okay Nabu")
+    check verifyWakeWordPhrase("nabu set a timer", "Okay Nabu")
+    check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Okay Nabu")
+
     # False wakes must REJECT
     check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Mr. Clemens")
     check not verifyWakeWordPhrase("I'm sorry, I can't help you. Jake!", "Hey Jay Dee")

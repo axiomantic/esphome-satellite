@@ -20,7 +20,9 @@ static const char *const TAG = "voice_assistant";
 
 static const size_t SAMPLE_RATE_HZ = 16000;
 
-static const size_t RING_BUFFER_SAMPLES = 2000 * SAMPLE_RATE_HZ / 1000;  // 2000 ms * 16 kHz / 1000 ms
+static const size_t PREROLL_BUFFER_SAMPLES = 2000 * SAMPLE_RATE_HZ / 1000;  // 2000 ms * 16 kHz / 1000 ms
+static const size_t PREROLL_BUFFER_SIZE = PREROLL_BUFFER_SAMPLES * sizeof(int16_t);
+static const size_t RING_BUFFER_SAMPLES = 4000 * SAMPLE_RATE_HZ / 1000;  // 4000 ms * 16 kHz / 1000 ms
 static const size_t RING_BUFFER_SIZE = RING_BUFFER_SAMPLES * sizeof(int16_t);
 static const size_t SEND_BUFFER_SAMPLES = 32 * SAMPLE_RATE_HZ / 1000;  // 32ms * 16kHz / 1000ms
 static const size_t SEND_BUFFER_SIZE = SEND_BUFFER_SAMPLES * sizeof(int16_t);
@@ -35,7 +37,11 @@ static const uint32_t AUDIO_CHANNEL_STALL_TIMEOUT_MS = 2000;
 VoiceAssistant::VoiceAssistant() { global_voice_assistant = this; }
 
 void VoiceAssistant::setup() {
+  this->preroll_buffer_ = ring_buffer::RingBuffer::create(PREROLL_BUFFER_SIZE);
   this->mic_source_->add_data_callback([this](const std::vector<uint8_t> &data) {
+    if (this->preroll_buffer_ != nullptr) {
+      this->preroll_buffer_->write((void *) data.data(), data.size());
+    }
     std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->ring_buffer_.lock();
     if (temp_ring_buffer != nullptr) {
       temp_ring_buffer->write((void *) data.data(), data.size());
@@ -322,6 +328,22 @@ void VoiceAssistant::loop() {
         this->status_clear_error();
       }
       this->clear_buffers_();
+
+      if (this->preroll_buffer_ != nullptr) {
+        std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->ring_buffer_.lock();
+        if (temp_ring_buffer != nullptr) {
+          size_t avail = this->preroll_buffer_->available();
+          if (avail > 0) {
+            std::vector<uint8_t> preroll_data(avail);
+            size_t read_bytes = this->preroll_buffer_->read(preroll_data.data(), avail);
+            if (read_bytes > 0) {
+              temp_ring_buffer->write(preroll_data.data(), read_bytes);
+              ESP_LOGI(TAG, "Prepended %zu bytes (%.2fs) of pre-roll wake word audio into stream",
+                       read_bytes, (float) read_bytes / (SAMPLE_RATE_HZ * sizeof(int16_t)));
+            }
+          }
+        }
+      }
 
       this->mic_source_->start();
       if (this->mic_source2_) {

@@ -324,6 +324,7 @@ class VoiceAssistant final : public Component {
   std::unique_ptr<audio::RingBufferAudioSource> audio_source2_;
   std::weak_ptr<ring_buffer::RingBuffer> ring_buffer_;
   std::weak_ptr<ring_buffer::RingBuffer> ring_buffer2_;
+  std::unique_ptr<ring_buffer::RingBuffer> preroll_buffer_{nullptr};
 
   // When streaming multiple channels, the send loop holds an exposed chunk on one channel until the other
   // channel also has audio so the channels are always sent together (an empty payload looks like
