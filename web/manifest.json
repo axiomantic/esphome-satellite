@@ -26,7 +26,7 @@
       ],
       "ota": {
         "path": "firmware-ota.bin",
-        "md5": "065b6214fa1231161409c9a81a43fea8",
+        "md5": "d5f779411d0ab3d6c969a5a6c860b6fb",
         "summary": "Official Seeed ReSpeaker XVF3800 firmware release."
       }
     }
