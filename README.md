@@ -107,7 +107,10 @@ Once the board has rebooted into ESPHome, connect using either method:
   - [Dual-Assistant Profiles & Independent Feedback](#dual-assistant-profiles--independent-feedback)
   - [5-Minute Conversation Memory & Context Isolation](#5-minute-conversation-memory--context-isolation)
   - [Dynamic Partition Loader for Custom Models](#dynamic-partition-loader-for-custom-models)
-  - [Semantic Wake Word Verification (LLM Prompt Rider)](#semantic-wake-word-verification-llm-prompt-rider)
+  - [System 1 Neural Gatekeeper & Addressing Verification](#system-1-neural-gatekeeper--addressing-verification)
+    - [Deferred Physical Feedback (v0.7.0)](#deferred-physical-feedback-v070)
+    - [Home Assistant Custom Integration Setup](#home-assistant-custom-integration-setup)
+    - [Alternative: Direct LLM Prompt Rider](#alternative-direct-llm-prompt-rider)
 - [Acoustic Tuning & Female Voice Equalization](#acoustic-tuning--female-voice-equalization)
   - [Microphone Pre-Gain Boost](#microphone-pre-gain-boost)
   - [Sliding Window Size Tuning](#sliding-window-size-tuning)
@@ -174,21 +177,67 @@ Voice interactions often span multi-turn dialogue where context should persist a
 ### Dynamic Partition Loader for Custom Models
 Using [`src/wake_partition_loader.nim`](src/wake_partition_loader.nim), users can flash up to 3 custom microWakeWord `.tflite` models into dedicated flash partitions (`wake_model`, `wake_model_2`, `wake_model_3` at `0x510000`, `0x550000`, `0x590000`). At boot time, the partition loader validates 64-byte `WAKE` headers, extracts tensor arena sizes and probability cutoffs, memory-maps the weights directly from SPI flash (avoiding heap allocation), and dynamically registers them into the active detection pool.
 
-### Semantic Wake Word Verification (LLM Prompt Rider)
+### System 1 Neural Gatekeeper & Addressing Verification
 
 In far-field acoustic environments, television dialogue, background chatter, or momentary acoustic spikes can cause false wake events. Traditional voice systems attempt rigid on-device string matching against the Speech-to-Text (STT) transcript. However, rigid string matching frequently drops valid voice commands because:
 1. **Whisper STT phonetic drift**: Fast speech or accents cause Whisper to transcribe phonetically rather than orthographically (e.g., *"Mr. Clemens"* commonly transcribes as *"Mr. Clement"*, *"Mister Clements"*, *"Mr. Clemence"*, or *"Mister Clemens"*).
 2. **Buffer boundary jitter**: The audio buffer may capture leading breath, conversational fillers like *"uh"* or *"well"*, or clip the very first phoneme.
 
+To achieve effortless acoustic wake-up with zero false triggers, `esphome-satellite` implements a two-tier gatekeeper architecture:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Speaker as Household Speaker
+    participant Sat as ESPHome Satellite
+    participant HA as Home Assistant Core (Assist Pipeline)
+    participant Gate as Gatekeeper (custom_components/esphome_satellite)
+    participant Sys1 as System 1 Server (/v1/systemone)
+    participant Down as Downstream Agent (LLM / Assist)
+
+    Speaker->>Sat: Ambient speech (e.g. TV dialogue mentioning Clemens)
+    Note over Sat: microWakeWord edge trigger<br/>Satellite stays dark & silent (v0.7.0)
+    Sat->>HA: Start Pipeline (Audio Stream + 2.0s Pre-roll)
+    HA->>HA: Whisper STT transcribes utterance
+    HA->>Gate: async_process(user_input)
+    Note over Gate: Resolves satellite slot & wake phrase<br/>Queries System 1 classifier
+    Gate->>Sys1: POST /v1/systemone
+    Sys1-->>Gate: {"ambient_conversation": 0.88, "addressed": 0.12}
+    Note over Gate: 0.88 >= threshold (0.60)<br/>Decision: AMBIENT CONVERSATION
+    Gate-->>HA: ConversationResult(response.speech="")
+    Note over HA: pipeline.py line 1803:<br/>if not speech: skip TTS
+    HA->>Sat: on_end (no TTS stream)
+    Note over Sat: Satellite returns to Idle<br/>Zero chimes, zero LEDs, zero tokens burned
+```
+
 #### Continuous 2.0-Second Pre-Roll Audio
-`esphome-satellite` eliminates the clipped-audio problem by maintaining a continuous 2.0-second circular audio buffer in memory while idle. When an on-device microWakeWord model triggers:
+`esphome-satellite` eliminates clipped audio by maintaining a continuous 2.0-second circular audio buffer in PSRAM while idle. When an on-device microWakeWord model triggers:
 - The firmware automatically prepends the 2.0 seconds of pre-roll audio containing the spoken wake word into the stream sent to Home Assistant's STT engine.
 - Whisper receives and transcribes both the wake word phrase and the subsequent user command in full.
 
-#### Standard Prompt Rider
-Rather than discarding valid requests on-device with brittle string checks, `esphome-satellite` completely eliminates on-device string matching and delegates secondary verification semantically to the Home Assistant Conversation Agent (LLM).
+#### Deferred Physical Feedback (v0.7.0)
+In firmware `v0.7.0`, hardware cues adhere strictly to **Rule 5 (Deterministic Hardware / LED Binding)**:
+- **Pre-Verification Silence & Darkness**: During `Listening` and `Verifying`, the satellite emits **zero sound and zero light**. False edge triggers from TV chatter or room conversation never blink LEDs or ring wake chimes.
+- **Physical Verification Acknowledgment**: When Gatekeeper verifies that speech was addressed to the satellite, it invokes the native `esphome.<device>_wake_word_verified` action. The satellite transitions from `Verifying -> Thinking`, rings the wake chime (if enabled), starts the typewriter processing sound, and animates the Thinking LED spinner.
 
-Append the following standard **38-Word Prompt Rider** to the system prompt of your Home Assistant LLM Conversation Agent (in **Settings > Voice Assistants > Assist > Conversation Agent**):
+#### Home Assistant Custom Integration Setup
+The companion integration lives in [`custom_components/esphome_satellite`](custom_components/esphome_satellite/):
+
+1. **Install Component**: Copy `custom_components/esphome_satellite` to your Home Assistant `/config/custom_components/` directory (or install via HACS custom repository).
+2. **Restart Home Assistant**: Restart Home Assistant Core via **Developer Tools > YAML > Restart**.
+3. **Add Integration**:
+   - Go to **Settings > Devices & Services > Add Integration**.
+   - Search for **ESPHome Satellite Gatekeeper**.
+   - Enter your System 1 endpoint URL (e.g. `http://laya.lan/v1/systemone`), Bearer Token, and select your downstream Conversation Agent.
+4. **Wire Assist Pipeline**:
+   - Go to **Settings > Voice Assistants > Assist**.
+   - Set **Conversation Agent** to **Gatekeeper**.
+5. **Runtime Tuning via Options Flow**:
+   - Click **Configure** on the Gatekeeper integration card.
+   - Adjust per-slot sensitivity thresholds (default `0.60`), toggle slot gating, or choose fallback behavior (`allow` fail-open or `drop` fail-closed).
+
+#### Alternative: Direct LLM Prompt Rider
+For standalone installations without a local System 1 / Laya classifier, you can bypass the custom component and delegate addressing verification directly to your downstream LLM conversation agent by appending this standard **38-Word Prompt Rider** to the system prompt in **Settings > Voice Assistants > Assist > Conversation Agent**:
 
 ```text
 WAKE VERIFICATION: Input includes 2s pre-roll audio. The opening words must roughly match or phonetically approximate "<WAKE_PHRASE>" (speech-to-text often mishears spoken names, e.g. "clement", filler like "uh", or mid-phrase clips). If matched, strip it and respond; otherwise (e.g. TV dialogue, bystander talk, unaddressed commands with no wake word), you must execute no tools and output strictly nothing (0 characters).
@@ -196,12 +245,7 @@ WAKE VERIFICATION: Input includes 2s pre-roll audio. The opening words must roug
 
 *(Replace `<WAKE_PHRASE>` with your slot's trigger phrase, e.g., `Mr. Clemens`, `OK Computer`, or `Hey Jarvis`.)*
 
-#### Silent Drop Contract
-When an accidental trigger or background conversation reaches the pipeline:
-1. The LLM evaluates the STT transcript and determines that the wake phrase is absent or unaddressed.
-2. The LLM outputs strictly **0 characters** (`""`) and executes zero tool calls.
-3. Home Assistant recognizes the empty response and completely suppresses Text-to-Speech synthesis.
-4. The satellite receives an empty TTS stream and transitions cleanly back to `rsIdle` without playing chime, error tones, or voice output.
+When an accidental trigger or background conversation reaches the pipeline under the prompt rider, the LLM outputs strictly **0 characters** (`""`) with zero tool calls. Home Assistant recognizes the empty response, suppresses TTS, and returns the satellite cleanly to `rsIdle`.
 
 ---
 
