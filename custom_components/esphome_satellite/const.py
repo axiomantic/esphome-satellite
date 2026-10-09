@@ -24,20 +24,29 @@ DEFAULT_FALLBACK: Final = "allow"  # "allow" (fail-open) | "drop" (fail-closed)
 
 # Decision Classification Choices & Criteria
 CHOICE_ADDRESSED: Final = "addressed"
-CHOICE_AMBIENT: Final = "ambient_conversation"
+CHOICE_AMBIENT: Final = "ambient"
 CLASSIFICATION_CHOICES: Final = [CHOICE_ADDRESSED, CHOICE_AMBIENT]
 CLASSIFICATION_CRITERIA: Final = {
-    CHOICE_ADDRESSED: "Spoken directly to the voice assistant as a command or query",
-    CHOICE_AMBIENT: "Background chatter, bystander talk, or speech not directed at the assistant",
+    CHOICE_ADDRESSED: "Spoken command, request (e.g. tell me a joke, turn on lights), or addressing the assistant",
+    CHOICE_AMBIENT: "Casual bystander conversation between humans or TV chatter",
 }
 
 # Question Templates
 QUESTION_TEMPLATE_GENERAL: Final = (
-    "Is this utterance directly addressing the smart home voice assistant with a question, command, "
-    "or statement meant for the device, or is it background speech, television audio, or ambient conversation between humans?"
+    "Is this utterance an addressed request, command, or query directed to the smart home assistant, "
+    "or is it ambient conversation between humans or TV audio?"
 )
 
 QUESTION_TEMPLATE_CLEMENS: Final = (
-    "Is this utterance addressing Mr. Clemens (Mark Twain / the home assistant persona) or issuing a command to the household, "
-    "or is it ambient conversational speech between people in the room or television audio?"
+    "The voice satellite triggered on wake phrase 'Mr. Clemens'. "
+    "Is this utterance an addressed request to the assistant (including jokes, questions, device controls, "
+    "or phonetic approximations of the wake phrase like Clamonds, Clamance, or Clemons), "
+    "or is it ambient bystander conversation between humans or TV chatter?"
+)
+
+QUESTION_TEMPLATE_SLOT2: Final = (
+    "The voice satellite triggered on secondary wake phrase. "
+    "Is this utterance an addressed request to the assistant (including jokes, questions, device controls, "
+    "or phonetic approximations of the wake phrase), "
+    "or is it ambient bystander conversation between humans or TV chatter?"
 )
