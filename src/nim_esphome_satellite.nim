@@ -52,6 +52,7 @@ type
   Idle* = distinct SatelliteContext
   WaitingForSpeech* = distinct SatelliteContext
   StreamingSpeech* = distinct SatelliteContext
+  Verifying* = distinct SatelliteContext
   Processing* = distinct SatelliteContext
   Replying* = distinct SatelliteContext
   Cancelling* = distinct SatelliteContext
@@ -83,14 +84,16 @@ type
   Thinking* = Processing
   SilentDismiss* = SilentDismissing
   PipelineError* = ActionableError
+  VerifyingWakeWord* = Verifying
 
 typestate SatelliteFSM:
   consumeOnTransition = false
-  states Idle, WaitingForSpeech, StreamingSpeech, Processing, Replying, Cancelling, SilentDismissing, ActionableError, ConnectionError, Muted, FollowUp, PlayingMedia, Alerting, Announcing, Updating, ReplyingBargeInAttempted, ReplyingBargeInIgnored, BargedIn, IntentCompleteNoTts, ActionSuccess, PipelineErrorEvaluating
+  states Idle, WaitingForSpeech, StreamingSpeech, Verifying, Processing, Replying, Cancelling, SilentDismissing, ActionableError, ConnectionError, Muted, FollowUp, PlayingMedia, Alerting, Announcing, Updating, ReplyingBargeInAttempted, ReplyingBargeInIgnored, BargedIn, IntentCompleteNoTts, ActionSuccess, PipelineErrorEvaluating
   transitions:
     Idle -> (WaitingForSpeech | StreamingSpeech | ConnectionError | Muted | PlayingMedia | Alerting | Announcing | Updating) as IdleResult
     WaitingForSpeech -> (StreamingSpeech | Cancelling | SilentDismissing | PipelineErrorEvaluating | ActionableError | ConnectionError | Idle) as WaitingResult
-    StreamingSpeech -> (Processing | Cancelling | SilentDismissing | PipelineErrorEvaluating | ConnectionError | Idle) as StreamingResult
+    StreamingSpeech -> (Verifying | Processing | Cancelling | SilentDismissing | PipelineErrorEvaluating | ConnectionError | Idle) as StreamingResult
+    Verifying -> (Processing | Cancelling | SilentDismissing | PipelineErrorEvaluating | ActionableError | ConnectionError | Idle) as VerifyingResult
     Processing -> (Replying | IntentCompleteNoTts | Cancelling | SilentDismissing | PipelineErrorEvaluating | ActionableError | ConnectionError | Idle) as ProcessingResult
     Replying -> (Idle | Cancelling | FollowUp | ReplyingBargeInAttempted | PipelineErrorEvaluating | ConnectionError) as ReplyingResult
     Cancelling -> (Idle | PlayingMedia | ConnectionError) as CancelResult
@@ -174,9 +177,43 @@ proc onStopDuringWoken*(s: WaitingForSpeech): Cancelling {.transition.} =
   info("SatelliteFSM", "State: WAITING_FOR_SPEECH -> CANCELLING (Stop command received during chime)")
   result = Cancelling(SatelliteContext(s))
 
-proc onSpeechEnded*(s: StreamingSpeech): Processing {.transition.} =
-  info("SatelliteFSM", "State: STREAMING_SPEECH -> PROCESSING (VAD speech ended)")
+proc onSpeechEnded*(s: StreamingSpeech): Verifying {.transition.} =
+  info("SatelliteFSM", "State: STREAMING_SPEECH -> VERIFYING (VAD speech ended, awaiting verification)")
+  result = Verifying(SatelliteContext(s))
+
+proc onSpeechEndedDirectToProcessing*(s: StreamingSpeech): Processing {.transition.} =
+  info("SatelliteFSM", "State: STREAMING_SPEECH -> PROCESSING (direct transition without verification)")
   result = Processing(SatelliteContext(s))
+
+proc onWakeWordVerified*(s: Verifying): Processing {.transition.} =
+  info("SatelliteFSM", "State: VERIFYING -> PROCESSING (wake word / intent verified)")
+  result = Processing(SatelliteContext(s))
+
+proc onPipelineEndFromVerifying*(s: Verifying): SilentDismissing {.transition.} =
+  info("SatelliteFSM", "State: VERIFYING -> SILENT_DISMISSING (pipeline ended without verification)")
+  result = SilentDismissing(SatelliteContext(s))
+
+proc onStopDuringVerifying*(s: Verifying): Cancelling {.transition.} =
+  info("SatelliteFSM", "State: VERIFYING -> CANCELLING (Stop command received during verifying)")
+  result = Cancelling(SatelliteContext(s))
+
+proc onStopDuringVerifyingToIdle*(s: Verifying): Idle {.transition.} =
+  info("SatelliteFSM", "State: VERIFYING -> IDLE (Stop command received during verifying)")
+  result = Idle(SatelliteContext())
+
+proc onVerifyingTimeout*(s: Verifying): SilentDismissing {.transition.} =
+  info("SatelliteFSM", "State: VERIFYING -> SILENT_DISMISSING (verification timeout)")
+  result = SilentDismissing(SatelliteContext(s))
+
+proc onPipelineErrorFromVerifying*(s: Verifying, err: string): PipelineErrorEvaluating {.transition.} =
+  var ctx = SatelliteContext(s)
+  ctx.errorCode = err
+  error("SatelliteFSM", "State: VERIFYING -> PIPELINE_ERROR_EVALUATING (" & err & ")")
+  result = PipelineErrorEvaluating(ctx)
+
+proc onConnectionErrorFromVerifying*(s: Verifying): ConnectionError {.transition.} =
+  warn("SatelliteFSM", "State: VERIFYING -> CONNECTION_ERROR (Home Assistant disconnected)")
+  result = ConnectionError(SatelliteContext(s))
 
 proc onSilenceTimeout*(s: StreamingSpeech): SilentDismissing {.transition.} =
   info("SatelliteFSM", "State: STREAMING_SPEECH -> SILENT_DISMISSING (no speech recognized)")
@@ -516,6 +553,7 @@ type
     rsIntentCompleteNoTts = 18
     rsActionSuccess = 19
     rsPipelineErrorEvaluating = 20
+    rsVerifying = 21
 
 const
   rsWoken* = rsWaitingForSpeech
@@ -523,6 +561,7 @@ const
   rsThinking* = rsProcessing
   rsSilentDismiss* = rsSilentDismissing
   rsPipelineError* = rsActionableError
+  rsVerifyingWakeWord* = rsVerifying
 
 type
   SatelliteFSMInstance* = object
@@ -533,6 +572,8 @@ type
       waitingState*: WaitingForSpeech
     of rsStreamingSpeech:
       streamingState*: StreamingSpeech
+    of rsVerifying:
+      verifyingState*: Verifying
     of rsProcessing:
       processingState*: Processing
     of rsReplying:
@@ -598,6 +639,7 @@ proc `currentState=`*(s: RuntimeState) =
   of rsIdle: fsm = SatelliteFSMInstance(state: rsIdle, idleState: Idle(SatelliteContext()))
   of rsWaitingForSpeech: fsm = SatelliteFSMInstance(state: rsWaitingForSpeech, waitingState: WaitingForSpeech(SatelliteContext()))
   of rsStreamingSpeech: fsm = SatelliteFSMInstance(state: rsStreamingSpeech, streamingState: StreamingSpeech(SatelliteContext()))
+  of rsVerifying: fsm = SatelliteFSMInstance(state: rsVerifying, verifyingState: Verifying(SatelliteContext()))
   of rsProcessing: fsm = SatelliteFSMInstance(state: rsProcessing, processingState: Processing(SatelliteContext()))
   of rsReplying: fsm = SatelliteFSMInstance(state: rsReplying, replyingState: Replying(SatelliteContext()))
   of rsCancelling: fsm = SatelliteFSMInstance(state: rsCancelling, cancellingState: Cancelling(SatelliteContext()))
@@ -896,10 +938,19 @@ proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
   lastSpeechActivityMs = satelliteNowMs()
   if fsm.state == rsStreamingSpeech:
     let next = onSpeechEnded(fsm.streamingState)
-    fsm = SatelliteFSMInstance(state: rsProcessing, processingState: next)
-    satellitePipeline.startProcessingLoop(configuredProcessingStyle)
+    fsm = SatelliteFSMInstance(state: rsVerifying, verifyingState: next)
+    # Note: In Verifying state, do NOT start processing audio loop!
   elif fsm.state == rsFollowUp:
     let next = onFollowUpSpeechEnded(fsm.followUpState)
+    fsm = SatelliteFSMInstance(state: rsProcessing, processingState: next)
+    satellitePipeline.startProcessingLoop(configuredProcessingStyle)
+
+proc nim_satellite_wake_word_verified*() {.exportc, cdecl.} =
+  speechActive = false
+  speechStartMs = 0
+  lastSpeechActivityMs = satelliteNowMs()
+  if fsm.state == rsVerifying:
+    let next = onWakeWordVerified(fsm.verifyingState)
     fsm = SatelliteFSMInstance(state: rsProcessing, processingState: next)
     satellitePipeline.startProcessingLoop(configuredProcessingStyle)
 
@@ -951,6 +1002,11 @@ proc nim_satellite_pipeline_end*() {.exportc, cdecl.} =
     let idle = onResetActionSuccess(fsm.actionSuccessState)
     fsm = SatelliteFSMInstance(state: rsIdle, idleState: idle)
     returnFromIdleToMediaOrIdle()
+  elif fsm.state == rsVerifying:
+    let dismiss = onPipelineEndFromVerifying(fsm.verifyingState)
+    let idle = onDismiss(dismiss)
+    fsm = SatelliteFSMInstance(state: rsIdle, idleState: idle)
+    returnFromIdleToMediaOrIdle()
 
 proc nim_satellite_follow_up*() {.exportc, cdecl.} =
   speechActive = false
@@ -971,6 +1027,9 @@ proc nim_satellite_stop_word*() {.exportc, cdecl.} =
     fsm = SatelliteFSMInstance(state: rsCancelling, cancellingState: cancel)
   of rsStreamingSpeech:
     let cancel = onStopDuringListening(fsm.streamingState)
+    fsm = SatelliteFSMInstance(state: rsCancelling, cancellingState: cancel)
+  of rsVerifying:
+    let cancel = onStopDuringVerifying(fsm.verifyingState)
     fsm = SatelliteFSMInstance(state: rsCancelling, cancellingState: cancel)
   of rsProcessing:
     let cancel = onStopDuringThinking(fsm.processingState)
@@ -1001,6 +1060,8 @@ proc nim_satellite_error*(code: cstring) {.exportc, cdecl.} =
     evalState = onPipelineErrorFromWaiting(fsm.waitingState, err)
   of rsStreamingSpeech:
     evalState = onPipelineErrorFromListening(fsm.streamingState, err)
+  of rsVerifying:
+    evalState = onPipelineErrorFromVerifying(fsm.verifyingState, err)
   of rsProcessing:
     evalState = onPipelineErrorFromThinking(fsm.processingState, err)
   of rsReplying:
@@ -1115,6 +1176,9 @@ proc nim_satellite_disconnected*() {.exportc, cdecl.} =
     fsm = SatelliteFSMInstance(state: rsConnectionError, connErrState: next)
   of rsStreamingSpeech:
     let next = onDisconnectFromStreaming(fsm.streamingState)
+    fsm = SatelliteFSMInstance(state: rsConnectionError, connErrState: next)
+  of rsVerifying:
+    let next = onConnectionErrorFromVerifying(fsm.verifyingState)
     fsm = SatelliteFSMInstance(state: rsConnectionError, connErrState: next)
   of rsProcessing:
     let next = onDisconnectFromProcessing(fsm.processingState)
@@ -1259,6 +1323,14 @@ proc satelliteLoop*(now: uint32) =
         warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s of silence. Returning to Idle.")
         notifyHardwareAbort()
         nim_satellite_silence_timeout()
+  of rsVerifying:
+    if elapsed >= 10000:
+      warn("SatelliteFSM", "Watchdog: Verifying state timed out after 10s. Returning to Idle.")
+      notifyHardwareAbort()
+      let dismiss = onVerifyingTimeout(fsm.verifyingState)
+      let idle = onDismiss(dismiss)
+      fsm = SatelliteFSMInstance(state: rsIdle, idleState: idle)
+      returnFromIdleToMediaOrIdle()
   of rsProcessing:
     if elapsed >= 20000:
       warn("SatelliteFSM", "Watchdog: Thinking state timed out after 20s. Triggering PipelineError.")
