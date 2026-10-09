@@ -124,7 +124,7 @@ proc computeAnimationColors*(
     let red = uint32(uint8(255.0'f32 * brightness)) shl 16
     for i in 0 ..< 12:
       result[i] = red
-  of "Woken", "Listening":
+  of "Woken", "Listening", "Verifying":
     let pulse = 0.80'f32 + 0.20'f32 * sin(now * 0.009'f32)
     let r = uint32(uint8(clamp(70.0'f32 * pulse * brightness, 0.0'f32, 255.0'f32))) shl 16
     let g = uint32(uint8(clamp(220.0'f32 * pulse * brightness, 0.0'f32, 255.0'f32))) shl 8

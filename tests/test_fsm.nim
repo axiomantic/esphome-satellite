@@ -14,7 +14,11 @@ suite "Satellite Typestate FSM - Happy Path & Invariants":
     check listening is Listening
     check SatelliteContext(listening).wakeWord == "hey assistant"
 
-    var thinking = listening.onSpeechEnded()
+    var verifying = listening.onSpeechEnded()
+    check verifying is Verifying
+    check SatelliteContext(verifying).wakeWord == "hey assistant"
+
+    var thinking = verifying.onWakeWordVerified()
     check thinking is Thinking
     check SatelliteContext(thinking).wakeWord == "hey assistant"
 
@@ -33,12 +37,17 @@ suite "Satellite Typestate FSM - Happy Path & Invariants":
     check cancellingFromListening is Cancelling
     check cancellingFromListening.onCancelFinished() is Idle
 
-    var th = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var v = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var cancellingFromVerifying = v.onStopDuringVerifying()
+    check cancellingFromVerifying is Cancelling
+    check cancellingFromVerifying.onCancelFinished() is Idle
+
+    var th = v.onWakeWordVerified()
     var cancellingFromThinking = th.onStopDuringThinking()
     check cancellingFromThinking is Cancelling
     check cancellingFromThinking.onCancelFinished() is Idle
 
-    var rep = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var rep = th.onTtsStarted()
     var cancellingFromReplying = rep.onStopDuringReplying()
     check cancellingFromReplying is Cancelling
     check cancellingFromReplying.onCancelFinished() is Idle
@@ -58,7 +67,7 @@ suite "Satellite Typestate FSM - Granular Error Handling":
 
   test "SilentDismiss from Thinking when STT recognizes no words":
     var idle = Idle(SatelliteContext())
-    var thinking = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var thinking = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified()
     var dismissed = thinking.onDismissFromThinking()
     check dismissed is SilentDismiss
     check dismissed.onDismiss() is Idle
@@ -92,7 +101,7 @@ suite "Satellite Typestate FSM - Granular Error Handling":
 
   test "ConnectionError drops active session and safely recovers":
     var idle = Idle(SatelliteContext())
-    var thinking = idle.onWakeWord("assistant", 45).onChimeFinished().onSpeechEnded()
+    var thinking = idle.onWakeWord("assistant", 45).onChimeFinished().onSpeechEnded().onWakeWordVerified()
     var dropped = thinking.onDisconnectFromThinking()
     check dropped is ConnectionError
     check dropped.onConnected() is Idle
@@ -107,7 +116,7 @@ suite "Satellite Typestate FSM - Extended Lifecycle States":
 
   test "FollowUp continuous conversation":
     var idle = Idle(SatelliteContext())
-    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified().onTtsStarted()
     var followUp = replying.onFollowUpRequested()
     check followUp is FollowUp
     # Direct speech ended while in follow-up listening
@@ -119,7 +128,9 @@ suite "Satellite Typestate FSM - Extended Lifecycle States":
     # Or transition via ready to listen
     var listening = followUp.onFollowUpReadyToListen()
     check listening is Listening
-    var thinking = listening.onSpeechEnded()
+    var verifying = listening.onSpeechEnded()
+    check verifying is Verifying
+    var thinking = verifying.onWakeWordVerified()
     check thinking is Thinking
 
   test "PlayingMedia and audio ducking":
@@ -154,7 +165,7 @@ suite "Satellite Typestate FSM - Extended Lifecycle States":
 suite "Satellite Typestate FSM - Reified Barge-In Architecture":
   test "Wake word during Replying enters ReplyingBargeInAttempted and confirms Stop":
     var idle = Idle(SatelliteContext())
-    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified().onTtsStarted()
     var attempt = replying.onWakeWordDuringReplying("Stop", 0)
     check attempt is ReplyingBargeInAttempted
 
@@ -164,7 +175,7 @@ suite "Satellite Typestate FSM - Reified Barge-In Architecture":
 
   test "Non-stop wake word during Replying is ignored and resumes playback":
     var idle = Idle(SatelliteContext())
-    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified().onTtsStarted()
     var attempt = replying.onWakeWordDuringReplying("assistant", 0)
     check attempt is ReplyingBargeInAttempted
 
@@ -177,7 +188,7 @@ suite "Satellite Typestate FSM - Reified Barge-In Architecture":
 suite "Satellite Typestate FSM - Non-TTS Intent Completion (Thinking Deadlock Resolution)":
   test "Processing transitions through IntentCompleteNoTts and ActionSuccess to Idle":
     var idle = Idle(SatelliteContext())
-    var processing = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var processing = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified()
     check processing is Processing
 
     var noTts = processing.onIntentCompleteNoTts()
@@ -229,6 +240,9 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_wake_word("assistant", 0)
     nim_satellite_chime_done(true)
     nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 21 # Verifying
+    nim_satellite_wake_word_verified()
+    check nim_satellite_get_state() == 3 # Thinking
     nim_satellite_tts_start()
     check nim_satellite_get_state() == 4 # Replying
 
@@ -242,6 +256,8 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
 
     # Follow-up answered
     nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 21 # Verifying
+    nim_satellite_wake_word_verified()
     check nim_satellite_get_state() == 3 # Thinking
     nim_satellite_tts_start()
     nim_satellite_tts_end()
@@ -251,6 +267,7 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_wake_word("assistant", 0)
     nim_satellite_chime_done(true)
     nim_satellite_speech_ended()
+    nim_satellite_wake_word_verified()
     nim_satellite_tts_start()
     check nim_satellite_get_state() == 4 # Replying
     nim_satellite_follow_up()
@@ -280,6 +297,7 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     check nim_satellite_get_state() == 1 # Woken
     nim_satellite_chime_done(true)
     nim_satellite_speech_ended()
+    nim_satellite_wake_word_verified()
     nim_satellite_tts_start()
     nim_satellite_tts_end()
     # Returns to PlayingMedia because media was playing!
@@ -317,6 +335,8 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_wake_word("assistant", 0)
     nim_satellite_chime_done(true)
     nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 21 # Verifying
+    nim_satellite_wake_word_verified()
     check nim_satellite_get_state() == 3 # Processing (Thinking)
 
     # on_end fires without TTS
@@ -327,6 +347,7 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_wake_word("assistant", 0)
     nim_satellite_chime_done(true)
     nim_satellite_speech_ended()
+    nim_satellite_wake_word_verified()
     nim_satellite_tts_start()
     check nim_satellite_get_state() == 4 # Replying
 
@@ -338,6 +359,7 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     nim_satellite_wake_word("assistant", 0)
     nim_satellite_chime_done(true)
     nim_satellite_speech_ended()
+    nim_satellite_wake_word_verified()
     nim_satellite_tts_start()
     check nim_satellite_get_state() == 4 # Replying
 
@@ -369,8 +391,13 @@ suite "Runtime C API Bridge (ESPHome Integration with Extended States)":
     check nim_satellite_get_state() == 2 # Listening
     check not nim_satellite_is_processing()
 
-    # User stops speaking -> Thinking begins -> Processing loop starts
+    # User stops speaking -> Verifying begins -> No processing loop yet
     nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 21 # Verifying
+    check not nim_satellite_is_processing()
+
+    # Wake word verified -> Thinking begins -> Processing loop starts
+    nim_satellite_wake_word_verified()
     check nim_satellite_get_state() == 3 # Thinking
     check nim_satellite_is_processing()
 
@@ -423,14 +450,14 @@ suite "Satellite Typestate FSM - Explicit Timeouts & Audio Watchdogs":
 
   test "Thinking processing loop server timeout transitions to PipelineError":
     var idle = Idle(SatelliteContext())
-    var thinking = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var thinking = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified()
     var pErr = thinking.onProcessingTimeout()
     check pErr is PipelineError
     check SatelliteContext(pErr).errorCode == "server-timeout"
 
   test "Replying TTS stream stall timeout transitions to Idle":
     var idle = Idle(SatelliteContext())
-    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted()
+    var replying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified().onTtsStarted()
     var backToIdle = replying.onTtsTimeout()
     check backToIdle is Idle
 
@@ -442,7 +469,7 @@ suite "Satellite Typestate FSM - Explicit Timeouts & Audio Watchdogs":
 
   test "FollowUp inactivity timeout transitions to Idle":
     var idle = Idle(SatelliteContext())
-    var followUp = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onTtsStarted().onFollowUpRequested()
+    var followUp = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded().onWakeWordVerified().onTtsStarted().onFollowUpRequested()
     var backToIdle = followUp.onFollowUpTimeout()
     check backToIdle is Idle
 
@@ -480,6 +507,72 @@ suite "Runtime C API - Cancelling Lifecycle":
     nim_satellite_cancel_done(true)
     check nim_satellite_get_state() == 0 # rsIdle
     check not nim_satellite_is_cancelling()
+
+suite "Satellite Typestate FSM - Verifying Typestate & Silent Drops":
+  test "Speech ended transitions to Verifying typestate":
+    var idle = Idle(SatelliteContext())
+    var listening = idle.onWakeWord("assistant", 0).onChimeFinished()
+    var verifying = listening.onSpeechEnded()
+    check verifying is Verifying
+    check SatelliteContext(verifying).wakeWord == "assistant"
+
+  test "Wake word verified transitions Verifying to Processing":
+    var idle = Idle(SatelliteContext())
+    var verifying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var processing = verifying.onWakeWordVerified()
+    check processing is Processing
+
+  test "Silent dismissal from Verifying when pipeline ends without verification (false wake)":
+    var idle = Idle(SatelliteContext())
+    var verifying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var dismissing = verifying.onPipelineEndFromVerifying()
+    check dismissing is SilentDismissing
+    var backToIdle = dismissing.onDismiss()
+    check backToIdle is Idle
+
+  test "Verifying timeout transitions to SilentDismissing":
+    var idle = Idle(SatelliteContext())
+    var verifying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var dismissing = verifying.onVerifyingTimeout()
+    check dismissing is SilentDismissing
+    check dismissing.onDismiss() is Idle
+
+  test "Stop during Verifying transitions to Cancelling":
+    var idle = Idle(SatelliteContext())
+    var verifying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var cancelling = verifying.onStopDuringVerifying()
+    check cancelling is Cancelling
+    check cancelling.onCancelFinished() is Idle
+
+  test "Pipeline error during Verifying transitions to PipelineErrorEvaluating":
+    var idle = Idle(SatelliteContext())
+    var verifying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var pEval = verifying.onPipelineErrorFromVerifying("stt-no-text-recognized")
+    check pEval is PipelineErrorEvaluating
+    check pEval.onClassifySilentError() is SilentDismissing
+
+  test "Disconnect during Verifying transitions to ConnectionError":
+    var idle = Idle(SatelliteContext())
+    var verifying = idle.onWakeWord("assistant", 0).onChimeFinished().onSpeechEnded()
+    var connErr = verifying.onConnectionErrorFromVerifying()
+    check connErr is ConnectionError
+    check connErr.onConnected() is Idle
+
+  test "Silent dismissal from Verifying via C API (false wake dropped silently)":
+    check nim_satellite_get_state() == 0 # Idle
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    check nim_satellite_get_state() == 2 # Listening
+
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 21 # Verifying
+    check not nim_satellite_is_processing()
+
+    # Home Assistant drops the run without verification event
+    nim_satellite_pipeline_end()
+    check nim_satellite_get_state() == 0 # Returns to Idle with zero sound cues
+    check not nim_satellite_is_processing()
+
 
 
 

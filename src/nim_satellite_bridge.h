@@ -12,6 +12,7 @@ void nim_satellite_cancel_done(bool ok);
 void nim_satellite_speech_start(void);
 void nim_satellite_listening_active(void);
 void nim_satellite_speech_ended(void);
+void nim_satellite_wake_word_verified(void);
 void nim_satellite_silence_timeout(void);
 void nim_satellite_tts_start(void);
 void nim_satellite_tts_end(void);
@@ -151,6 +152,9 @@ inline bool call_nim_is_cancelling(void) {
 inline void call_nim_speech_ended(void) {
   nim_satellite_speech_ended();
 }
+inline void call_nim_wake_word_verified(void) {
+  nim_satellite_wake_word_verified();
+}
 inline void call_nim_tts_start(void) {
   nim_satellite_tts_start();
 }
@@ -286,6 +290,7 @@ inline const char* get_satellite_state_name() {
     case 18: return "Intent Complete No TTS";
     case 19: return "Action Success";
     case 20: return "Pipeline Error Evaluating";
+    case 21: return "Verifying";
     default: return "Unknown";
   }
 }
