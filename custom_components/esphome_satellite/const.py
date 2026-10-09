@@ -16,7 +16,7 @@ CONF_TIMEOUT_SECONDS: Final = "timeout_seconds"
 CONF_FALLBACK_BEHAVIOR: Final = "fallback_behavior"
 
 # Default Configuration Values
-DEFAULT_SYSTEMONE_URL: Final = "http://flanopticon.lan:8000/v1/systemone"
+DEFAULT_SYSTEMONE_URL: Final = "http://laya.flanopticon.lan/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = "f0d1e0282ec4410b81e4d4bbcc366ad3165b707f44fc90662234f2dbc7d0b01d"
 DEFAULT_THRESHOLD: Final = 0.60
 DEFAULT_TIMEOUT: Final = 2.5
