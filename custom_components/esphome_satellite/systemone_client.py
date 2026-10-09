@@ -102,7 +102,9 @@ class SystemOneClient:
                 if result:
                     choice = result.get("choice", CHOICE_ADDRESSED)
                     # Support Laya answer_confidence, standard confidence, or probability lookup
-                    conf = float(result.get("answer_confidence", result.get("confidence", 0.0)))
+                    probs = result.get("probabilities", {})
+                    choice_prob = probs.get(choice, 0.0) if isinstance(probs, dict) else 0.0
+                    conf = float(result.get("answer_confidence", result.get("confidence", choice_prob)))
                     abstention = result.get("abstention", "passed")
                     if abstention == "abstained":
                         _LOGGER.info(

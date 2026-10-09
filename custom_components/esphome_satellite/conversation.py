@@ -114,7 +114,10 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 min_confidence=threshold,
             )
         except SystemOneClientError as err:
-            fallback = self._entry.options.get(CONF_FALLBACK_BEHAVIOR, "allow")
+            fallback = self._entry.options.get(
+                CONF_FALLBACK_BEHAVIOR,
+                self._entry.data.get(CONF_FALLBACK_BEHAVIOR, "allow"),
+            )
             if fallback == "drop":
                 _LOGGER.warning(
                     "[Gatekeeper] System 1 unavailable (%s). Fail-closed: dropping utterance '%s'",
@@ -168,9 +171,11 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         # 2. Check dedicated slot sensor if published
         slot_sensor_id = f"sensor.{satellite_id.split('.')[-1]}_active_assistant_slot"
         slot_sensor = self.hass.states.get(slot_sensor_id)
-        if slot_sensor and slot_sensor.state.isdigit():
-            # Convert 1-indexed sensor to 0-indexed internal slot
-            active_slot = max(0, int(slot_sensor.state) - 1)
+        if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
+            try:
+                active_slot = max(0, int(float(slot_sensor.state)) - 1)
+            except (ValueError, TypeError):
+                pass
 
         return (active_slot, wake_word)
 
@@ -182,13 +187,17 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         return QUESTION_TEMPLATE_GENERAL
 
     def _get_slot_threshold(self, slot_index: int) -> float:
-        """Retrieve threshold for specific slot."""
+        """Retrieve threshold for specific slot, inheriting default threshold if not overridden."""
         options = self._entry.options
+        data = self._entry.data
+        default_thresh = options.get(
+            CONF_DEFAULT_THRESHOLD, data.get(CONF_DEFAULT_THRESHOLD, DEFAULT_THRESHOLD)
+        )
         if slot_index == 0:
-            return float(options.get(CONF_SLOT1_THRESHOLD, DEFAULT_THRESHOLD))
+            return float(options.get(CONF_SLOT1_THRESHOLD, default_thresh))
         if slot_index == 1:
-            return float(options.get(CONF_SLOT2_THRESHOLD, DEFAULT_THRESHOLD))
-        return float(options.get(CONF_DEFAULT_THRESHOLD, DEFAULT_THRESHOLD))
+            return float(options.get(CONF_SLOT2_THRESHOLD, default_thresh))
+        return float(default_thresh)
 
     def _is_slot_gate_enabled(self, slot_index: int) -> bool:
         """Check if gatekeeper is enabled for specific slot."""
