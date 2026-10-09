@@ -34,6 +34,7 @@ from .const import (
     DOMAIN,
     QUESTION_TEMPLATE_CLEMENS,
     QUESTION_TEMPLATE_GENERAL,
+    QUESTION_TEMPLATE_SLOT2,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -133,7 +134,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             return await self._delegate_downstream(user_input)
 
         # Intercept ambient conversation
-        if choice == CHOICE_AMBIENT and confidence >= threshold:
+        if choice in (CHOICE_AMBIENT, "ambient_conversation") and confidence >= threshold:
             _LOGGER.info(
                 "[Gatekeeper] INTERCEPTED ambient speech on satellite %s (Slot %d, wake='%s', conf=%.2f, rtt=%.1fms): '%s'",
                 satellite_id,
@@ -184,6 +185,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         ww_lower = wake_word.lower()
         if "clemens" in ww_lower or slot_index == 0:
             return QUESTION_TEMPLATE_CLEMENS
+        if slot_index == 1:
+            return QUESTION_TEMPLATE_SLOT2
         return QUESTION_TEMPLATE_GENERAL
 
     def _get_slot_threshold(self, slot_index: int) -> float:
