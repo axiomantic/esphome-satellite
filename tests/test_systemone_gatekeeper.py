@@ -383,6 +383,121 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             result = await entity.async_process(user_input)
             self.assertEqual(result, "allowed_result")
 
+    def test_resolve_satellite_context_float_sensor_state(self):
+        """Verify float-formatted sensor states ('1.0', '2.0') from ESPHome are correctly parsed."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "entry_123"
+        mock_entry.data = {}
+        mock_entry.options = {}
+        mock_client = MagicMock()
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        sat_state = MagicMock()
+        sat_state.attributes = {"active_pipeline_index": 0, "wake_word": "clemens"}
+
+        sensor_state = MagicMock()
+
+        def get_state(eid):
+            if "assist_satellite" in eid:
+                return sat_state
+            if "active_assistant_slot" in eid:
+                return sensor_state
+            return None
+
+        self.mock_hass.states.get.side_effect = get_state
+
+        # Case 1: ESPHome publishes "2.0"
+        sensor_state.state = "2.0"
+        slot, ww = entity._resolve_satellite_context("assist_satellite.living_room")
+        self.assertEqual(slot, 1)
+        self.assertEqual(ww, "clemens")
+
+        # Case 2: ESPHome publishes "1.0"
+        sensor_state.state = "1.0"
+        slot, ww = entity._resolve_satellite_context("assist_satellite.living_room")
+        self.assertEqual(slot, 0)
+
+        # Case 3: Standard integer string "2"
+        sensor_state.state = "2"
+        slot, ww = entity._resolve_satellite_context("assist_satellite.living_room")
+        self.assertEqual(slot, 1)
+
+        # Case 4: Sensor unavailable or unknown; falls back to satellite attributes
+        sensor_state.state = "unavailable"
+        sat_state.attributes["active_pipeline_index"] = 1
+        slot, ww = entity._resolve_satellite_context("assist_satellite.living_room")
+        self.assertEqual(slot, 1)
+
+    def test_gatekeeper_threshold_inheritance(self):
+        """Verify slot thresholds inherit default_threshold if not explicitly configured in options."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "entry_123"
+        mock_entry.data = {"default_threshold": 0.72}
+        mock_entry.options = {}
+        mock_client = MagicMock()
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        # Inherits from data default_threshold (0.72)
+        self.assertAlmostEqual(entity._get_slot_threshold(0), 0.72)
+        self.assertAlmostEqual(entity._get_slot_threshold(1), 0.72)
+
+        # Configured in options default_threshold (0.80)
+        mock_entry.options = {"default_threshold": 0.80}
+        self.assertAlmostEqual(entity._get_slot_threshold(0), 0.80)
+        self.assertAlmostEqual(entity._get_slot_threshold(1), 0.80)
+
+        # Slot-specific override takes precedence
+        mock_entry.options = {
+            "default_threshold": 0.80,
+            "slot1_threshold": 0.65,
+            "slot2_threshold": 0.85,
+        }
+        self.assertAlmostEqual(entity._get_slot_threshold(0), 0.65)
+        self.assertAlmostEqual(entity._get_slot_threshold(1), 0.85)
+
+    async def test_systemone_client_probabilities_schema(self):
+        """Verify client correctly parses probabilities dictionary if confidence is not top-level."""
+        client = SystemOneClient(self.mock_hass, "http://localhost:8000/v1/systemone")
+
+        class MockResponse:
+            status = 200
+
+            async def json(self):
+                return {
+                    "answers": {
+                        "address_intent": {
+                            "choice": "ambient_conversation",
+                            "probabilities": {
+                                "ambient_conversation": 0.91,
+                                "addressed": 0.09,
+                            },
+                        }
+                    }
+                }
+
+            async def text(self):
+                return ""
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        class MockSession:
+            def post(self, *args, **kwargs):
+                return MockResponse()
+
+        with patch(
+            "custom_components.esphome_satellite.systemone_client.async_get_clientsession",
+            return_value=MockSession(),
+        ):
+            choice, conf, rtt = await client.classify_addressing("talking nearby", "question")
+            self.assertEqual(choice, "ambient_conversation")
+            self.assertAlmostEqual(conf, 0.91)
+
 
 if __name__ == "__main__":
     unittest.main()
