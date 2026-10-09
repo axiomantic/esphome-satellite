@@ -61,16 +61,18 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
       check (c and 0x00FF0000'u32) == 0x00FF0000'u32 # Red channel 255
       check (c and 0x0000FFFF'u32) == 0'u32          # Green and Blue 0
 
-  test "LED animation states - Listening produces pulsing electric azure":
-    let colors = computeAnimationColors("Listening", "Off", 1.0'f32, 1000'u32)
-    for c in colors:
-      let r = (c shr 16) and 0xFF'u32
-      let g = (c shr 8) and 0xFF'u32
-      let b = c and 0xFF'u32
-      check b > 0'u32          # Blue channel active
-      check g > 0'u32          # Green channel active
-      check b > r              # Blue dominant over red
-      check g > r              # Green dominant over red
+  test "LED animation states - Pre-verification (Woken, Listening, Verifying) remains idle without active LEDs":
+    let colorsListening = computeAnimationColors("Listening", "Off", 1.0'f32, 1000'u32)
+    for c in colorsListening:
+      check c == 0'u32 # LEDs remain off to prevent false fire distractions
+
+    let colorsWoken = computeAnimationColors("Woken", "Off", 1.0'f32, 1000'u32)
+    for c in colorsWoken:
+      check c == 0'u32
+
+    let colorsVerifying = computeAnimationColors("Verifying", "Off", 1.0'f32, 1000'u32)
+    for c in colorsVerifying:
+      check c == 0'u32
 
   test "LED animation states - Follow Up produces conversational listening emerald-teal wave":
     let colors = computeAnimationColors("Follow Up", "Off", 1.0'f32, 1000'u32)
