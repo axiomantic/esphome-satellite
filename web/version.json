@@ -1,6 +1,6 @@
 {
   "name": "esphome-satellite",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "commit": "57b24e7",
   "built_at": "2026-09-15T05:57:43Z",
   "factory_sha256": "7e64b93c51087e389ade79e7f5687a6d35f2c0db40131d5dc2c5346ee28c80c0",

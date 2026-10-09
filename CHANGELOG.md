@@ -7,17 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-09
+
 ### Added
-- **Semantic Wake Word Verification Prompt Rider**: Standardized LLM prompt directive and silent drop contract (0-character response suppresses TTS synthesis and returns satellite to idle), eliminating brittle on-device drops on Whisper phonetic drift.
-- **Continuous 2.0-Second Pre-Roll Audio Buffer**: Continuous circular audio ring buffer in memory streaming 2.0 seconds of pre-wake speech directly to Whisper STT.
-- **Electric Azure LED Animation**: High-visibility electric azure animation during active listening and conversational emerald-teal breathing wave during follow-up turns.
+- **Verifying Typestate & Silent Ambient Rejection**: Introduced explicit `rsVerifying` typestate to the satellite finite state machine adhering to the Reified Event-Typestate architectural invariants. Isolates audio capture and speech recognition from intent execution, holding in verification until an authoritative confirmation is received. Ambient utterances rejected by System 1 are silently dismissed to idle with zero audio or visual disruption.
+- **System 1 Gatekeeper Conversation Integration**: Real-time semantic addressing evaluation using ModernBERT / Laya System 1 embeddings to classify captured utterances as either `addressed` or `ambient`. Features dynamic phonetic rider instructions recognizing ASR approximations (e.g. "Mr. Clamonds", "Mr. Clamance", "Clemons").
+- **Deferred Physical Feedback**: Deferred wake chime playback and active LED animation until System 1 verification completes. Pre-verification audio capture (`Listening`, `Verifying`) remains visually and acoustically dark, eliminating false-trigger distractions from ambient noise or room conversation.
+- **Chime-Then-Processing Audio Chaining**: Seamlessly sequences wake chime acknowledgment followed by the typewriter processing loop via `play_chime_then_processing` upon intent verification.
+- **Home Assistant Gatekeeper Configuration**: Fully configurable System 1 URL and bearer authentication token in Home Assistant with options flow support and custom component packaging.
 
-### Changed
-- **Default Acoustic Presets**: Configured Slot 1 processing sound to `Typewriter`, Slot 2 processing sound to `Silent`, and set all wake chimes and cancel sounds to disabled (`restore_mode: RESTORE_DEFAULT_OFF`).
-- **Immediate Processing Sound Initiation**: Satellite transitions cleanly and instantaneously to `Thinking` and begins the processing audio loop as soon as VAD detects speech end.
-
-### Removed
-- **Rigid On-Device Wake Word Verification**: Completely purged `verifyWakeWordPhrase`, phonetic match heuristics, `nim_satellite_verify_wake_word`, `call_nim_verify_wake_word`, and the `Voice: Wake Word Verification` switch entity.
+### Fixed
+- **OptionsFlow Property Setter**: Resolved Home Assistant `AttributeError` caused by assigning to the read-only `config_entry` property on options flows.
+- **Default System 1 Configuration**: Eliminated hardcoded private LAN hostnames and authentication tokens, standardizing on user-configurable settings with secure default fallbacks.
 
 ## [0.6.1] - 2026-09-14
 

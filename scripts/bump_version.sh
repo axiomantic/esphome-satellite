@@ -21,7 +21,12 @@ sed -i '' -E "s/version[[:space:]]*=[[:space:]]*\"[^\"]+\"/version       = \"$NE
 # 2. Update packages/respeaker_xvf3800.yaml substitutions
 sed -i '' -E "s/version:[[:space:]]*\"[^\"]+\"/version: \"$NEW_VERSION\"/" packages/respeaker_xvf3800.yaml
 
-# 3. Regenerate web/index.html and web/manifest.json
+# 3. Update web/version.json if present
+if [ -f "web/version.json" ]; then
+    sed -i '' -E "s/\"version\":[[:space:]]*\"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" web/version.json
+fi
+
+# 4. Regenerate web/index.html and web/manifest.json
 nim r --path:../nim-esphome/src scripts/generate_web.nim
 
 # 4. Run version sync validation test
