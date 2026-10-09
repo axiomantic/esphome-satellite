@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ESPHome Satellite Gatekeeper",
+        "description": "Configure the System 1 Neural Gatekeeper to protect downstream conversational agents from ambient chatter and false wakeups.",
+        "data": {
+          "downstream_agent": "Downstream Conversation Agent",
+          "systemone_url": "System 1 Endpoint URL",
+          "systemone_token": "API Bearer Token",
+          "default_threshold": "Default Ambient Classification Threshold"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gatekeeper Options & Edge Tuning",
+        "description": "Configure per-slot thresholds, timeouts, and fallback policies.",
+        "data": {
+          "downstream_agent": "Downstream Conversation Agent",
+          "systemone_url": "System 1 Endpoint URL",
+          "systemone_token": "API Bearer Token",
+          "slot1_enabled": "Enable Gatekeeper on Slot 1",
+          "slot1_threshold": "Slot 1 Ambient Classification Threshold",
+          "slot2_enabled": "Enable Gatekeeper on Slot 2",
+          "slot2_threshold": "Slot 2 Ambient Classification Threshold",
+          "timeout_seconds": "System 1 Timeout (seconds)",
+          "fallback_behavior": "Fallback Policy on System 1 Failure"
+        }
+      }
+    }
+  }
+}
