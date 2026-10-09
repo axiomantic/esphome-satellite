@@ -80,16 +80,27 @@ class ESPHomeSatelliteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
         """Return the options flow handler."""
-        return ESPHomeSatelliteOptionsFlow(config_entry)
+        return ESPHomeSatelliteOptionsFlow()
 
 
 class ESPHomeSatelliteOptionsFlow(config_entries.OptionsFlow):
     """Handle per-slot and operational options for the Gatekeeper."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    def __init__(self, config_entry: config_entries.ConfigEntry | None = None) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+        super().__init__()
+
+    @property
+    def config_entry(self) -> config_entries.ConfigEntry:
+        """Return the config entry."""
+        if self._config_entry is not None:
+            return self._config_entry
+        return super().config_entry
 
     async def async_step_init(self, user_input=None):
         """Manage the Gatekeeper options."""
