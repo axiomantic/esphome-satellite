@@ -102,6 +102,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 satellite_id,
                 slot_index + 1,
             )
+            await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
         threshold = self._get_slot_threshold(slot_index)
@@ -131,6 +132,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 "[Gatekeeper] System 1 unavailable (%s). Fail-open: passing to downstream agent",
                 err,
             )
+            await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
         # Intercept ambient conversation
@@ -155,7 +157,40 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             rtt_ms,
             text,
         )
+        await self._notify_wake_word_verified(satellite_id)
         return await self._delegate_downstream(user_input)
+
+    async def _notify_wake_word_verified(self, satellite_id: str) -> None:
+        """Signal the ESPHome satellite that wake word / addressing was verified."""
+        try:
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry = ent_reg.async_get(satellite_id)
+            if not entry or not entry.config_entry_id:
+                return
+
+            config_entry = self.hass.config_entries.async_get_entry(entry.config_entry_id)
+            if not config_entry or config_entry.domain != "esphome":
+                return
+
+            device_name = config_entry.data.get("device_name")
+            if not device_name:
+                return
+
+            service_prefix = device_name.replace("-", "_")
+            service_name = f"{service_prefix}_wake_word_verified"
+
+            if self.hass.services.has_service("esphome", service_name):
+                await self.hass.services.async_call(
+                    "esphome",
+                    service_name,
+                    blocking=False,
+                )
+                _LOGGER.debug(
+                    "[Gatekeeper] Notified satellite %s via %s", satellite_id, service_name
+                )
+        except Exception as err:
+            _LOGGER.debug("[Gatekeeper] Could not notify satellite %s: %s", satellite_id, err)
 
     def _resolve_satellite_context(self, satellite_id: str) -> tuple[int, str]:
         """Extract active pipeline slot (0-indexed) and wake word from satellite entity."""

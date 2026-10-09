@@ -12,11 +12,40 @@ REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 # Mock homeassistant modules if not present in environment
+if "voluptuous" not in sys.modules:
+    sys.modules["voluptuous"] = MagicMock()
+
 if "homeassistant" not in sys.modules:
     ha = MagicMock()
     sys.modules["homeassistant"] = ha
     sys.modules["homeassistant.core"] = MagicMock()
+    sys.modules["homeassistant.core"].callback = lambda f: f
     sys.modules["homeassistant.config_entries"] = MagicMock()
+
+    class MockOptionsFlow:
+        """Mock HA OptionsFlow with config_entry property that has no setter."""
+        def __init__(self):
+            self.hass = None
+            self.handler = None
+
+        @property
+        def config_entry(self):
+            if self.hass is not None and hasattr(self.hass, "config_entries"):
+                return self.hass.config_entries.async_get_known_entry(self.handler)
+            raise ValueError("The config entry is not available during initialisation")
+
+        def async_show_form(self, step_id=None, data_schema=None, errors=None):
+            return {"type": "form", "step_id": step_id, "data_schema": data_schema, "errors": errors}
+
+        def async_create_entry(self, title="", data=None):
+            return {"type": "create_entry", "title": title, "data": data}
+
+    class MockConfigFlow:
+        def __init_subclass__(cls, domain=None, **kwargs):
+            super().__init_subclass__(**kwargs)
+
+    sys.modules["homeassistant.config_entries"].OptionsFlow = MockOptionsFlow
+    sys.modules["homeassistant.config_entries"].ConfigFlow = MockConfigFlow
     sys.modules["homeassistant.const"] = MagicMock()
     sys.modules["homeassistant.helpers"] = MagicMock()
     sys.modules["homeassistant.helpers.aiohttp_client"] = MagicMock()
@@ -25,6 +54,12 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.helpers.selector"] = MagicMock()
     sys.modules["homeassistant.components"] = MagicMock()
     sys.modules["homeassistant.components.conversation"] = MagicMock()
+    ha.core = sys.modules["homeassistant.core"]
+    ha.config_entries = sys.modules["homeassistant.config_entries"]
+    ha.const = sys.modules["homeassistant.const"]
+    ha.helpers = sys.modules["homeassistant.helpers"]
+    ha.components = sys.modules["homeassistant.components"]
+    ha.components.conversation = sys.modules["homeassistant.components.conversation"]
 
     class MockConversationEntity:
         """Mock base conversation entity."""
@@ -497,6 +532,125 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             choice, conf, rtt = await client.classify_addressing("talking nearby", "question")
             self.assertEqual(choice, "ambient_conversation")
             self.assertAlmostEqual(conf, 0.91)
+
+    async def test_notify_wake_word_verified_on_approved(self):
+        """Verify _notify_wake_word_verified is called when addressed speech is approved."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+        mock_client.classify_addressing.return_value = ("addressed", 0.95, 15.0)
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        user_input = MagicMock()
+        user_input.text = "turn off the lights"
+        user_input.satellite_id = "assist_satellite.test_satellite"
+        user_input.language = "en"
+        user_input.conversation_id = "conv_123"
+
+        with patch.object(entity, "_resolve_satellite_context", return_value=(0, "assistant")), \
+             patch.object(entity, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            mock_delegate.return_value = MagicMock()
+            await entity.async_process(user_input)
+
+            mock_notify.assert_awaited_once_with("assist_satellite.test_satellite")
+            mock_delegate.assert_awaited_once_with(user_input)
+
+    async def test_notify_wake_word_verified_not_called_on_ambient(self):
+        """Verify _notify_wake_word_verified is NOT called when ambient speech is intercepted."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+        mock_client.classify_addressing.return_value = ("ambient_conversation", 0.95, 12.0)
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        user_input = MagicMock()
+        user_input.text = "pass the salt please"
+        user_input.satellite_id = "assist_satellite.test_satellite"
+        user_input.language = "en"
+        user_input.conversation_id = "conv_123"
+
+        with patch.object(entity, "_resolve_satellite_context", return_value=(0, "assistant")), \
+             patch.object(entity, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            result = await entity.async_process(user_input)
+
+            mock_notify.assert_not_called()
+            mock_delegate.assert_not_called()
+            self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
+
+
+class TestESPHomeSatelliteOptionsFlow(unittest.IsolatedAsyncioTestCase):
+    """Regression tests for ESPHomeSatelliteOptionsFlow and config flow."""
+
+    def setUp(self):
+        self.mock_hass = MagicMock()
+        self.mock_entry = MagicMock()
+        self.mock_entry.entry_id = "test_entry_123"
+        self.mock_entry.options = {
+            "downstream_agent": "conversation.test_agent",
+            "systemone_url": "http://10.0.0.1:8000/v1/systemone",
+            "systemone_token": "secret_token_123",
+            "slot1_enabled": True,
+            "slot1_threshold": 0.85,
+            "slot2_enabled": False,
+            "slot2_threshold": 0.80,
+            "timeout_seconds": 3.0,
+            "fallback_behavior": "drop",
+        }
+        self.mock_entry.data = {}
+        self.mock_hass.config_entries.async_get_known_entry.return_value = self.mock_entry
+
+    async def test_options_flow_instantiation_no_setter_error(self):
+        """Verify OptionsFlow does not raise AttributeError when initialized."""
+        from custom_components.esphome_satellite.config_flow import (
+            ESPHomeSatelliteConfigFlow,
+            ESPHomeSatelliteOptionsFlow,
+        )
+
+        flow = ESPHomeSatelliteConfigFlow.async_get_options_flow(self.mock_entry)
+        self.assertIsInstance(flow, ESPHomeSatelliteOptionsFlow)
+
+        flow_direct = ESPHomeSatelliteOptionsFlow(self.mock_entry)
+        self.assertEqual(flow_direct.config_entry, self.mock_entry)
+
+    async def test_options_flow_async_step_init_renders_form(self):
+        """Verify async_step_init renders form populated with existing options."""
+        from custom_components.esphome_satellite.config_flow import (
+            ESPHomeSatelliteConfigFlow,
+        )
+
+        flow = ESPHomeSatelliteConfigFlow.async_get_options_flow(self.mock_entry)
+        flow.hass = self.mock_hass
+        flow.handler = self.mock_entry.entry_id
+
+        result = await flow.async_step_init()
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "init")
+
+    async def test_options_flow_async_step_init_saves_user_input(self):
+        """Verify async_step_init saves user_input when submitted."""
+        from custom_components.esphome_satellite.config_flow import (
+            ESPHomeSatelliteConfigFlow,
+        )
+
+        flow = ESPHomeSatelliteConfigFlow.async_get_options_flow(self.mock_entry)
+        flow.hass = self.mock_hass
+        flow.handler = self.mock_entry.entry_id
+
+        user_input = {
+            "systemone_url": "http://10.0.0.2:8000/v1/systemone",
+            "systemone_token": "new_secret_token",
+        }
+        result = await flow.async_step_init(user_input=user_input)
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["data"], user_input)
 
 
 if __name__ == "__main__":
