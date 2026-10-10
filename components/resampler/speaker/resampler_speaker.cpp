@@ -154,7 +154,8 @@ void ResamplerSpeaker::loop() {
     xEventGroupClearBits(this->event_group_, ResamplingEventGroupBits::STATE_STOPPING);
   }
   // Retries on a subsequent loop if the task is still running on the other core
-  if ((event_group_bits & ResamplingEventGroupBits::STATE_STOPPED) && this->task_.deallocate()) {
+  if (event_group_bits & ResamplingEventGroupBits::STATE_STOPPED) {
+    this->task_.deallocate();
     ESP_LOGD(TAG, "Stopped");
     xEventGroupClearBits(this->event_group_, ResamplingEventGroupBits::ALL_BITS);
   }
