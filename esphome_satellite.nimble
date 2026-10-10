@@ -10,7 +10,7 @@ srcDir        = "src"
 
 requires "nim >= 2.2.8"
 requires "https://github.com/axiomantic/nim-esphome >= 0.4.0"
-requires "typestates >= 0.12.0"
+requires "typestates >= 0.12.1"
 
 task test, "Run satellite invariant test suites":
   exec "nim c -r tests/test_fsm.nim"
