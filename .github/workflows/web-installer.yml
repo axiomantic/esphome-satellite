@@ -129,7 +129,7 @@ jobs:
         if: steps.plan.outputs.build_firmware == 'true'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Cache PlatformIO toolchains & ESPHome packages
         if: steps.plan.outputs.build_firmware == 'true'
