@@ -32,26 +32,42 @@ CHOICE_ADDRESSED: Final = "addressed"
 CHOICE_AMBIENT: Final = "ambient"
 CLASSIFICATION_CHOICES: Final = [CHOICE_ADDRESSED, CHOICE_AMBIENT]
 CLASSIFICATION_CRITERIA: Final = {
-    CHOICE_ADDRESSED: "Spoken command, request, or query explicitly addressing the smart home assistant",
-    CHOICE_AMBIENT: "Casual bystander conversation between humans, third-person mention of a name, or TV chatter",
+    CHOICE_ADDRESSED: (
+        "Spoken command, instruction, request, question, or list operation directed to the smart assistant, "
+        "accounting for phonetic STT errors (e.g. 'and' for 'add', 'turn on' vs 'turn in')"
+    ),
+    CHOICE_AMBIENT: (
+        "Casual bystander conversation between humans, third-person mention of a name, gossip, or TV audio "
+        "not intended to instruct the assistant"
+    ),
 }
 
 # Question Templates
 QUESTION_TEMPLATE_GENERAL: Final = (
-    "Is this utterance an addressed request, command, or query directed to the smart home assistant, "
-    "or is it ambient conversation between humans or TV audio?"
+    "This text is raw speech-to-text (STT) and probably contains phonetic mistranscriptions "
+    "(such as 'and' for 'add', misheard verbs, or homophones). "
+    "Assume it does, and determine what the user actually said. "
+    "With the understanding that if it contains the wake phrase or is directed at the assistant, "
+    "it most likely is an instruction and everything following is the instruction. "
+    "Is this utterance an instruction, command, request, or query intended for the smart assistant?"
 )
 
 QUESTION_TEMPLATE_SLOT1: Final = (
-    "The voice satellite triggered on wake phrase '{wake_word}'. "
-    "Is this utterance an addressed request or query directed to the assistant, "
-    "or is it ambient bystander conversation talking about someone or TV chatter?"
+    "This is raw speech-to-text (STT) from a voice satellite triggered on wake phrase '{wake_word}'. "
+    "It probably contains phonetic mistranscriptions (e.g. 'and' instead of 'add', homophones, or misheard words). "
+    "Assume it does, and infer what the user was trying to say. "
+    "With the understanding that if it contains wake phrase '{wake_word}' or a command, "
+    "it most likely is an instruction and everything following '{wake_word}' is the instruction. "
+    "Is this an addressed instruction or query to {wake_word}?"
 )
 
 QUESTION_TEMPLATE_SLOT2: Final = (
-    "The voice satellite triggered on secondary wake phrase '{wake_word}'. "
-    "Is this utterance an addressed request or query directed to the assistant, "
-    "or is it ambient bystander conversation talking about someone or TV chatter?"
+    "This is raw speech-to-text (STT) from a voice satellite triggered on wake phrase '{wake_word}'. "
+    "It probably contains phonetic mistranscriptions (e.g. 'and' instead of 'add', homophones, or misheard words). "
+    "Assume it does, and infer what the user was trying to say. "
+    "With the understanding that if it contains wake phrase '{wake_word}' or a command, "
+    "it most likely is an instruction and everything following '{wake_word}' is the instruction. "
+    "Is this an addressed instruction or query to {wake_word}?"
 )
 
 # Built-in Default Wake Word Regex Patterns
