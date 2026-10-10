@@ -27,7 +27,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install ESPHome
-        run: pip install esphome
+        run: pip install -U "esphome>=2026.9.0"
 
       - name: Build Factory Binary
         run: |

@@ -14,6 +14,10 @@ namespace esphome::voice_assistant {
 
 static const char *const TAG = "voice_assistant";
 
+#ifndef API_LOG_MSG_DROPPED
+#define API_LOG_MSG_DROPPED(tag, what) ESP_LOGW(tag, "Dropped API message: %s", what)
+#endif
+
 #ifdef SAMPLE_RATE_HZ
 #undef SAMPLE_RATE_HZ
 #endif
