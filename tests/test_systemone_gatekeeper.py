@@ -105,16 +105,18 @@ from custom_components.esphome_satellite.const import (
     CHOICE_AMBIENT,
     CLASSIFICATION_CRITERIA,
     CONF_DOWNSTREAM_AGENT,
+    CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
     CONF_SLOT1_ENABLED,
     CONF_SLOT1_THRESHOLD,
     CONF_SLOT2_ENABLED,
+    CONF_SLOT2_PATTERNS,
     CONF_SLOT2_THRESHOLD,
     CONF_SYSTEMONE_TOKEN,
     CONF_SYSTEMONE_URL,
     DEFAULT_THRESHOLD,
-    QUESTION_TEMPLATE_CLEMENS,
     QUESTION_TEMPLATE_GENERAL,
+    QUESTION_TEMPLATE_SLOT1,
 )
 from custom_components.esphome_satellite.conversation import ESPHomeSatelliteGatekeeperEntity
 from custom_components.esphome_satellite.systemone_client import (
@@ -330,7 +332,7 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
         self.mock_hass.states.get.return_value = sat_state
 
         user_input = MagicMock()
-        user_input.text = "Turn off the kitchen lights"
+        user_input.text = "Mr. Clemens, turn off the kitchen lights"
         user_input.satellite_id = "assist_satellite.living_room"
         user_input.conversation_id = "conv_2"
         user_input.language = "en"
@@ -347,7 +349,7 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             downstream_mock.assert_called_once()
             call_kwargs = downstream_mock.call_args[1]
             self.assertEqual(call_kwargs["agent_id"], "conversation.claude")
-            self.assertEqual(call_kwargs["text"], "Turn off the kitchen lights")
+            self.assertEqual(call_kwargs["text"], "Mr. Clemens, turn off the kitchen lights")
 
     async def test_gatekeeper_entity_non_satellite_bypass(self):
         """Direct dashboard typing (no satellite_id) immediately bypasses System 1."""
@@ -394,7 +396,7 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
         self.mock_hass.states.get.return_value = sat_state
 
         user_input = MagicMock()
-        user_input.text = "Hello world"
+        user_input.text = "Mr. Clemens, hello world"
         user_input.satellite_id = "assist_satellite.living_room"
         user_input.conversation_id = "conv_4"
         user_input.language = "en"
@@ -533,19 +535,20 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(choice, "ambient_conversation")
             self.assertAlmostEqual(conf, 0.91)
 
-    async def test_notify_wake_word_verified_on_approved(self):
-        """Verify _notify_wake_word_verified is called when addressed speech is approved."""
+
+    async def test_notify_wake_word_verified_on_addressed(self):
+        """Verify _notify_wake_word_verified calls the ESPHome service when addressed."""
         mock_entry = MagicMock()
         mock_entry.entry_id = "test_entry"
         mock_entry.options = {}
         mock_entry.data = {}
         mock_client = AsyncMock()
-        mock_client.classify_addressing.return_value = ("addressed", 0.95, 15.0)
+        mock_client.classify_addressing.return_value = ("addressed", 0.95, 12.0)
 
         entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
 
         user_input = MagicMock()
-        user_input.text = "turn off the lights"
+        user_input.text = "Mr. Clemens, turn on the lights"
         user_input.satellite_id = "assist_satellite.test_satellite"
         user_input.language = "en"
         user_input.conversation_id = "conv_123"
@@ -585,6 +588,213 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             mock_delegate.assert_not_called()
             self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
 
+    async def test_gatekeeper_fast_path_wake_word_rejection(self):
+        """Utterances lacking wake word are dropped immediately with zero System 1 calls."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        sat_state = MagicMock()
+        sat_state.attributes = {"active_pipeline_index": 0, "wake_word": "clemens"}
+        self.mock_hass.states.get.return_value = sat_state
+
+        naked_commands = [
+            "turn off the kitchen lights",
+            "set a timer for 15 minutes",
+            "white rice and roti",
+            "a nice stop",
+            "Mr. Business is a funny cat",
+        ]
+
+        for text in naked_commands:
+            mock_client.classify_addressing.reset_mock()
+            user_input = MagicMock()
+            user_input.text = text
+            user_input.satellite_id = "assist_satellite.living_room"
+            user_input.language = "en"
+            user_input.conversation_id = f"conv_{text[:5]}"
+
+            result = await entity.async_process(user_input)
+
+            # Fast-path drops with empty speech
+            self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
+            # System 1 was never invoked
+            mock_client.classify_addressing.assert_not_called()
+
+    async def test_gatekeeper_wake_word_soundalikes_accepted(self):
+        """Phonetic approximations of Clemens / Mark Twain pass fast-path to System 1."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+        mock_client.classify_addressing.return_value = ("addressed", 0.95, 15.0)
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        sat_state = MagicMock()
+        sat_state.attributes = {"active_pipeline_index": 0, "wake_word": "clemens"}
+        self.mock_hass.states.get.return_value = sat_state
+
+        valid_utterances = [
+            "Mr. Clemens, tell me a joke",
+            "mr clemens what time is it",
+            "mister clemens turn on lights",
+            "mista clemens turn on lights",
+            "Clamance what time is it",
+            "clamonds are good",
+            "Mark Twain tell me a story",
+            "twain what is 2 plus 2",
+            "hey clemens how are you",
+        ]
+
+        for text in valid_utterances:
+            mock_client.classify_addressing.reset_mock()
+            user_input = MagicMock()
+            user_input.text = text
+            user_input.satellite_id = "assist_satellite.living_room"
+            user_input.language = "en"
+            user_input.conversation_id = "conv_test"
+
+            with patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+                mock_delegate.return_value = "delegated"
+                result = await entity.async_process(user_input)
+                self.assertEqual(result, "delegated")
+                mock_client.classify_addressing.assert_called_once()
+
+    async def test_gatekeeper_slot2_wake_words(self):
+        """Slot 2 satellite accepts Slot 2 default wake word variants (e.g. Okay Nabu) or custom patterns."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry_slot2"
+        mock_entry.title = "Satellite Slot 2 Gatekeeper"
+        mock_entry.options = {}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+        mock_client.classify_addressing.return_value = ("addressed", 0.92, 14.0)
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        sat_state = MagicMock()
+        sat_state.attributes = {"active_pipeline_index": 1, "wake_word": "Okay Nabu"}
+        self.mock_hass.states.get.return_value = sat_state
+
+        slot2_utterances = [
+            "Okay Nabu, what is the news",
+            "hey nabu what time is it",
+            "OK Nabu what is the weather",
+            "nabu turn on lights",
+            "Nabu, turn off lights",
+            "hey naboo how are you",
+        ]
+
+        for text in slot2_utterances:
+            mock_client.classify_addressing.reset_mock()
+            user_input = MagicMock()
+            user_input.text = text
+            user_input.satellite_id = "assist_satellite.living_room_slot2"
+            user_input.language = "en"
+            user_input.conversation_id = "conv_slot2"
+
+            with patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+                mock_delegate.return_value = "delegated_slot2"
+                result = await entity.async_process(user_input)
+                self.assertEqual(result, "delegated_slot2")
+                mock_client.classify_addressing.assert_called_once()
+
+        # Custom Slot 2 regex pattern support
+        mock_entry.options = {CONF_SLOT2_PATTERNS: r"\b(?:hey\s+)?assistant\s*(?:two|2)?\b"}
+        user_input_custom = MagicMock()
+        user_input_custom.text = "Hey assistant two, what time is it"
+        user_input_custom.satellite_id = "assist_satellite.living_room_slot2"
+        user_input_custom.language = "en"
+        user_input_custom.conversation_id = "conv_custom"
+
+        with patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            mock_delegate.return_value = "delegated_custom"
+            result = await entity.async_process(user_input_custom)
+            self.assertEqual(result, "delegated_custom")
+
+        # Naked commands on Slot 2 satellite must drop
+        naked_user_input = MagicMock()
+        naked_user_input.text = "turn off the kitchen lights"
+        naked_user_input.satellite_id = "assist_satellite.living_room_slot2"
+        naked_user_input.language = "en"
+        naked_user_input.conversation_id = "conv_naked"
+
+        result = await entity.async_process(naked_user_input)
+        self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
+
+    async def test_gatekeeper_enforce_wake_word_disabled(self):
+        """When enforce_wake_word=False, naked commands pass through to System 1."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {CONF_ENFORCE_WAKE_WORD: False}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+        mock_client.classify_addressing.return_value = ("addressed", 0.95, 10.0)
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        sat_state = MagicMock()
+        sat_state.attributes = {"active_pipeline_index": 0, "wake_word": "clemens"}
+        self.mock_hass.states.get.return_value = sat_state
+
+        user_input = MagicMock()
+        user_input.text = "turn off the kitchen lights"
+        user_input.satellite_id = "assist_satellite.living_room"
+        user_input.language = "en"
+        user_input.conversation_id = "conv_no_enforce"
+
+        with patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            mock_delegate.return_value = "delegated"
+            result = await entity.async_process(user_input)
+            self.assertEqual(result, "delegated")
+            mock_client.classify_addressing.assert_called_once()
+
+    async def test_gatekeeper_default_drop_fail_closed(self):
+        """Under default-drop, ambient, low confidence (<0.60), or abstained results are dropped."""
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry"
+        mock_entry.options = {"default_threshold": 0.60}
+        mock_entry.data = {}
+        mock_client = AsyncMock()
+
+        entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
+
+        sat_state = MagicMock()
+        sat_state.attributes = {"active_pipeline_index": 0, "wake_word": "clemens"}
+        self.mock_hass.states.get.return_value = sat_state
+
+        cases = [
+            ("ambient", 0.90, True),     # Ambient -> drop
+            ("ambient", 0.30, True),     # Ambient low confidence -> drop
+            ("addressed", 0.45, True),   # Addressed below 0.60 threshold -> drop
+            ("addressed", 0.0, True),    # Abstained (conf 0.0) -> drop
+            ("addressed", 0.95, False),  # Confirmed addressed -> approve
+        ]
+
+        for choice, conf, should_drop in cases:
+            mock_client.classify_addressing.return_value = (choice, conf, 12.0)
+            user_input = MagicMock()
+            user_input.text = "Mr. Clemens, test utterance"
+            user_input.satellite_id = "assist_satellite.living_room"
+            user_input.language = "en"
+            user_input.conversation_id = "conv_dd"
+
+            with patch.object(entity, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+                mock_delegate.return_value = "delegated"
+                result = await entity.async_process(user_input)
+                if should_drop:
+                    self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
+                    mock_delegate.assert_not_called()
+                else:
+                    self.assertEqual(result, "delegated")
+                    mock_delegate.assert_called_once()
+
 
 class TestESPHomeSatelliteOptionsFlow(unittest.IsolatedAsyncioTestCase):
     """Regression tests for ESPHomeSatelliteOptionsFlow and config flow."""
@@ -617,6 +827,7 @@ class TestESPHomeSatelliteOptionsFlow(unittest.IsolatedAsyncioTestCase):
         flow = ESPHomeSatelliteConfigFlow.async_get_options_flow(self.mock_entry)
         self.assertIsInstance(flow, ESPHomeSatelliteOptionsFlow)
 
+        # Directly passing entry should also succeed without setter AttributeError
         flow_direct = ESPHomeSatelliteOptionsFlow(self.mock_entry)
         self.assertEqual(flow_direct.config_entry, self.mock_entry)
 

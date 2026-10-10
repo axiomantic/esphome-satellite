@@ -1,0 +1,6 @@
+{
+  "name": "ESPHome Satellite Gatekeeper",
+  "render_readme": true,
+  "content_in_root": false,
+  "filename": "esphome_satellite"
+}

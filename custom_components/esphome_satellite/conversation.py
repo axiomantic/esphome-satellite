@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.components import conversation
@@ -16,25 +17,33 @@ from homeassistant.helpers import intent
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CHOICE_ADDRESSED,
     CHOICE_AMBIENT,
     CONF_DEFAULT_THRESHOLD,
     CONF_DOWNSTREAM_AGENT,
+    CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
     CONF_SLOT1_ENABLED,
+    CONF_SLOT1_PATTERNS,
     CONF_SLOT1_THRESHOLD,
     CONF_SLOT2_ENABLED,
+    CONF_SLOT2_PATTERNS,
     CONF_SLOT2_THRESHOLD,
     CONF_SYSTEMONE_TOKEN,
     CONF_SYSTEMONE_URL,
     CONF_TIMEOUT_SECONDS,
+    DEFAULT_ENFORCE_WAKE_WORD,
+    DEFAULT_FALLBACK,
     DEFAULT_SYSTEMONE_TOKEN,
     DEFAULT_SYSTEMONE_URL,
     DEFAULT_THRESHOLD,
     DEFAULT_TIMEOUT,
     DOMAIN,
-    QUESTION_TEMPLATE_CLEMENS,
     QUESTION_TEMPLATE_GENERAL,
+    QUESTION_TEMPLATE_SLOT1,
     QUESTION_TEMPLATE_SLOT2,
+    REGEX_WAKE_WORD_CLEMENS,
+    REGEX_WAKE_WORD_NABU,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -105,6 +114,20 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
+        # Fast-Path Wake Word Enforcement:
+        # Utterances lacking the wake word or its phonetic variants are dropped immediately
+        # with zero latency, zero tokens, and zero downstream calls.
+        if self._is_wake_word_enforced():
+            if not self._check_wake_word_present(text, slot_index, wake_word):
+                _LOGGER.info(
+                    "[Gatekeeper] DROPPED utterance on satellite %s (Slot %d, wake='%s'): missing wake word in '%s'",
+                    satellite_id,
+                    slot_index + 1,
+                    wake_word,
+                    text,
+                )
+                return self._create_silent_drop_result(user_input)
+
         threshold = self._get_slot_threshold(slot_index)
         question_template = self._select_question_template(slot_index, wake_word)
 
@@ -118,7 +141,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         except SystemOneClientError as err:
             fallback = self._entry.options.get(
                 CONF_FALLBACK_BEHAVIOR,
-                self._entry.data.get(CONF_FALLBACK_BEHAVIOR, "allow"),
+                self._entry.data.get(CONF_FALLBACK_BEHAVIOR, DEFAULT_FALLBACK),
             )
             if fallback == "drop":
                 _LOGGER.warning(
@@ -135,30 +158,87 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
-        # Intercept ambient conversation
-        if choice in (CHOICE_AMBIENT, "ambient_conversation") and confidence >= threshold:
+        # Addressed utterance confirmed (Default-Drop / Fail-Closed)
+        if choice in (CHOICE_ADDRESSED, "addressed") and confidence >= threshold:
             _LOGGER.info(
-                "[Gatekeeper] INTERCEPTED ambient speech on satellite %s (Slot %d, wake='%s', conf=%.2f, rtt=%.1fms): '%s'",
+                "[Gatekeeper] APPROVED addressed utterance on satellite %s (Slot %d, conf=%.2f, rtt=%.1fms): '%s'",
                 satellite_id,
                 slot_index + 1,
-                wake_word,
                 confidence,
                 rtt_ms,
                 text,
             )
-            return self._create_silent_drop_result(user_input)
+            await self._notify_wake_word_verified(satellite_id)
+            return await self._delegate_downstream(user_input)
 
-        # Addressed utterance confirmed
+        # Any utterance that is ambient, low-confidence, or abstained is silently dropped
         _LOGGER.info(
-            "[Gatekeeper] APPROVED addressed utterance on satellite %s (Slot %d, conf=%.2f, rtt=%.1fms): '%s'",
+            "[Gatekeeper] INTERCEPTED non-addressed speech on satellite %s (Slot %d, wake='%s', choice='%s', conf=%.2f, rtt=%.1fms): '%s'",
             satellite_id,
             slot_index + 1,
+            wake_word,
+            choice,
             confidence,
             rtt_ms,
             text,
         )
-        await self._notify_wake_word_verified(satellite_id)
-        return await self._delegate_downstream(user_input)
+        return self._create_silent_drop_result(user_input)
+
+    def _is_wake_word_enforced(self) -> bool:
+        """Check if wake word presence is required on the incoming transcript."""
+        options = self._entry.options
+        data = self._entry.data
+        return bool(
+            options.get(
+                CONF_ENFORCE_WAKE_WORD,
+                data.get(CONF_ENFORCE_WAKE_WORD, DEFAULT_ENFORCE_WAKE_WORD),
+            )
+        )
+
+    def _get_slot_wake_word(self, slot_index: int, reported_wake_word: str) -> str:
+        """Get the effective wake word label for the slot."""
+        if reported_wake_word:
+            return reported_wake_word
+        if slot_index == 0:
+            return "Mr. Clemens"
+        return "Okay Nabu"
+
+    def _get_slot_wake_pattern(self, slot_index: int) -> re.Pattern:
+        """Get compiled regex pattern for slot wake word verification."""
+        options = self._entry.options
+        data = self._entry.data
+
+        custom_pattern = options.get(
+            CONF_SLOT1_PATTERNS if slot_index == 0 else CONF_SLOT2_PATTERNS,
+            data.get(CONF_SLOT1_PATTERNS if slot_index == 0 else CONF_SLOT2_PATTERNS, ""),
+        )
+        if custom_pattern:
+            try:
+                return re.compile(custom_pattern, re.IGNORECASE)
+            except re.error as err:
+                _LOGGER.error("[Gatekeeper] Invalid custom regex for Slot %d: %s", slot_index + 1, err)
+
+        if slot_index == 0:
+            return REGEX_WAKE_WORD_CLEMENS
+        return REGEX_WAKE_WORD_NABU
+
+    def _check_wake_word_present(self, text: str, slot_index: int, wake_word: str) -> bool:
+        """Verify the transcript contains the active satellite's wake word or phonetic approximations."""
+        # 1. Check configured / built-in slot pattern
+        slot_pattern = self._get_slot_wake_pattern(slot_index)
+        if slot_pattern.search(text):
+            return True
+
+        # 2. Check dynamic match against reported wake_word attribute if present
+        if wake_word:
+            cleaned = re.escape(wake_word.strip().lower())
+            dynamic_pattern = re.compile(r"\b(?:(?:hey|okay|ok)\s+)?" + cleaned + r"\b", re.IGNORECASE)
+            if dynamic_pattern.search(text):
+                return True
+
+        # 3. Check alternate slot pattern
+        alt_pattern = self._get_slot_wake_pattern(1 if slot_index == 0 else 0)
+        return bool(alt_pattern.search(text))
 
     async def _notify_wake_word_verified(self, satellite_id: str) -> None:
         """Signal the ESPHome satellite that wake word / addressing was verified."""
@@ -205,24 +285,41 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             wake_word = satellite_entity.attributes.get("wake_word", "")
 
         # 2. Check dedicated slot sensor if published
-        slot_sensor_id = f"sensor.{satellite_id.split('.')[-1]}_active_assistant_slot"
-        slot_sensor = self.hass.states.get(slot_sensor_id)
-        if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
+        sat_part = satellite_id.split(".")[-1]
+        slot_sensor_candidates = [
+            f"sensor.{sat_part}_active_assistant_slot",
+            f"sensor.{sat_part}_voice_active_assistant_slot",
+        ]
+
+        # Check for 6-character hex MAC suffix matching in sensor registry
+        mac_match = re.search(r"([0-9a-fA-F]{6})", sat_part)
+        if mac_match and hasattr(self.hass.states, "async_all"):
+            mac_suffix = mac_match.group(1).lower()
             try:
-                active_slot = max(0, int(float(slot_sensor.state)) - 1)
-            except (ValueError, TypeError):
+                for state in self.hass.states.async_all("sensor"):
+                    if mac_suffix in state.entity_id and "active_assistant_slot" in state.entity_id:
+                        slot_sensor_candidates.append(state.entity_id)
+                        break
+            except Exception:
                 pass
+
+        for cand_id in slot_sensor_candidates:
+            slot_sensor = self.hass.states.get(cand_id)
+            if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
+                try:
+                    active_slot = max(0, int(float(slot_sensor.state)) - 1)
+                    break
+                except (ValueError, TypeError):
+                    pass
 
         return (active_slot, wake_word)
 
     def _select_question_template(self, slot_index: int, wake_word: str) -> str:
         """Select calibrated question template based on slot and wake word."""
-        ww_lower = wake_word.lower()
-        if "clemens" in ww_lower or slot_index == 0:
-            return QUESTION_TEMPLATE_CLEMENS
-        if slot_index == 1:
-            return QUESTION_TEMPLATE_SLOT2
-        return QUESTION_TEMPLATE_GENERAL
+        target_ww = self._get_slot_wake_word(slot_index, wake_word)
+        if slot_index == 0:
+            return QUESTION_TEMPLATE_SLOT1.format(wake_word=target_ww)
+        return QUESTION_TEMPLATE_SLOT2.format(wake_word=target_ww)
 
     def _get_slot_threshold(self, slot_index: int) -> float:
         """Retrieve threshold for specific slot, inheriting default threshold if not overridden."""
