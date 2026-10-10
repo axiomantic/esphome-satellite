@@ -23,11 +23,14 @@
           "systemone_url": "System 1 Endpoint URL",
           "systemone_token": "API Bearer Token",
           "slot1_enabled": "Enable Gatekeeper on Slot 1",
-          "slot1_threshold": "Slot 1 Ambient Classification Threshold",
+          "slot1_threshold": "Slot 1 Confidence Threshold",
+          "slot1_patterns": "Slot 1 Custom Wake Word Regex (Optional)",
           "slot2_enabled": "Enable Gatekeeper on Slot 2",
-          "slot2_threshold": "Slot 2 Ambient Classification Threshold",
+          "slot2_threshold": "Slot 2 Confidence Threshold",
+          "slot2_patterns": "Slot 2 Custom Wake Word Regex (Optional)",
           "timeout_seconds": "System 1 Timeout (seconds)",
-          "fallback_behavior": "Fallback Policy on System 1 Failure"
+          "fallback_behavior": "Fallback Policy on System 1 Failure",
+          "enforce_wake_word": "Enforce Wake Word Presence (Fast-Path Rejection)"
         }
       }
     }
