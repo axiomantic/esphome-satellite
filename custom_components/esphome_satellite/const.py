@@ -25,7 +25,7 @@ CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = ""
-DEFAULT_THRESHOLD: Final = 0.60
+DEFAULT_THRESHOLD: Final = 0.50
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
 DEFAULT_ENFORCE_WAKE_WORD: Final = True
@@ -90,3 +90,34 @@ WAKE_WORD_PATTERNS_NABU: Final = (
 
 REGEX_WAKE_WORD_CLEMENS = re.compile(WAKE_WORD_PATTERNS_CLEMENS, re.IGNORECASE)
 REGEX_WAKE_WORD_NABU = re.compile(WAKE_WORD_PATTERNS_NABU, re.IGNORECASE)
+
+# Audio Stream & Frame Invariants (16kHz 16-bit Mono)
+AUDIO_SAMPLE_RATE: Final = 16000
+AUDIO_SAMPLE_WIDTH: Final = 2  # 16-bit signed PCM
+AUDIO_CHANNELS: Final = 1      # Mono
+AUDIO_FRAME_MS: Final = 20     # Standard 20ms frame
+AUDIO_FRAME_BYTES: Final = (AUDIO_SAMPLE_RATE // 1000) * AUDIO_FRAME_MS * AUDIO_SAMPLE_WIDTH  # 640 bytes
+
+
+def validate_audio_frame_alignment(chunk: bytes) -> tuple[int, int]:
+    """Validate 16kHz 16-bit mono PCM audio chunk sample and frame alignment.
+
+    Returns:
+        tuple[samples, frames_20ms]
+
+    Raises:
+        ValueError: If chunk violates sample alignment (% 2 != 0) or frame alignment (% 640 != 0).
+    """
+    length = len(chunk)
+    if length % AUDIO_SAMPLE_WIDTH != 0:
+        raise ValueError(
+            f"Sample alignment violation: chunk length {length} is not a multiple of {AUDIO_SAMPLE_WIDTH} bytes"
+        )
+    if length % AUDIO_FRAME_BYTES != 0:
+        raise ValueError(
+            f"Frame alignment violation: chunk length {length} is not a multiple of {AUDIO_FRAME_BYTES} bytes (20ms frames)"
+        )
+    samples = length // AUDIO_SAMPLE_WIDTH
+    frames = length // AUDIO_FRAME_BYTES
+    return (samples, frames)
+
