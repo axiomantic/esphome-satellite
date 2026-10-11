@@ -573,6 +573,144 @@ suite "Satellite Typestate FSM - Verifying Typestate & Silent Drops":
     check nim_satellite_get_state() == 0 # Returns to Idle with zero sound cues
     check not nim_satellite_is_processing()
 
+suite "Satellite Typestate FSM - Speculative Streaming Intent & StreamingSpeechVerified":
+  setup:
+    nim_satellite_reset_for_test()
+
+  teardown:
+    nim_satellite_reset_for_test()
+
+  test "StreamingSpeechVerified happy path lifecycle and context preservation":
+    var idle = Idle(SatelliteContext())
+    var streaming = idle.onWakeWord("hey assistant", 120).onChimeFinished()
+    check streaming is StreamingSpeech
+    check SatelliteContext(streaming).wakeWord == "hey assistant"
+    check SatelliteContext(streaming).beamAngle == 120
+
+    # Speculative verification arrives while streaming speech
+    var verified = streaming.onWakeWordVerified()
+    check verified is StreamingSpeechVerified
+    check verified is WakeWordVerified
+    check SatelliteContext(verified).wakeWord == "hey assistant"
+    check SatelliteContext(verified).beamAngle == 120
+
+    # User finishes speaking -> transitions directly to Processing
+    var processing = verified.onSpeechEnded()
+    check processing is Processing
+    check SatelliteContext(processing).wakeWord == "hey assistant"
+    check SatelliteContext(processing).beamAngle == 120
+
+    # TTS playback
+    var replying = processing.onTtsStarted()
+    check replying is Replying
+    check replying.onTtsFinished() is Idle
+
+  test "Stop during StreamingSpeechVerified transitions to Cancelling":
+    var idle = Idle(SatelliteContext())
+    var verified = idle.onWakeWord("assistant", 0).onChimeFinished().onWakeWordVerified()
+    var cancelling = verified.onStopDuringVerified()
+    check cancelling is Cancelling
+    check cancelling.onCancelFinished() is Idle
+
+    var verified2 = idle.onWakeWord("assistant", 0).onChimeFinished().onWakeWordVerified()
+    check verified2.onStopDuringVerifiedToIdle() is Idle
+
+  test "Silence timeout during StreamingSpeechVerified transitions to SilentDismissing":
+    var idle = Idle(SatelliteContext())
+    var verified = idle.onWakeWord("assistant", 0).onChimeFinished().onWakeWordVerified()
+    var dismissing = verified.onSilenceTimeout()
+    check dismissing is SilentDismissing
+    check dismissing.onDismiss() is Idle
+
+  test "Pipeline error during StreamingSpeechVerified transitions to PipelineErrorEvaluating":
+    var idle = Idle(SatelliteContext())
+    var verified = idle.onWakeWord("assistant", 0).onChimeFinished().onWakeWordVerified()
+    var pEval = verified.onPipelineErrorFromVerified("stt-stream-abort")
+    check pEval is PipelineErrorEvaluating
+    check SatelliteContext(pEval).errorCode == "stt-stream-abort"
+
+    var pErr = pEval.onClassifyActionableError()
+    check pErr is ActionableError
+    check pErr.onResetPipelineError() is Idle
+
+  test "Disconnect during StreamingSpeechVerified transitions to ConnectionError":
+    var idle = Idle(SatelliteContext())
+    var verified = idle.onWakeWord("assistant", 0).onChimeFinished().onWakeWordVerified()
+    var connErr = verified.onDisconnectFromVerified()
+    check connErr is ConnectionError
+    check connErr.onConnected() is Idle
+
+  test "Speculative verification C API lifecycle and speech timer preservation":
+    check nim_satellite_get_state() == 0 # Idle
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    check nim_satellite_get_state() == 2 # rsStreamingSpeech
+
+    # Speech starts
+    nim_satellite_speech_start()
+    check speechActive == true
+
+    # While speaking, speculative intent verification arrives
+    nim_satellite_wake_word_verified()
+    check nim_satellite_get_state() == 22 # rsStreamingSpeechVerified
+    # Invariant: speechActive must NOT be cleared when entering verified!
+    check speechActive == true
+
+    # Speech ends naturally (VAD silence detected)
+    nim_satellite_speech_ended()
+    check nim_satellite_get_state() == 3 # rsProcessing
+    check speechActive == false
+    check nim_satellite_is_processing()
+
+    # TTS begins and completes
+    nim_satellite_tts_start()
+    check nim_satellite_get_state() == 4 # rsReplying
+    check not nim_satellite_is_processing()
+
+    nim_satellite_tts_end()
+    check nim_satellite_get_state() == 0 # rsIdle
+
+  test "Stop word during rsStreamingSpeechVerified transitions to rsCancelling via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_wake_word_verified()
+    check nim_satellite_get_state() == 22 # rsStreamingSpeechVerified
+
+    nim_satellite_stop_word()
+    check nim_satellite_get_state() == 14 # rsCancelling
+    check nim_satellite_is_cancelling()
+    nim_satellite_cancel_done(true)
+    check nim_satellite_get_state() == 0 # rsIdle
+
+  test "Silence timeout during rsStreamingSpeechVerified transitions to rsSilentDismissing via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_wake_word_verified()
+    check nim_satellite_get_state() == 22 # rsStreamingSpeechVerified
+
+    nim_satellite_silence_timeout()
+    check nim_satellite_get_state() == 5 # rsSilentDismissing
+
+  test "Pipeline error during rsStreamingSpeechVerified evaluates to ActionableError via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_wake_word_verified()
+    check nim_satellite_get_state() == 22 # rsStreamingSpeechVerified
+
+    nim_satellite_error("system1-timeout")
+    check nim_satellite_get_state() == 6 # rsActionableError
+
+  test "Disconnection during rsStreamingSpeechVerified transitions to ConnectionError via C API":
+    nim_satellite_wake_word("assistant", 0)
+    nim_satellite_chime_done(true)
+    nim_satellite_wake_word_verified()
+    check nim_satellite_get_state() == 22 # rsStreamingSpeechVerified
+
+    nim_satellite_disconnected()
+    check nim_satellite_get_state() == 7 # rsConnectionError
+    nim_satellite_connected()
+    check nim_satellite_get_state() == 0 # rsIdle
+
 
 
 

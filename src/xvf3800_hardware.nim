@@ -124,6 +124,14 @@ proc computeAnimationColors*(
     let red = uint32(uint8(255.0'f32 * brightness)) shl 16
     for i in 0 ..< 12:
       result[i] = red
+  of "StreamingSpeechVerified", "WakeWordVerified", "Streaming Speech Verified", "Wake Word Verified":
+    # Instant visual certainty: Solid locked emerald-cyan ring or focused beam
+    let r = uint32(uint8(clamp(10.0'f32 * brightness, 0.0'f32, 255.0'f32))) shl 16
+    let g = uint32(uint8(clamp(230.0'f32 * brightness, 0.0'f32, 255.0'f32))) shl 8
+    let b = uint32(uint8(clamp(255.0'f32 * brightness, 0.0'f32, 255.0'f32)))
+    let lockedColor = r or g or b
+    for i in 0 ..< 12:
+      result[i] = lockedColor
   of "Follow Up":
     # Conversational mode active listening: distinctive breathing emerald-teal wave
     let pulse = 0.55'f32 + 0.45'f32 * sin(now * 0.007'f32)
