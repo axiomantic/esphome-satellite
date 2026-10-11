@@ -221,20 +221,39 @@ In firmware `v0.7.0`, hardware cues adhere strictly to **Rule 5 (Deterministic H
 - **Physical Verification Acknowledgment**: When Gatekeeper verifies that speech was addressed to the satellite, it invokes the native `esphome.<device>_wake_word_verified` action. The satellite transitions from `Verifying -> Thinking`, rings the wake chime (if enabled), starts the typewriter processing sound, and animates the Thinking LED spinner.
 
 #### Home Assistant Custom Integration Setup
-The companion integration lives in [`custom_components/esphome_satellite`](custom_components/esphome_satellite/):
+The canonical companion integration is maintained directly in [`custom_components/esphome_satellite`](custom_components/esphome_satellite/). It provides the sub-200ms System 1 neural addressing gatekeeper and speculative streaming STT proxy.
 
-1. **Install Component**: Copy `custom_components/esphome_satellite` to your Home Assistant `/config/custom_components/` directory (or install via HACS custom repository).
-2. **Restart Home Assistant**: Restart Home Assistant Core via **Developer Tools > YAML > Restart**.
-3. **Add Integration**:
-   - Go to **Settings > Devices & Services > Add Integration**.
+##### Method 1: HACS Custom Repository (Recommended)
+1. In Home Assistant, open **HACS > Integrations**.
+2. Click the three dots menu in the top right corner and select **Custom repositories**.
+3. Enter the repository URL:
+   ```text
+   https://github.com/axiomantic/esphome-satellite
+   ```
+   Set Category to **Integration**, then click **Add**.
+4. Search for **ESPHome Satellite Gatekeeper** in HACS, click **Download**, and confirm.
+5. Restart Home Assistant Core via **Developer Tools > YAML > Restart** (or `ha core restart`).
+
+##### Method 2: Manual Installation
+1. Copy the `custom_components/esphome_satellite` directory into your Home Assistant `/config/custom_components/` directory:
+   ```bash
+   cp -r custom_components/esphome_satellite /config/custom_components/
+   ```
+2. Restart Home Assistant Core via **Developer Tools > YAML > Restart**.
+
+##### Configuration & Pipeline Wiring
+1. **Add Integration**:
+   - Navigate to **Settings > Devices & Services > Add Integration**.
    - Search for **ESPHome Satellite Gatekeeper**.
-   - Enter your System 1 endpoint URL (e.g. `http://laya.lan/v1/systemone`), Bearer Token, and select your downstream Conversation Agent.
-4. **Wire Assist Pipeline**:
-   - Go to **Settings > Voice Assistants > Assist**.
-   - Set **Conversation Agent** to **Gatekeeper**.
-5. **Runtime Tuning via Options Flow**:
-   - Click **Configure** on the Gatekeeper integration card.
-   - Adjust per-slot sensitivity thresholds (default `0.60`), toggle slot gating, or choose fallback behavior (`allow` fail-open or `drop` fail-closed).
+   - Enter your System 1 endpoint URL (e.g. `http://laya.lan/v1/systemone` or `http://10.0.0.10:8000/v1/systemone`), optional Bearer Token, and select your downstream Conversation Agent.
+2. **Wire Assist Pipeline**:
+   - Navigate to **Settings > Voice Assistants**.
+   - Select your desired voice assistant pipeline (e.g. *Mark Twain* or *Assist*).
+   - Set **Conversation Agent** to **ESPHome Satellite Gatekeeper**.
+   - (Optional) Set **Speech-to-Text** to **Speculative STT Proxy** to enable sub-500ms early wake word acknowledgment over streaming audio.
+3. **Runtime Tuning via Options Flow**:
+   - In **Settings > Devices & Services**, click **Configure** on the **ESPHome Satellite Gatekeeper** card.
+   - Adjust per-slot sensitivity thresholds (calibrated default: `0.50`), toggle slot gating, configure custom wake word patterns, or select fallback behavior (`drop` fail-closed or `allow` fail-open). All wake words are dynamically resolved from the satellite entity attributes with zero hardcoded constraints.
 
 #### Alternative: Direct LLM Prompt Rider
 For standalone installations without a local System 1 / Laya classifier, you can bypass the custom component and delegate addressing verification directly to your downstream LLM conversation agent by appending this standard **38-Word Prompt Rider** to the system prompt in **Settings > Voice Assistants > Assist > Conversation Agent**:
