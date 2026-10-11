@@ -9,6 +9,8 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_DEFAULT_THRESHOLD,
     CONF_DOWNSTREAM_AGENT,
+    CONF_DOWNSTREAM_STT,
+    CONF_EARLY_WAKE_VERIFICATION,
     CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
     CONF_SLOT1_ENABLED,
@@ -17,11 +19,15 @@ from .const import (
     CONF_SLOT2_ENABLED,
     CONF_SLOT2_PATTERNS,
     CONF_SLOT2_THRESHOLD,
+    CONF_SPECULATIVE_CHUNK_MS,
     CONF_SYSTEMONE_TOKEN,
     CONF_SYSTEMONE_URL,
     CONF_TIMEOUT_SECONDS,
+    DEFAULT_DOWNSTREAM_STT,
+    DEFAULT_EARLY_WAKE_VERIFICATION,
     DEFAULT_ENFORCE_WAKE_WORD,
     DEFAULT_FALLBACK,
+    DEFAULT_SPECULATIVE_CHUNK_MS,
     DEFAULT_SYSTEMONE_TOKEN,
     DEFAULT_SYSTEMONE_URL,
     DEFAULT_THRESHOLD,
@@ -73,6 +79,25 @@ class ESPHomeSatelliteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),
+                vol.Optional(
+                    CONF_DOWNSTREAM_STT,
+                    default=DEFAULT_DOWNSTREAM_STT,
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_SPECULATIVE_CHUNK_MS,
+                    default=DEFAULT_SPECULATIVE_CHUNK_MS,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=100,
+                        max=2000,
+                        step=50,
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_EARLY_WAKE_VERIFICATION,
+                    default=DEFAULT_EARLY_WAKE_VERIFICATION,
+                ): selector.BooleanSelector(),
             }
         )
 
@@ -181,6 +206,20 @@ class ESPHomeSatelliteOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_ENFORCE_WAKE_WORD,
                     default=options.get(CONF_ENFORCE_WAKE_WORD, DEFAULT_ENFORCE_WAKE_WORD),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_DOWNSTREAM_STT,
+                    description={"suggested_value": options.get(CONF_DOWNSTREAM_STT, data.get(CONF_DOWNSTREAM_STT, DEFAULT_DOWNSTREAM_STT))},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_SPECULATIVE_CHUNK_MS,
+                    default=options.get(CONF_SPECULATIVE_CHUNK_MS, data.get(CONF_SPECULATIVE_CHUNK_MS, DEFAULT_SPECULATIVE_CHUNK_MS)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=100, max=2000, step=50, mode=selector.NumberSelectorMode.BOX)
+                ),
+                vol.Optional(
+                    CONF_EARLY_WAKE_VERIFICATION,
+                    default=options.get(CONF_EARLY_WAKE_VERIFICATION, data.get(CONF_EARLY_WAKE_VERIFICATION, DEFAULT_EARLY_WAKE_VERIFICATION)),
                 ): selector.BooleanSelector(),
             }
         )

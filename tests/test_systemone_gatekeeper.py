@@ -86,6 +86,84 @@ if "homeassistant" not in sys.modules:
 
     sys.modules["homeassistant.components.conversation"].ConversationResult = MockConversationResult
 
+    from enum import Enum
+    try:
+        from enum import StrEnum
+    except ImportError:
+        class StrEnum(str, Enum):
+            pass
+
+    class MockAudioFormats(StrEnum):
+        WAV = "wav"
+        RAW = "raw"
+        OGG = "ogg"
+
+    class MockAudioCodecs(StrEnum):
+        PCM = "pcm"
+        OPUS = "opus"
+
+    class MockAudioBitRates(int, Enum):
+        BITRATE_16 = 16
+
+    class MockAudioSampleRates(int, Enum):
+        SAMPLERATE_16000 = 16000
+
+    class MockAudioChannels(int, Enum):
+        CHANNEL_MONO = 1
+
+    class MockSpeechResultState(StrEnum):
+        SUCCESS = "success"
+        ERROR = "error"
+
+    class MockSpeechMetadata:
+        def __init__(
+            self,
+            language="en",
+            format=MockAudioFormats.RAW,
+            codec=MockAudioCodecs.PCM,
+            bit_rate=MockAudioBitRates.BITRATE_16,
+            sample_rate=MockAudioSampleRates.SAMPLERATE_16000,
+            channel=MockAudioChannels.CHANNEL_MONO,
+        ):
+            self.language = language
+            self.format = format
+            self.codec = codec
+            self.bit_rate = bit_rate
+            self.sample_rate = sample_rate
+            self.channel = channel
+
+    class MockSpeechResult:
+        def __init__(self, text, result):
+            self.text = text
+            self.result = result
+
+    class MockSpeechToTextEntity:
+        _attr_has_entity_name = True
+        _attr_name = "STT"
+
+    sys.modules["homeassistant.components.stt"] = MagicMock()
+    sys.modules["homeassistant.components.stt"].AudioFormats = MockAudioFormats
+    sys.modules["homeassistant.components.stt"].AudioCodecs = MockAudioCodecs
+    sys.modules["homeassistant.components.stt"].AudioBitRates = MockAudioBitRates
+    sys.modules["homeassistant.components.stt"].AudioSampleRates = MockAudioSampleRates
+    sys.modules["homeassistant.components.stt"].AudioChannels = MockAudioChannels
+    sys.modules["homeassistant.components.stt"].SpeechResultState = MockSpeechResultState
+    sys.modules["homeassistant.components.stt"].SpeechMetadata = MockSpeechMetadata
+    sys.modules["homeassistant.components.stt"].SpeechResult = MockSpeechResult
+    sys.modules["homeassistant.components.stt"].SpeechToTextEntity = MockSpeechToTextEntity
+    def mock_get_stt_engine(hass, engine_id):
+        if not hass or not hasattr(hass, "data"):
+            return None
+        stt_data = hass.data.get("stt")
+        if hasattr(stt_data, "get_entity"):
+            return stt_data.get_entity(engine_id)
+        return None
+
+    sys.modules["homeassistant.components.stt"].async_get_speech_to_text_engine = mock_get_stt_engine
+    ha.components.stt = sys.modules["homeassistant.components.stt"]
+    ha.const.Platform.CONVERSATION = "conversation"
+    ha.const.Platform.STT = "stt"
+
 if "aiohttp" not in sys.modules:
     aiohttp_mock = MagicMock()
 
@@ -105,20 +183,32 @@ from custom_components.esphome_satellite.const import (
     CHOICE_AMBIENT,
     CLASSIFICATION_CRITERIA,
     CONF_DOWNSTREAM_AGENT,
+    CONF_DOWNSTREAM_STT,
+    CONF_EARLY_WAKE_VERIFICATION,
     CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
     CONF_SLOT1_ENABLED,
+    CONF_SLOT1_PATTERNS,
     CONF_SLOT1_THRESHOLD,
     CONF_SLOT2_ENABLED,
     CONF_SLOT2_PATTERNS,
     CONF_SLOT2_THRESHOLD,
+    CONF_SPECULATIVE_CHUNK_MS,
     CONF_SYSTEMONE_TOKEN,
     CONF_SYSTEMONE_URL,
+    DEFAULT_DOWNSTREAM_STT,
+    DEFAULT_EARLY_WAKE_VERIFICATION,
+    DEFAULT_SPECULATIVE_CHUNK_MS,
     DEFAULT_THRESHOLD,
     QUESTION_TEMPLATE_GENERAL,
     QUESTION_TEMPLATE_SLOT1,
 )
 from custom_components.esphome_satellite.conversation import ESPHomeSatelliteGatekeeperEntity
+from custom_components.esphome_satellite.stt import (
+    ESPHomeSatelliteSpeculativeSTT,
+    pcm_to_wav,
+    trim_wake_word,
+)
 from custom_components.esphome_satellite.systemone_client import (
     SystemOneClient,
     SystemOneClientError,
@@ -862,6 +952,427 @@ class TestESPHomeSatelliteOptionsFlow(unittest.IsolatedAsyncioTestCase):
         result = await flow.async_step_init(user_input=user_input)
         self.assertEqual(result["type"], "create_entry")
         self.assertEqual(result["data"], user_input)
+
+
+class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
+    """Test suite for ESPHomeSatelliteSpeculativeSTT proxy and helper functions."""
+
+    def setUp(self):
+        self.mock_hass = MagicMock()
+        self.mock_hass.states = MagicMock()
+        self.mock_hass.services = MagicMock()
+        self.mock_hass.data = {}
+
+        self.mock_entry = MagicMock()
+        self.mock_entry.entry_id = "test_entry_456"
+        self.mock_entry.data = {
+            CONF_SYSTEMONE_URL: "http://localhost:8000/v1/systemone",
+            CONF_DOWNSTREAM_STT: "stt.faster_whisper",
+            CONF_SPECULATIVE_CHUNK_MS: 500,
+            CONF_EARLY_WAKE_VERIFICATION: True,
+        }
+        self.mock_entry.options = {}
+
+        self.mock_client = MagicMock(spec=SystemOneClient)
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 0.95, 25.0)
+        )
+
+    def test_trim_wake_word_helper(self):
+        """Verify regex wake phrase trimming behavior across diverse utterances."""
+        # 1. Standard wake phrases
+        self.assertEqual(
+            trim_wake_word("Mr. Clemens, turn on the lights"),
+            "turn on the lights",
+        )
+        self.assertEqual(
+            trim_wake_word("Hey Clemens please turn off the fan"),
+            "please turn off the fan",
+        )
+        self.assertEqual(
+            trim_wake_word("Okay Nabu what time is it?"),
+            "what time is it?",
+        )
+        self.assertEqual(
+            trim_wake_word("Mister Clemens: set a timer for 5 minutes"),
+            "set a timer for 5 minutes",
+        )
+
+        # 2. Leading polite / filler words (<= 1 word before wake word)
+        self.assertEqual(
+            trim_wake_word("Hey Mr. Clemens turn on the kitchen"),
+            "turn on the kitchen",
+        )
+        self.assertEqual(
+            trim_wake_word("Um Clemens cancel that"),
+            "cancel that",
+        )
+
+        # 3. Wake word missing
+        self.assertEqual(
+            trim_wake_word("turn on the living room lights"),
+            "turn on the living room lights",
+        )
+
+        # 4. Wake word in mid-sentence (third person discussion, not a wake prefix)
+        self.assertEqual(
+            trim_wake_word("I was speaking with Mr Clemens yesterday"),
+            "I was speaking with Mr Clemens yesterday",
+        )
+
+        # 5. Utterance contains only the wake word
+        self.assertEqual(
+            trim_wake_word("Mr. Clemens"),
+            "Mr. Clemens",
+        )
+        self.assertEqual(
+            trim_wake_word("Hey Clemens!"),
+            "Hey Clemens!",
+        )
+
+        # 6. Empty / whitespace
+        self.assertEqual(trim_wake_word(""), "")
+        self.assertEqual(trim_wake_word("   "), "")
+
+    def test_pcm_to_wav_helper(self):
+        """Verify pcm_to_wav packages raw bytes into valid RIFF WAV header."""
+        raw_pcm = b"\x00\x00" * 8000  # 0.5s of 16-bit mono 16kHz silence
+        wav_bytes = pcm_to_wav(raw_pcm, sample_rate=16000, channels=1, sample_width=2)
+        self.assertTrue(wav_bytes.startswith(b"RIFF"))
+        self.assertIn(b"WAVEfmt ", wav_bytes)
+        self.assertIn(b"data", wav_bytes)
+        self.assertEqual(len(wav_bytes), 44 + len(raw_pcm))
+
+    async def test_stt_entity_properties_default(self):
+        """Verify default supported audio formats and configuration properties."""
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        self.assertEqual(stt_proxy.downstream_stt_id, "stt.faster_whisper")
+        self.assertEqual(stt_proxy.speculative_chunk_ms, 500)
+        self.assertTrue(stt_proxy.early_wake_verification)
+        self.assertEqual(stt_proxy.supported_languages, ["en", "*"])
+
+        from homeassistant.components.stt import (
+            AudioBitRates,
+            AudioChannels,
+            AudioCodecs,
+            AudioFormats,
+            AudioSampleRates,
+        )
+        self.assertIn(AudioFormats.RAW, stt_proxy.supported_formats)
+        self.assertIn(AudioCodecs.PCM, stt_proxy.supported_codecs)
+        self.assertIn(AudioBitRates.BITRATE_16, stt_proxy.supported_bit_rates)
+        self.assertIn(AudioSampleRates.SAMPLERATE_16000, stt_proxy.supported_sample_rates)
+        self.assertIn(AudioChannels.CHANNEL_MONO, stt_proxy.supported_channels)
+
+    async def test_stt_entity_properties_delegated(self):
+        """Verify supported properties delegate to downstream entity when available."""
+        mock_downstream = MagicMock()
+        mock_downstream.supported_languages = ["fr", "de"]
+        mock_downstream.supported_formats = ["wav"]
+
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        self.assertEqual(stt_proxy.supported_languages, ["fr", "de"])
+        self.assertEqual(stt_proxy.supported_formats, ["wav"])
+
+    async def test_stt_process_audio_stream_dual_pipe_and_trim(self):
+        """Verify dual-pipe streaming, downstream delegation, and transcript trimming."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_downstream = MagicMock()
+        captured_chunks = []
+
+        async def downstream_stream_handler(metadata, stream):
+            async for chunk in stream:
+                captured_chunks.append(chunk)
+            return SpeechResult(
+                text="Mr. Clemens, turn off the television",
+                result=SpeechResultState.SUCCESS,
+            )
+
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=downstream_stream_handler
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        # Generate 5 chunks of 1024 bytes (160ms total, below 500ms speculative window)
+        async def dummy_audio_stream():
+            for i in range(5):
+                yield b"\x01\x02" * 512
+
+        metadata = SpeechMetadata()
+        result = await stt_proxy.async_process_audio_stream(metadata, dummy_audio_stream())
+
+        # Verify downstream STT received all chunks
+        self.assertEqual(len(captured_chunks), 5)
+        # Verify returned result was trimmed of wake word
+        self.assertEqual(result.result, SpeechResultState.SUCCESS)
+        self.assertEqual(result.text, "turn off the television")
+
+    async def test_stt_speculative_verification_triggers_satellite_notification(self):
+        """Verify 500ms sliding window triggers System 1 and fires satellite verified service."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        # Setup mock satellite entity & registry entry
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_reg_entry = MagicMock()
+        mock_reg_entry.config_entry_id = "esphome_living_room_entry"
+
+        mock_config_entry = MagicMock()
+        mock_config_entry.domain = "esphome"
+        mock_config_entry.data = {"device_name": "living-room"}
+
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get = MagicMock(return_value=mock_reg_entry)
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_ent_reg):
+            self.mock_hass.config_entries.async_get_entry = MagicMock(
+                return_value=mock_config_entry
+            )
+            self.mock_hass.services.has_service = MagicMock(return_value=True)
+            self.mock_hass.services.async_call = AsyncMock()
+
+            mock_downstream = MagicMock()
+
+            # Downstream STT handler for partial vs final streams
+            async def downstream_stream_handler(metadata, stream):
+                chunks = []
+                async for chunk in stream:
+                    chunks.append(chunk)
+                total_len = sum(len(c) for c in chunks)
+                # If short slice (speculative window), return partial transcription
+                if total_len >= 16000:
+                    return SpeechResult(
+                        text="Mr Clemens turn on the lights",
+                        result=SpeechResultState.SUCCESS,
+                    )
+                return SpeechResult(
+                    text="turn on the lights",
+                    result=SpeechResultState.SUCCESS,
+                )
+
+            mock_downstream.async_process_audio_stream = AsyncMock(
+                side_effect=downstream_stream_handler
+            )
+            self.mock_hass.data["stt"] = MagicMock()
+            self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+            stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+                self.mock_hass,
+                self.mock_entry,
+                self.mock_client,
+                speculative_chunk_ms=500,
+            )
+
+            # Stream 20 chunks of 1024 bytes (20,480 bytes > 16,000 bytes 500ms window)
+            async def audio_stream():
+                for _ in range(20):
+                    yield b"\x01\x02" * 512
+                    await asyncio.sleep(0.005)
+
+            metadata = SpeechMetadata()
+            result = await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+
+            # Verify System 1 was called speculatively
+            self.mock_client.classify_addressing.assert_called()
+            # Verify satellite service living_room_wake_word_verified was invoked
+            self.mock_hass.services.async_call.assert_called_with(
+                "esphome",
+                "living_room_wake_word_verified",
+                blocking=False,
+            )
+            self.assertEqual(result.text, "turn on the lights")
+
+    async def test_stt_speculative_ambient_speech_does_not_trigger_verified(self):
+        """Verify ambient classification during sliding window does not notify satellite."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        # Mock ambient response (< 0.80)
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_AMBIENT, 0.25, 20.0)
+        )
+
+        self.mock_hass.services.async_call = AsyncMock()
+
+        mock_downstream = MagicMock()
+
+        async def downstream_stream_handler(metadata, stream):
+            async for _ in stream:
+                pass
+            return SpeechResult(
+                text="we were discussing the weather outside",
+                result=SpeechResultState.SUCCESS,
+            )
+
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=downstream_stream_handler
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        async def audio_stream():
+            for _ in range(20):
+                yield b"\x01\x02" * 512
+                await asyncio.sleep(0.005)
+
+        metadata = SpeechMetadata()
+        result = await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+
+        # Verify satellite was NOT notified
+        self.mock_hass.services.async_call.assert_not_called()
+        self.assertEqual(result.text, "we were discussing the weather outside")
+
+    async def test_stt_downstream_missing_returns_error(self):
+        """Verify missing downstream STT entity returns SpeechResultState.ERROR."""
+        from homeassistant.components.stt import SpeechMetadata, SpeechResultState
+
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=None)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        async def audio_stream():
+            yield b"\x00"
+
+        metadata = SpeechMetadata()
+        result = await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+        self.assertEqual(result.result, SpeechResultState.ERROR)
+        self.assertIsNone(result.text)
+
+    async def test_stt_downstream_error_passed_through(self):
+        """Verify downstream STT failure is returned cleanly without trimming."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            return_value=SpeechResult(text=None, result=SpeechResultState.ERROR)
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        async def audio_stream():
+            yield b"\x00"
+
+        metadata = SpeechMetadata()
+        result = await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+        self.assertEqual(result.result, SpeechResultState.ERROR)
+        self.assertIsNone(result.text)
+
+    async def test_stt_async_setup_entry(self):
+        """Verify async_setup_entry registers ESPHomeSatelliteSpeculativeSTT entity."""
+        from custom_components.esphome_satellite.stt import async_setup_entry
+
+        added_entities = []
+
+        def mock_add_entities(entities):
+            added_entities.extend(entities)
+
+        await async_setup_entry(self.mock_hass, self.mock_entry, mock_add_entities)
+        self.assertEqual(len(added_entities), 1)
+        self.assertIsInstance(added_entities[0], ESPHomeSatelliteSpeculativeSTT)
+
+    async def test_stt_early_verification_disabled(self):
+        """Verify when early verification is disabled, satellite is never notified."""
+        self.mock_entry.options[CONF_EARLY_WAKE_VERIFICATION] = False
+        self.mock_hass.services.async_call = AsyncMock()
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        self.assertFalse(stt_proxy.early_wake_verification)
+
+        await stt_proxy._notify_satellite_verified()
+        self.mock_hass.services.async_call.assert_not_called()
+
+    async def test_stt_broadcast_fallback_service_call(self):
+        """Verify when no active assist_satellite state exists, calls matching esphome services."""
+        self.mock_hass.states.async_all = MagicMock(return_value=[])
+        self.mock_hass.services.async_services = MagicMock(
+            return_value={"esphome": {"satellite1_wake_word_verified": {}}}
+        )
+        self.mock_hass.services.async_call = AsyncMock()
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        await stt_proxy._notify_satellite_verified()
+        self.mock_hass.services.async_call.assert_called_with(
+            "esphome",
+            "satellite1_wake_word_verified",
+            blocking=False,
+        )
+
+    async def test_stt_custom_wake_word_patterns_trimming(self):
+        """Verify custom slot patterns are respected in trimming."""
+        self.mock_entry.options[CONF_SLOT1_PATTERNS] = r"\bjarvis\b"
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        patterns = stt_proxy._get_active_wake_patterns()
+        trimmed = trim_wake_word("Jarvis, dim the living room", patterns)
+        self.assertEqual(trimmed, "dim the living room")
 
 
 if __name__ == "__main__":
