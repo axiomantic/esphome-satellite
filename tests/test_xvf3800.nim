@@ -74,6 +74,21 @@ suite "XVF3800 Hardware & Animation Suite (TDD)":
     for c in colorsVerifying:
       check c == 0'u32
 
+  test "LED animation states - StreamingSpeechVerified produces solid cyan/emerald locked ring":
+    let colors = computeAnimationColors("Streaming Speech Verified", "Off", 1.0'f32, 1000'u32)
+    for c in colors:
+      let r = (c shr 16) and 0xFF'u32
+      let g = (c shr 8) and 0xFF'u32
+      let b = c and 0xFF'u32
+      check r == 10'u32
+      check g == 230'u32
+      check b == 255'u32
+
+    let colorsAlias1 = computeAnimationColors("StreamingSpeechVerified", "Off", 1.0'f32, 1000'u32)
+    check colorsAlias1 == colors
+    let colorsAlias2 = computeAnimationColors("Wake Word Verified", "Off", 1.0'f32, 1000'u32)
+    check colorsAlias2 == colors
+
   test "LED animation states - Follow Up produces conversational listening emerald-teal wave":
     let colors = computeAnimationColors("Follow Up", "Off", 1.0'f32, 1000'u32)
     for c in colors:

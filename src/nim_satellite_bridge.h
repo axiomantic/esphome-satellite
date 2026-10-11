@@ -291,6 +291,7 @@ inline const char* get_satellite_state_name() {
     case 19: return "Action Success";
     case 20: return "Pipeline Error Evaluating";
     case 21: return "Verifying";
+    case 22: return "Streaming Speech Verified";
     default: return "Unknown";
   }
 }
