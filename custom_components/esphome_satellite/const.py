@@ -76,20 +76,6 @@ QUESTION_TEMPLATE_SLOT2: Final = (
     "Is this an addressed instruction or query to {wake_word}?"
 )
 
-# Built-in Default Wake Word Regex Patterns
-WAKE_WORD_PATTERNS_CLEMENS: Final = (
-    r"\b("
-    r"(?:hey\s+)?(?:(?:mr\.?|mister|mista)\s+)?(?:clemens|clemons|clamance|clamonds|claments|clamons|clements|clement)"
-    r"|(?:(?:hey\s+)?(?:mark\s+)?(?:twain|twane))"
-    r")\b"
-)
-
-WAKE_WORD_PATTERNS_NABU: Final = (
-    r"\b(?:(?:hey|okay|ok)\s+)?(?:nabu|naboo)\b"
-)
-
-REGEX_WAKE_WORD_CLEMENS = re.compile(WAKE_WORD_PATTERNS_CLEMENS, re.IGNORECASE)
-REGEX_WAKE_WORD_NABU = re.compile(WAKE_WORD_PATTERNS_NABU, re.IGNORECASE)
 
 # Audio Stream & Frame Invariants (16kHz 16-bit Mono)
 AUDIO_SAMPLE_RATE: Final = 16000

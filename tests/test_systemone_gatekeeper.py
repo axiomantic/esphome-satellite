@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+import re
 import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -982,54 +983,58 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_trim_wake_word_helper(self):
-        """Verify regex wake phrase trimming behavior across diverse utterances."""
+        """Verify dynamic wake phrase trimming behavior across diverse utterances."""
+        test_patterns = [
+            re.compile(r"\b(?:hey\s+)?(?:(?:mr\.?|mister)\s+)?clemens\b", re.I),
+            re.compile(r"\b(?:okay\s+)?nabu\b", re.I),
+        ]
         # 1. Standard wake phrases
         self.assertEqual(
-            trim_wake_word("Mr. Clemens, turn on the lights"),
+            trim_wake_word("Mr. Clemens, turn on the lights", test_patterns),
             "turn on the lights",
         )
         self.assertEqual(
-            trim_wake_word("Hey Clemens please turn off the fan"),
+            trim_wake_word("Hey Clemens please turn off the fan", test_patterns),
             "please turn off the fan",
         )
         self.assertEqual(
-            trim_wake_word("Okay Nabu what time is it?"),
+            trim_wake_word("Okay Nabu what time is it?", test_patterns),
             "what time is it?",
         )
         self.assertEqual(
-            trim_wake_word("Mister Clemens: set a timer for 5 minutes"),
+            trim_wake_word("Mister Clemens: set a timer for 5 minutes", test_patterns),
             "set a timer for 5 minutes",
         )
 
         # 2. Leading polite / filler words (<= 1 word before wake word)
         self.assertEqual(
-            trim_wake_word("Hey Mr. Clemens turn on the kitchen"),
+            trim_wake_word("Hey Mr. Clemens turn on the kitchen", test_patterns),
             "turn on the kitchen",
         )
         self.assertEqual(
-            trim_wake_word("Um Clemens cancel that"),
+            trim_wake_word("Um Clemens cancel that", test_patterns),
             "cancel that",
         )
 
         # 3. Wake word missing
         self.assertEqual(
-            trim_wake_word("turn on the living room lights"),
+            trim_wake_word("turn on the living room lights", test_patterns),
             "turn on the living room lights",
         )
 
         # 4. Wake word in mid-sentence (third person discussion, not a wake prefix)
         self.assertEqual(
-            trim_wake_word("I was speaking with Mr Clemens yesterday"),
+            trim_wake_word("I was speaking with Mr Clemens yesterday", test_patterns),
             "I was speaking with Mr Clemens yesterday",
         )
 
         # 5. Utterance contains only the wake word
         self.assertEqual(
-            trim_wake_word("Mr. Clemens"),
+            trim_wake_word("Mr. Clemens", test_patterns),
             "Mr. Clemens",
         )
         self.assertEqual(
-            trim_wake_word("Hey Clemens!"),
+            trim_wake_word("Hey Clemens!", test_patterns),
             "Hey Clemens!",
         )
 
@@ -1112,7 +1117,9 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
         )
         self.mock_hass.data["stt"] = MagicMock()
         self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
-
+        self.mock_entry.options = {
+            CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b"
+        }
         stt_proxy = ESPHomeSatelliteSpeculativeSTT(
             self.mock_hass,
             self.mock_entry,
@@ -1188,6 +1195,9 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
             )
             self.mock_hass.data["stt"] = MagicMock()
             self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+            self.mock_entry.options = {
+                CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b"
+            }
 
             stt_proxy = ESPHomeSatelliteSpeculativeSTT(
                 self.mock_hass,
