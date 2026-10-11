@@ -1374,6 +1374,88 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
         trimmed = trim_wake_word("Jarvis, dim the living room", patterns)
         self.assertEqual(trimmed, "dim the living room")
 
+    async def test_stt_long_utterance_no_queue_deadlock_on_verified(self):
+        """Verify that utterances exceeding chunk_queue.maxsize (128) do not deadlock when verified early."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_downstream = MagicMock()
+
+        async def downstream_stream_handler(metadata, stream):
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            return SpeechResult(text="long test instruction", result=SpeechResultState.SUCCESS)
+
+        mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_stream_handler)
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        async def long_stream():
+            # Send 200 chunks (exceeds maxsize 128)
+            for _ in range(200):
+                yield b"\x00" * 640
+
+        metadata = SpeechMetadata()
+        result = await stt_proxy.async_process_audio_stream(metadata, long_stream())
+        self.assertEqual(result.result, SpeechResultState.SUCCESS)
+        self.assertEqual(result.text, "long test instruction")
+
+    def test_audio_stream_frame_and_sample_alignment_invariants(self):
+        """Verify 16kHz 16-bit mono audio stream frame and sample alignment invariants."""
+        from custom_components.esphome_satellite.const import (
+            AUDIO_FRAME_BYTES,
+            AUDIO_FRAME_MS,
+            AUDIO_SAMPLE_RATE,
+            AUDIO_SAMPLE_WIDTH,
+            validate_audio_frame_alignment,
+        )
+
+        # 1. Fundamental acoustic constants
+        self.assertEqual(AUDIO_SAMPLE_RATE, 16000)
+        self.assertEqual(AUDIO_SAMPLE_WIDTH, 2)
+        self.assertEqual(AUDIO_FRAME_MS, 20)
+        self.assertEqual(AUDIO_FRAME_BYTES, 640)
+
+        # 2. Valid frame-aligned chunks
+        valid_20ms = b"\x00" * 640
+        samples, frames = validate_audio_frame_alignment(valid_20ms)
+        self.assertEqual(samples, 320)
+        self.assertEqual(frames, 1)
+
+        valid_40ms = b"\x00" * 1280
+        samples, frames = validate_audio_frame_alignment(valid_40ms)
+        self.assertEqual(samples, 640)
+        self.assertEqual(frames, 2)
+
+        valid_500ms = b"\x00" * 16000
+        samples, frames = validate_audio_frame_alignment(valid_500ms)
+        self.assertEqual(samples, 8000)
+        self.assertEqual(frames, 25)
+
+        # Zero length buffer
+        samples, frames = validate_audio_frame_alignment(b"")
+        self.assertEqual(samples, 0)
+        self.assertEqual(frames, 0)
+
+        # 3. Sample alignment violation: odd byte count
+        with self.assertRaisesRegex(ValueError, "Sample alignment violation"):
+            validate_audio_frame_alignment(b"\x00" * 641)
+
+        # 4. Frame alignment violation: even bytes, but not a multiple of 640 bytes (20ms)
+        with self.assertRaisesRegex(ValueError, "Frame alignment violation"):
+            validate_audio_frame_alignment(b"\x00" * 700)
+
 
 if __name__ == "__main__":
     unittest.main()
+

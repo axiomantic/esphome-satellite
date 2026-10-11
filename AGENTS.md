@@ -121,3 +121,26 @@ After modifying audio, firmware, or installer logic:
    - **Zero Emojis**: Never use emojis in documentation, READMEs, HTML pages, commit messages, or PR descriptions. Keep all prose clear, technical, and human.
 6. **Commit and Push Invariant**:
    - All changes must be committed and pushed once reviewed. Implementations and fixes are never left uncommitted in the working tree or unpushed to the remote repository. Always rebase on the latest remote before pushing.
+
+---
+
+## 6. Absolute Ban on Brittle Heuristics & Regex Pre-Filters
+
+1. **No Regex Pre-Drops in Gatekeeper**:
+   - Gatekeeper exists to delegate phonetic similarity and addressing classification to **System 1**.
+   - Placing a regex drop filter (`enforce_wake_word: true` dropping turns) in front of System 1 is strictly forbidden. Speech-to-text models produce phonetic approximations, homophones, and acoustic variations that static regexes will drop. System 1 must evaluate the turn.
+2. **Zero Hardcoded Wake Words, Personas, or Names**:
+   - `esphome-satellite` is an open-source, generic component and firmware framework.
+   - All wake words and pipelines are user-defined. Never hardcode personal personas, specific names, or regex patterns into constants (`const.py`) or default branches.
+   - Wake words must be resolved dynamically from the satellite entity attributes, Home Assistant pipeline configuration, or user options.
+
+---
+
+## 7. Canonical Repository Integrity for `custom_components/esphome_satellite`
+
+1. **Sole Source of Truth**:
+   - `custom_components/esphome_satellite/` in this repository is the canonical source of truth for the Home Assistant integration.
+   - Any enhancements, bug fixes, or test additions must be developed and tested directly within this repository.
+2. **Zero Forking in Consumer Repos**:
+   - Consumer repos (such as `home-assistant-vibecode-agent`) must never contain divergent copies or separate branches of `custom_components/esphome_satellite`.
+

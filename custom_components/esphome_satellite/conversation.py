@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Any
 
 from homeassistant.components import conversation
@@ -49,6 +50,23 @@ from .systemone_client import SystemOneClient, SystemOneClientError
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def extract_instruction_after_wake(text: str, patterns: list[re.Pattern]) -> str | None:
+    """Return the instruction following the wake phrase, or None if only the wake phrase was spoken."""
+    if not text:
+        return None
+
+    for pattern in patterns:
+        match = pattern.search(text)
+        if match:
+            prefix = text[: match.start()].strip()
+            if len(prefix.split()) <= 1:
+                remainder = text[match.end() :].lstrip(" ,;:.-!?")
+                return remainder if remainder else None
+
+    return text.strip()
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -70,6 +88,7 @@ async def async_setup_entry(
 
     async_add_entities([ESPHomeSatelliteGatekeeperEntity(hass, entry, client)])
 
+
 class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
     """Conversation entity that guards downstream agents against ambient speech."""
 
@@ -86,6 +105,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         self._entry = entry
         self._client = client
         self._attr_unique_id = f"{entry.entry_id}_gatekeeper"
+        self._active_followup_convs: dict[str, float] = {}
+        self._active_followup_satellites: dict[str, float] = {}
 
     @property
     def supported_languages(self) -> list[str]:
@@ -100,6 +121,19 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         # Bypass gatekeeper for non-satellite inputs (e.g. text typed in dashboard)
         if not satellite_id:
             return await self._delegate_downstream(user_input)
+
+        now = time.monotonic()
+        conv_id = user_input.conversation_id
+        is_followup = False
+        if conv_id and conv_id in self._active_followup_convs:
+            if (now - self._active_followup_convs[conv_id]) < 30.0:
+                is_followup = True
+            self._active_followup_convs.pop(conv_id, None)
+
+        if not is_followup and satellite_id in self._active_followup_satellites:
+            if (now - self._active_followup_satellites[satellite_id]) < 30.0:
+                is_followup = True
+            self._active_followup_satellites.pop(satellite_id, None)
 
         # Resolve satellite slot, wake word, and active threshold
         slot_index, wake_word = self._resolve_satellite_context(satellite_id)
@@ -116,8 +150,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
 
         # Fast-Path Wake Word Enforcement:
         # Utterances lacking the wake word or its phonetic variants are dropped immediately
-        # with zero latency, zero tokens, and zero downstream calls.
-        if self._is_wake_word_enforced():
+        # with zero latency, zero tokens, and zero downstream calls, unless in an active follow-up turn.
+        if self._is_wake_word_enforced() and not is_followup:
             if not self._check_wake_word_present(text, slot_index, wake_word):
                 _LOGGER.info(
                     "[Gatekeeper] DROPPED utterance on satellite %s (Slot %d, wake='%s'): missing wake word in '%s'",
@@ -128,13 +162,47 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 )
                 return self._create_silent_drop_result(user_input)
 
+        # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
+        slot_pattern = self._get_slot_wake_pattern(slot_index)
+        if not is_followup:
+            instruction = extract_instruction_after_wake(text, [slot_pattern])
+            if instruction is None:
+                _LOGGER.info(
+                    "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
+                    satellite_id,
+                    slot_index + 1,
+                    wake_word,
+                )
+                await self._notify_wake_word_verified(satellite_id)
+                if conv_id:
+                    self._active_followup_convs[conv_id] = now
+                self._active_followup_satellites[satellite_id] = now
+                resp = intent.IntentResponse(language=user_input.language)
+                resp.async_set_speech("Yes?")
+                return ConversationResult(
+                    response=resp,
+                    conversation_id=user_input.conversation_id,
+                    continue_conversation=True,
+                )
+            eval_text = text
+        else:
+            # In follow-up mode, the turn is an active response to the assistant prompt
+            _LOGGER.info(
+                "[Gatekeeper] Passing active follow-up turn on satellite %s (Slot %d): '%s'",
+                satellite_id,
+                slot_index + 1,
+                text,
+            )
+            await self._notify_wake_word_verified(satellite_id)
+            return await self._delegate_downstream(user_input)
+
         threshold = self._get_slot_threshold(slot_index)
         question_template = self._select_question_template(slot_index, wake_word)
 
         # Evaluate through System 1
         try:
             choice, confidence, rtt_ms = await self._client.classify_addressing(
-                text=text,
+                text=eval_text,
                 question_text=question_template,
                 min_confidence=threshold,
             )
@@ -245,46 +313,86 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         try:
             from homeassistant.helpers import entity_registry as er
             ent_reg = er.async_get(self.hass)
-            entry = ent_reg.async_get(satellite_id)
-            if not entry or not entry.config_entry_id:
-                return
+            entry = ent_reg.async_get(satellite_id) if satellite_id else None
 
-            config_entry = self.hass.config_entries.async_get_entry(entry.config_entry_id)
-            if not config_entry or config_entry.domain != "esphome":
-                return
+            services = self.hass.services.async_services().get("esphome", {})
+            target_svc: str | None = None
 
-            device_name = config_entry.data.get("device_name")
-            if not device_name:
-                return
+            if entry and entry.config_entry_id:
+                config_entry = self.hass.config_entries.async_get_entry(entry.config_entry_id)
+                if config_entry and config_entry.domain == "esphome":
+                    device_name = str(config_entry.data.get("device_name") or getattr(config_entry, "title", "")).lower()
+                    mac_match = re.search(r"([0-9a-fA-F]{6})", device_name)
+                    if not mac_match and entry.unique_id:
+                        clean_uid = entry.unique_id.replace(":", "").lower()
+                        mac_match = re.search(r"([0-9a-fA-F]{6})", clean_uid)
+                    mac_suffix = mac_match.group(1).lower() if mac_match else ""
 
-            service_prefix = device_name.replace("-", "_")
-            service_name = f"{service_prefix}_wake_word_verified"
+                    service_prefix = device_name.replace("-", "_")
+                    candidate = f"{service_prefix}_wake_word_verified"
+                    if candidate in services:
+                        target_svc = candidate
+                    elif mac_suffix:
+                        for svc in services:
+                            if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
+                                target_svc = svc
+                                break
 
-            if self.hass.services.has_service("esphome", service_name):
-                await self.hass.services.async_call(
-                    "esphome",
-                    service_name,
-                    blocking=False,
+            # If target_svc was not found via config entry, check satellite_id string for MAC
+            if not target_svc and satellite_id:
+                mac_match = re.search(r"([0-9a-fA-F]{6})", satellite_id)
+                if mac_match:
+                    mac_suffix = mac_match.group(1).lower()
+                    for svc in services:
+                        if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
+                            target_svc = svc
+                            break
+
+            if target_svc:
+                await self.hass.services.async_call("esphome", target_svc, blocking=False)
+                _LOGGER.info(
+                    "[Gatekeeper] Notified satellite %s via %s", satellite_id, target_svc
                 )
-                _LOGGER.debug(
-                    "[Gatekeeper] Notified satellite %s via %s", satellite_id, service_name
-                )
+            else:
+                # Fallback broadcast to any registered wake_word_verified service
+                for svc in services:
+                    if svc.endswith("_wake_word_verified"):
+                        await self.hass.services.async_call("esphome", svc, blocking=False)
+                        _LOGGER.info(
+                            "[Gatekeeper] Broadcast wake_word_verified via %s", svc
+                        )
         except Exception as err:
             _LOGGER.debug("[Gatekeeper] Could not notify satellite %s: %s", satellite_id, err)
 
     def _resolve_satellite_context(self, satellite_id: str) -> tuple[int, str]:
         """Extract active pipeline slot (0-indexed) and wake word from satellite entity."""
-        # 1. Inspect assist_satellite entity state or attributes
-        satellite_entity = self.hass.states.get(satellite_id)
         active_slot = 0
         wake_word = ""
 
+        # 1. Inspect assist_satellite entity state or attributes
+        satellite_entity = self.hass.states.get(satellite_id)
         if satellite_entity:
-            # Check internal or attribute active pipeline index
             active_slot = satellite_entity.attributes.get("active_pipeline_index", 0)
             wake_word = satellite_entity.attributes.get("wake_word", "")
 
-        # 2. Check dedicated slot sensor if published
+        # 2. Check dedicated slot sensor via device registry linkage
+        try:
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry = ent_reg.async_get(satellite_id)
+            if entry and entry.device_id:
+                for dev_entry in er.async_entries_for_device(ent_reg, entry.device_id):
+                    if dev_entry.domain == "sensor" and "active_assistant_slot" in dev_entry.entity_id:
+                        slot_sensor = self.hass.states.get(dev_entry.entity_id)
+                        if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
+                            try:
+                                return (max(0, int(float(slot_sensor.state)) - 1), wake_word)
+                            except (ValueError, TypeError):
+                                pass
+        except Exception as err:
+            _LOGGER.debug("[Gatekeeper] Device-linked slot sensor lookup failed: %s", err)
+
+        # 3. Fallback candidate checks by entity name or MAC suffix
         sat_part = satellite_id.split(".")[-1]
         slot_sensor_candidates = [
             f"sensor.{sat_part}_active_assistant_slot",

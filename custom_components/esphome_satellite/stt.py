@@ -287,11 +287,14 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         async def _tee_audio_stream() -> AsyncGenerator[bytes, None]:
             try:
                 async for chunk in stream:
-                    if not chunk_queue.full():
+                    if not verified_event.is_set() and not chunk_queue.full():
                         chunk_queue.put_nowait(chunk)
                     yield chunk
             finally:
-                await chunk_queue.put(b"")  # EOF sentinel
+                try:
+                    chunk_queue.put_nowait(b"")  # EOF sentinel
+                except asyncio.QueueFull:
+                    pass
 
         # Step 2: Spawn background speculative evaluation loop
         speculative_task = asyncio.create_task(
@@ -383,28 +386,41 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     sample_width=bytes_per_sample,
                 )
 
-                if partial_text and len(partial_text.split()) >= 2:
-                    try:
-                        choice, conf, rtt_ms = await self._client.classify_addressing(
-                            text=partial_text,
-                            question_text=QUESTION_TEMPLATE_GENERAL,
-                            min_confidence=0.80,
-                        )
-                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.80:
-                            _LOGGER.info(
-                                "[Speculative STT] Early address confirmed (conf=%.2f in %.1fms): '%s'",
-                                conf,
-                                rtt_ms,
-                                partial_text,
+                if partial_text:
+                    patterns = self._get_active_wake_patterns()
+                    matched_wake = any(p.search(partial_text) for p in patterns)
+
+                    if len(partial_text.split()) >= 2:
+                        try:
+                            choice, conf, rtt_ms = await self._client.classify_addressing(
+                                text=partial_text,
+                                question_text=QUESTION_TEMPLATE_GENERAL,
+                                min_confidence=0.80,
                             )
-                            verified_event.set()
-                            await self._notify_satellite_verified()
-                            break  # Terminate speculative loop once verified
-                    except (SystemOneClientError, Exception) as err:
-                        _LOGGER.debug(
-                            "[Speculative STT] Speculative classification check failed: %s",
-                            err,
+                            if (choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.80) or matched_wake:
+                                _LOGGER.info(
+                                    "[Speculative STT] Early address confirmed (conf=%.2f in %.1fms, wake=%s): '%s'",
+                                    conf,
+                                    rtt_ms,
+                                    matched_wake,
+                                    partial_text,
+                                )
+                                verified_event.set()
+                                await self._notify_satellite_verified()
+                                break  # Terminate speculative loop once verified
+                        except (SystemOneClientError, Exception) as err:
+                            _LOGGER.debug(
+                                "[Speculative STT] Speculative classification check failed: %s",
+                                err,
+                            )
+                    elif matched_wake:
+                        _LOGGER.info(
+                            "[Speculative STT] Early wake word pattern confirmed: '%s'",
+                            partial_text,
                         )
+                        verified_event.set()
+                        await self._notify_satellite_verified()
+                        break
 
     async def _transcribe_partial_slice(
         self,
@@ -456,24 +472,25 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             except Exception:
                 pass
 
-        if not candidates:
+        notified = False
+        for sat_id in candidates:
+            if await self._notify_single_satellite(sat_id):
+                notified = True
+
+        if not notified:
             # Fallback: broadcast to any esphome.*_wake_word_verified services
             try:
                 services = self.hass.services.async_services().get("esphome", {})
                 for svc_name in services:
                     if svc_name.endswith("_wake_word_verified"):
                         await self.hass.services.async_call("esphome", svc_name, blocking=False)
-                        _LOGGER.debug(
+                        _LOGGER.info(
                             "[Speculative STT] Broadcast wake_word_verified via %s", svc_name
                         )
             except Exception as err:
                 _LOGGER.debug("[Speculative STT] Broadcast service call failed: %s", err)
-            return
 
-        for sat_id in candidates:
-            await self._notify_single_satellite(sat_id)
-
-    async def _notify_single_satellite(self, satellite_id: str) -> None:
+    async def _notify_single_satellite(self, satellite_id: str) -> bool:
         """Notify a single satellite device via its esphome wake_word_verified service."""
         try:
             from homeassistant.helpers import entity_registry as er
@@ -481,31 +498,42 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             ent_reg = er.async_get(self.hass)
             entry = ent_reg.async_get(satellite_id)
             if not entry or not entry.config_entry_id:
-                return
+                return False
 
             config_entry = self.hass.config_entries.async_get_entry(entry.config_entry_id)
             if not config_entry or config_entry.domain != "esphome":
-                return
+                return False
 
-            device_name = config_entry.data.get("device_name")
+            device_name = str(config_entry.data.get("device_name") or getattr(config_entry, "title", "")).lower()
             if not device_name:
-                return
+                return False
+
+            mac_match = re.search(r"([0-9a-fA-F]{6})", device_name)
+            mac_suffix = mac_match.group(1).lower() if mac_match else ""
+
+            services = self.hass.services.async_services().get("esphome", {})
+            target_svc: str | None = None
 
             service_prefix = device_name.replace("-", "_")
-            service_name = f"{service_prefix}_wake_word_verified"
+            candidate = f"{service_prefix}_wake_word_verified"
+            if (hasattr(self.hass.services, "has_service") and self.hass.services.has_service("esphome", candidate)) or candidate in services:
+                target_svc = candidate
+            elif mac_suffix:
+                for svc in services:
+                    if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
+                        target_svc = svc
+                        break
 
-            if self.hass.services.has_service("esphome", service_name):
-                await self.hass.services.async_call(
-                    "esphome",
-                    service_name,
-                    blocking=False,
-                )
-                _LOGGER.debug(
-                    "[Speculative STT] Notified satellite %s via %s",
+            if target_svc:
+                await self.hass.services.async_call("esphome", target_svc, blocking=False)
+                _LOGGER.info(
+                    "[Speculative STT] Successfully notified satellite %s via %s",
                     satellite_id,
-                    service_name,
+                    target_svc,
                 )
+                return True
         except Exception as err:
             _LOGGER.debug(
                 "[Speculative STT] Could not notify satellite %s: %s", satellite_id, err
             )
+        return False
