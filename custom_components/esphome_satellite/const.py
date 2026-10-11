@@ -18,6 +18,9 @@ CONF_SLOT2_PATTERNS: Final = "slot2_patterns"
 CONF_TIMEOUT_SECONDS: Final = "timeout_seconds"
 CONF_FALLBACK_BEHAVIOR: Final = "fallback_behavior"
 CONF_ENFORCE_WAKE_WORD: Final = "enforce_wake_word"
+CONF_DOWNSTREAM_STT: Final = "downstream_stt"
+CONF_SPECULATIVE_CHUNK_MS: Final = "speculative_chunk_ms"
+CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
 
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
@@ -26,6 +29,9 @@ DEFAULT_THRESHOLD: Final = 0.60
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
 DEFAULT_ENFORCE_WAKE_WORD: Final = True
+DEFAULT_DOWNSTREAM_STT: Final = "stt.faster_whisper"
+DEFAULT_SPECULATIVE_CHUNK_MS: Final = 500
+DEFAULT_EARLY_WAKE_VERIFICATION: Final = True
 
 # Decision Classification Choices & Criteria
 CHOICE_ADDRESSED: Final = "addressed"
