@@ -42,8 +42,6 @@ from .const import (
     DEFAULT_THRESHOLD,
     DEFAULT_TIMEOUT,
     QUESTION_TEMPLATE_GENERAL,
-    REGEX_WAKE_WORD_CLEMENS,
-    REGEX_WAKE_WORD_NABU,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -77,7 +75,7 @@ def trim_wake_word(text: str, custom_patterns: list[re.Pattern] | None = None) -
     if not text:
         return ""
 
-    patterns = custom_patterns or [REGEX_WAKE_WORD_CLEMENS, REGEX_WAKE_WORD_NABU]
+    patterns = custom_patterns or []
     for pattern in patterns:
         match = pattern.search(text)
         if match:
@@ -255,8 +253,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         return None
 
     def _get_active_wake_patterns(self) -> list[re.Pattern]:
-        """Get compiled wake word regex patterns for trimming."""
-        patterns = [REGEX_WAKE_WORD_CLEMENS, REGEX_WAKE_WORD_NABU]
+        """Get compiled wake word regex patterns for trimming if user-configured."""
+        patterns: list[re.Pattern] = []
         for key in (CONF_SLOT1_PATTERNS, CONF_SLOT2_PATTERNS):
             custom = self._entry.options.get(key, self._entry.data.get(key, ""))
             if custom:
@@ -386,41 +384,28 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     sample_width=bytes_per_sample,
                 )
 
-                if partial_text:
-                    patterns = self._get_active_wake_patterns()
-                    matched_wake = any(p.search(partial_text) for p in patterns)
-
-                    if len(partial_text.split()) >= 2:
-                        try:
-                            choice, conf, rtt_ms = await self._client.classify_addressing(
-                                text=partial_text,
-                                question_text=QUESTION_TEMPLATE_GENERAL,
-                                min_confidence=0.80,
-                            )
-                            if (choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.80) or matched_wake:
-                                _LOGGER.info(
-                                    "[Speculative STT] Early address confirmed (conf=%.2f in %.1fms, wake=%s): '%s'",
-                                    conf,
-                                    rtt_ms,
-                                    matched_wake,
-                                    partial_text,
-                                )
-                                verified_event.set()
-                                await self._notify_satellite_verified()
-                                break  # Terminate speculative loop once verified
-                        except (SystemOneClientError, Exception) as err:
-                            _LOGGER.debug(
-                                "[Speculative STT] Speculative classification check failed: %s",
-                                err,
-                            )
-                    elif matched_wake:
-                        _LOGGER.info(
-                            "[Speculative STT] Early wake word pattern confirmed: '%s'",
-                            partial_text,
+                if partial_text and len(partial_text.split()) >= 2:
+                    try:
+                        choice, conf, rtt_ms = await self._client.classify_addressing(
+                            text=partial_text,
+                            question_text=QUESTION_TEMPLATE_GENERAL,
+                            min_confidence=0.80,
                         )
-                        verified_event.set()
-                        await self._notify_satellite_verified()
-                        break
+                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.80:
+                            _LOGGER.info(
+                                "[Speculative STT] Early address confirmed by System 1 (conf=%.2f in %.1fms): '%s'",
+                                conf,
+                                rtt_ms,
+                                partial_text,
+                            )
+                            verified_event.set()
+                            await self._notify_satellite_verified()
+                            break  # Terminate speculative loop once verified
+                    except (SystemOneClientError, Exception) as err:
+                        _LOGGER.debug(
+                            "[Speculative STT] Speculative classification check failed: %s",
+                            err,
+                        )
 
     async def _transcribe_partial_slice(
         self,

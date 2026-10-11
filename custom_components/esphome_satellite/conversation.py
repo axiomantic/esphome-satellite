@@ -43,8 +43,6 @@ from .const import (
     QUESTION_TEMPLATE_GENERAL,
     QUESTION_TEMPLATE_SLOT1,
     QUESTION_TEMPLATE_SLOT2,
-    REGEX_WAKE_WORD_CLEMENS,
-    REGEX_WAKE_WORD_NABU,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -267,42 +265,6 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             return reported_wake_word
         return f"Assistant Slot {slot_index + 1}"
 
-    def _get_slot_wake_pattern(self, slot_index: int) -> re.Pattern:
-        """Get compiled regex pattern for slot wake word verification."""
-        options = self._entry.options
-        data = self._entry.data
-
-        custom_pattern = options.get(
-            CONF_SLOT1_PATTERNS if slot_index == 0 else CONF_SLOT2_PATTERNS,
-            data.get(CONF_SLOT1_PATTERNS if slot_index == 0 else CONF_SLOT2_PATTERNS, ""),
-        )
-        if custom_pattern:
-            try:
-                return re.compile(custom_pattern, re.IGNORECASE)
-            except re.error as err:
-                _LOGGER.error("[Gatekeeper] Invalid custom regex for Slot %d: %s", slot_index + 1, err)
-
-        if slot_index == 0:
-            return REGEX_WAKE_WORD_CLEMENS
-        return REGEX_WAKE_WORD_NABU
-
-    def _check_wake_word_present(self, text: str, slot_index: int, wake_word: str) -> bool:
-        """Verify the transcript contains the active satellite's wake word or phonetic approximations."""
-        # 1. Check configured / built-in slot pattern
-        slot_pattern = self._get_slot_wake_pattern(slot_index)
-        if slot_pattern.search(text):
-            return True
-
-        # 2. Check dynamic match against reported wake_word attribute if present
-        if wake_word:
-            cleaned = re.escape(wake_word.strip().lower())
-            dynamic_pattern = re.compile(r"\b(?:(?:hey|okay|ok)\s+)?" + cleaned + r"\b", re.IGNORECASE)
-            if dynamic_pattern.search(text):
-                return True
-
-        # 3. Check alternate slot pattern
-        alt_pattern = self._get_slot_wake_pattern(1 if slot_index == 0 else 0)
-        return bool(alt_pattern.search(text))
 
     async def _notify_wake_word_verified(self, satellite_id: str) -> None:
         """Signal the ESPHome satellite that wake word / addressing was verified."""
