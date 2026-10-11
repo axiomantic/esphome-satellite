@@ -99,7 +99,7 @@ If the utterance was ambient chatter (e.g., *"We were reading Mark Twain yesterd
    - **Downstream Conversation Agent**: Select your existing Conversation Agent (e.g., `conversation.openai`, `conversation.fireworks_ai`, or `conversation.home_assistant`).
    - **System 1 Endpoint URL**: The HTTP URL of your System 1 inference endpoint (e.g., `http://10.0.0.10:8000/v1/systemone`).
    - **API Bearer Token**: (Optional) Bearer token if your System 1 server requires authentication.
-   - **Default Threshold**: Minimum confidence score required to approve an utterance (default: `0.60`).
+    - **Default Threshold**: Minimum confidence score required to approve an utterance (calibrated default: `0.50`).
 5. Click **Submit**. The integration entity will appear as `conversation.<title>`.
 
 ### 2. Configure Options Flow
@@ -109,12 +109,12 @@ To customize thresholds, patterns, or behaviors at any time:
 2. Click **Configure** (the gear icon):
    - **Downstream Conversation Agent**: Switch or update the target LLM.
    - **System 1 URL & Token**: Update endpoint credentials without restarting.
-   - **Enforce Wake Word Presence (Fast-Path Rejection)**: When enabled (default: `true`), transcripts that lack the expected wake word or its phonetic variants are dropped immediately.
+   - **Enforce Wake Word Presence**: When enabled, transcripts that lack the expected wake word or its phonetic variants are dropped immediately. When disabled (recommended when relying on neural classification), all utterances are evaluated directly by System 1.
    - **Slot 1 Gatekeeper Enabled**: Toggle gating for Slot 1 (primary wake word).
-   - **Slot 1 Confidence Threshold**: Minimum confidence for Slot 1 (0.10 to 0.95, default: `0.60`).
+   - **Slot 1 Confidence Threshold**: Minimum confidence for Slot 1 (0.10 to 0.95, default: `0.50`).
    - **Slot 1 Custom Wake Word Regex**: (Optional) Custom regular expression for Slot 1.
    - **Slot 2 Gatekeeper Enabled**: Toggle gating for Slot 2 (secondary wake word).
-   - **Slot 2 Confidence Threshold**: Minimum confidence for Slot 2 (0.10 to 0.95, default: `0.60`).
+   - **Slot 2 Confidence Threshold**: Minimum confidence for Slot 2 (0.10 to 0.95, default: `0.50`).
    - **Slot 2 Custom Wake Word Regex**: (Optional) Custom regular expression for Slot 2.
    - **Classification Timeout**: Timeout in seconds for System 1 requests (default: `2.5s`).
    - **Fallback Policy**:
