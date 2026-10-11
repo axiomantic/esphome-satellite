@@ -678,13 +678,14 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             mock_delegate.assert_not_called()
             self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
 
-    async def test_gatekeeper_fast_path_wake_word_rejection(self):
-        """Utterances lacking wake word are dropped immediately with zero System 1 calls."""
+    async def test_gatekeeper_delegates_to_system_one_without_regex_drop(self):
+        """Utterances without explicit wake word are not regex-dropped; they delegate directly to System 1."""
         mock_entry = MagicMock()
         mock_entry.entry_id = "test_entry"
         mock_entry.options = {}
         mock_entry.data = {}
         mock_client = AsyncMock()
+        mock_client.classify_addressing.return_value = ("ambient", 0.90, 12.0)
 
         entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, mock_entry, mock_client)
 
@@ -692,7 +693,7 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
         sat_state.attributes = {"active_pipeline_index": 0, "wake_word": "clemens"}
         self.mock_hass.states.get.return_value = sat_state
 
-        naked_commands = [
+        utterances = [
             "turn off the kitchen lights",
             "set a timer for 15 minutes",
             "white rice and roti",
@@ -700,8 +701,9 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             "Mr. Business is a funny cat",
         ]
 
-        for text in naked_commands:
+        for text in utterances:
             mock_client.classify_addressing.reset_mock()
+            mock_client.classify_addressing.return_value = ("ambient", 0.90, 12.0)
             user_input = MagicMock()
             user_input.text = text
             user_input.satellite_id = "assist_satellite.living_room"
@@ -710,10 +712,10 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
 
             result = await entity.async_process(user_input)
 
-            # Fast-path drops with empty speech
+            # Dropped because System 1 classified as ambient, NOT by regex pre-filter
             self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
-            # System 1 was never invoked
-            mock_client.classify_addressing.assert_not_called()
+            # System 1 was invoked directly
+            mock_client.classify_addressing.assert_called_once()
 
     async def test_gatekeeper_wake_word_soundalikes_accepted(self):
         """Phonetic approximations of Clemens / Mark Twain pass fast-path to System 1."""
@@ -808,12 +810,13 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
             result = await entity.async_process(user_input_custom)
             self.assertEqual(result, "delegated_custom")
 
-        # Naked commands on Slot 2 satellite must drop
+        # Ambient commands on Slot 2 satellite must drop
         naked_user_input = MagicMock()
         naked_user_input.text = "turn off the kitchen lights"
         naked_user_input.satellite_id = "assist_satellite.living_room_slot2"
         naked_user_input.language = "en"
         naked_user_input.conversation_id = "conv_naked"
+        mock_client.classify_addressing.return_value = ("ambient", 0.92, 14.0)
 
         result = await entity.async_process(naked_user_input)
         self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")

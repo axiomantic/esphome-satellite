@@ -148,45 +148,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
-        # Fast-Path Wake Word Enforcement:
-        # Utterances lacking the wake word or its phonetic variants are dropped immediately
-        # with zero latency, zero tokens, and zero downstream calls, unless in an active follow-up turn.
-        if self._is_wake_word_enforced() and not is_followup:
-            if not self._check_wake_word_present(text, slot_index, wake_word):
-                _LOGGER.info(
-                    "[Gatekeeper] DROPPED utterance on satellite %s (Slot %d, wake='%s'): missing wake word in '%s'",
-                    satellite_id,
-                    slot_index + 1,
-                    wake_word,
-                    text,
-                )
-                return self._create_silent_drop_result(user_input)
-
-        # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
-        slot_pattern = self._get_slot_wake_pattern(slot_index)
-        if not is_followup:
-            instruction = extract_instruction_after_wake(text, [slot_pattern])
-            if instruction is None:
-                _LOGGER.info(
-                    "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
-                    satellite_id,
-                    slot_index + 1,
-                    wake_word,
-                )
-                await self._notify_wake_word_verified(satellite_id)
-                if conv_id:
-                    self._active_followup_convs[conv_id] = now
-                self._active_followup_satellites[satellite_id] = now
-                resp = intent.IntentResponse(language=user_input.language)
-                resp.async_set_speech("Yes?")
-                return ConversationResult(
-                    response=resp,
-                    conversation_id=user_input.conversation_id,
-                    continue_conversation=True,
-                )
-            eval_text = text
-        else:
-            # In follow-up mode, the turn is an active response to the assistant prompt
+        # In follow-up mode, the turn is an active response to the assistant prompt
+        if is_followup:
             _LOGGER.info(
                 "[Gatekeeper] Passing active follow-up turn on satellite %s (Slot %d): '%s'",
                 satellite_id,
@@ -195,6 +158,41 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             )
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
+
+        # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
+        norm_text = re.sub(r"[^\w\s]", "", text.strip().lower())
+        norm_wake = re.sub(r"[^\w\s]", "", wake_word.strip().lower()) if wake_word else ""
+        words = norm_text.split()
+        wake_words = set(norm_wake.split()) if norm_wake else set()
+
+        is_wake_only = False
+        if not words:
+            is_wake_only = True
+        elif wake_words:
+            non_wake = [w for w in words if w not in wake_words and w not in ("hey", "ok", "okay", "hi", "hello", "yo")]
+            if len(non_wake) == 0:
+                is_wake_only = True
+
+        if is_wake_only:
+            _LOGGER.info(
+                "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
+                satellite_id,
+                slot_index + 1,
+                wake_word,
+            )
+            await self._notify_wake_word_verified(satellite_id)
+            if conv_id:
+                self._active_followup_convs[conv_id] = now
+            self._active_followup_satellites[satellite_id] = now
+            resp = intent.IntentResponse(language=user_input.language)
+            resp.async_set_speech("Yes?")
+            return ConversationResult(
+                response=resp,
+                conversation_id=user_input.conversation_id,
+                continue_conversation=True,
+            )
+
+        eval_text = text
 
         threshold = self._get_slot_threshold(slot_index)
         question_template = self._select_question_template(slot_index, wake_word)
@@ -267,9 +265,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         """Get the effective wake word label for the slot."""
         if reported_wake_word:
             return reported_wake_word
-        if slot_index == 0:
-            return "Mr. Clemens"
-        return "Okay Nabu"
+        return f"Assistant Slot {slot_index + 1}"
 
     def _get_slot_wake_pattern(self, slot_index: int) -> re.Pattern:
         """Get compiled regex pattern for slot wake word verification."""
