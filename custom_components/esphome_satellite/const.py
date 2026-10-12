@@ -25,7 +25,7 @@ CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = ""
-DEFAULT_THRESHOLD: Final = 0.80
+DEFAULT_THRESHOLD: Final = 0.50
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
 DEFAULT_ENFORCE_WAKE_WORD: Final = True
@@ -57,6 +57,22 @@ QUESTION_TEMPLATE_GENERAL: Final = (
     "it most likely is an instruction and everything following is the instruction. "
     "Is this utterance an instruction, command, request, or query intended for the smart assistant?"
 )
+
+QUESTION_TEMPLATE_WAKE_VERIFICATION: Final = (
+    "Does this speech recognition transcript contain the wake phrase '{wake_word}'?"
+)
+
+
+def make_wake_verification_criteria(wake_word: str) -> dict[str, str]:
+    """Generate dynamic criteria for System 1 phonetic wake phrase verification."""
+    return {
+        CHOICE_ADDRESSED: (
+            f"The wake phrase {wake_word} (or a phonetic equivalent, abbreviation, or homophone)."
+        ),
+        CHOICE_AMBIENT: (
+            "A different wake phrase, ambient conversation, or noise."
+        ),
+    }
 
 QUESTION_TEMPLATE_SLOT1: Final = (
     "This is raw speech-to-text (STT) from a voice satellite triggered on wake phrase '{wake_word}'. "

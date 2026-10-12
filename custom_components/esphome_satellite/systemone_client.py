@@ -39,17 +39,20 @@ class SystemOneClient:
         text: str,
         question_text: str,
         min_confidence: float = 0.60,
+        criteria: dict[str, str] | None = None,
     ) -> tuple[str, float, float]:
         """Classify whether the utterance is addressed or ambient conversation.
         
         Returns:
             tuple[choice, confidence, rtt_ms]
-            choice: 'addressed' | 'ambient_conversation'
+            choice: 'addressed' | 'ambient'
         """
         # Empty or purely whitespace text is never addressed
         stripped = text.strip()
         if not stripped:
             return (CHOICE_AMBIENT, 1.0, 0.0)
+
+        effective_criteria = criteria if criteria is not None else CLASSIFICATION_CRITERIA
 
         payload: dict[str, Any] = {
             "state": stripped,
@@ -57,10 +60,10 @@ class SystemOneClient:
                 "address_intent": {
                     "type": "choice",
                     "instructions": question_text,
-                    "criteria": CLASSIFICATION_CRITERIA,
+                    "criteria": effective_criteria,
                 }
             },
-            "min_confidence": min_confidence,
+            "min_confidence": 0.0,
         }
 
         headers = {"Content-Type": "application/json"}
@@ -104,7 +107,7 @@ class SystemOneClient:
                     # Support Laya answer_confidence, standard confidence, or probability lookup
                     probs = result.get("probabilities", {})
                     choice_prob = probs.get(choice, 0.0) if isinstance(probs, dict) else 0.0
-                    conf = float(result.get("answer_confidence", result.get("confidence", choice_prob)))
+                    conf = float(result.get("answer_confidence", choice_prob if choice_prob > 0.0 else result.get("confidence", 0.0)))
                     abstention = result.get("abstention", "passed")
                     if abstention == "abstained":
                         _LOGGER.info(
