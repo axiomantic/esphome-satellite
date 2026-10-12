@@ -14,10 +14,8 @@ from .const import (
     CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
     CONF_SLOT1_ENABLED,
-    CONF_SLOT1_PATTERNS,
     CONF_SLOT1_THRESHOLD,
     CONF_SLOT2_ENABLED,
-    CONF_SLOT2_PATTERNS,
     CONF_SLOT2_THRESHOLD,
     CONF_SPECULATIVE_CHUNK_MS,
     CONF_SYSTEMONE_TOKEN,
@@ -167,10 +165,6 @@ class ESPHomeSatelliteOptionsFlow(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.10, max=0.95, step=0.01, mode=selector.NumberSelectorMode.SLIDER)
                 ),
-                vol.Optional(
-                    CONF_SLOT1_PATTERNS,
-                    description={"suggested_value": options.get(CONF_SLOT1_PATTERNS, data.get(CONF_SLOT1_PATTERNS, ""))},
-                ): selector.TextSelector(),
                 vol.Required(
                     CONF_SLOT2_ENABLED,
                     default=options.get(CONF_SLOT2_ENABLED, True),
@@ -181,10 +175,6 @@ class ESPHomeSatelliteOptionsFlow(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.10, max=0.95, step=0.01, mode=selector.NumberSelectorMode.SLIDER)
                 ),
-                vol.Optional(
-                    CONF_SLOT2_PATTERNS,
-                    description={"suggested_value": options.get(CONF_SLOT2_PATTERNS, data.get(CONF_SLOT2_PATTERNS, ""))},
-                ): selector.TextSelector(),
                 vol.Required(
                     CONF_TIMEOUT_SECONDS,
                     default=options.get(CONF_TIMEOUT_SECONDS, data.get(CONF_TIMEOUT_SECONDS, DEFAULT_TIMEOUT)),

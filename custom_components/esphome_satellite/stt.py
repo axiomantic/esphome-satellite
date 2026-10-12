@@ -29,8 +29,6 @@ from .const import (
     CONF_DOWNSTREAM_STT,
     CONF_EARLY_WAKE_VERIFICATION,
     CONF_ENFORCE_WAKE_WORD,
-    CONF_SLOT1_PATTERNS,
-    CONF_SLOT2_PATTERNS,
     CONF_SPECULATIVE_CHUNK_MS,
     CONF_SYSTEMONE_TOKEN,
     CONF_SYSTEMONE_URL,
@@ -66,31 +64,6 @@ def pcm_to_wav(
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(pcm_data)
         return wav_io.getvalue()
-
-
-def trim_wake_word(text: str, custom_patterns: list[re.Pattern] | None = None) -> str:
-    """Trim wake word prefix from transcript if present, leaving the instruction.
-
-    If the wake phrase is detected near the start of the utterance (allowing
-    filler words like 'hey', 'um', 'please'), trims through the wake phrase
-    and any leading delimiters. If no wake word is found or if trimming would
-    result in an empty string, returns the original stripped text.
-    """
-    if not text:
-        return ""
-
-    patterns = custom_patterns or []
-    for pattern in patterns:
-        match = pattern.search(text)
-        if match:
-            # Check if match occurs near the beginning (at most 1 leading word)
-            prefix = text[: match.start()].strip()
-            if len(prefix.split()) <= 1:
-                remainder = text[match.end() :].lstrip(" ,;:.-!?")
-                if remainder:
-                    return remainder
-
-    return text.strip()
 
 
 async def async_setup_entry(
@@ -270,18 +243,6 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
         return None
 
-    def _get_active_wake_patterns(self) -> list[re.Pattern]:
-        """Get compiled wake word regex patterns for trimming if user-configured."""
-        patterns: list[re.Pattern] = []
-        for key in (CONF_SLOT1_PATTERNS, CONF_SLOT2_PATTERNS):
-            custom = self._entry.options.get(key, self._entry.data.get(key, ""))
-            if custom:
-                try:
-                    patterns.append(re.compile(custom, re.IGNORECASE))
-                except re.error:
-                    pass
-        return patterns
-
     async def async_process_audio_stream(
         self,
         metadata: SpeechMetadata,
@@ -322,34 +283,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             )
         )
 
-        # Step 3: Run downstream STT on primary stream
+        # Step 3: Run downstream STT on primary stream and return verbatim result intact
         try:
-            downstream_result = await downstream_entity.async_process_audio_stream(
+            return await downstream_entity.async_process_audio_stream(
                 metadata, _tee_audio_stream()
             )
-
-            # Step 4: If wake word enforcement is active (default), preserve the full
-            # transcript intact so Gatekeeper and downstream agents receive the complete
-            # utterance including the wake phrase.
-            # If enforcement is explicitly disabled and custom trimming patterns exist,
-            # trim wake word prefix from transcript.
-            if (
-                not self.enforce_wake_word
-                and downstream_result
-                and downstream_result.result == SpeechResultState.SUCCESS
-                and downstream_result.text
-            ):
-                patterns = self._get_active_wake_patterns()
-                if patterns:
-                    trimmed = trim_wake_word(downstream_result.text, patterns)
-                    _LOGGER.debug(
-                        "[Speculative STT] Post-speech trimmed: '%s' -> '%s'",
-                        downstream_result.text,
-                        trimmed,
-                    )
-                    return SpeechResult(text=trimmed, result=SpeechResultState.SUCCESS)
-
-            return downstream_result
 
         finally:
             if not speculative_task.done():
