@@ -141,7 +141,7 @@ class WakePartitionLoader {
     if (cancel_model != nullptr) {
       this->cancel_model_ = cancel_model;
       this->cancel_model_->enable();
-      this->cancel_model_->set_probability_cutoff(102);
+      this->cancel_model_->set_probability_cutoff(140);
       ESP_LOGI(TAG, "Initialized and enabled dedicated Cancel wake word model");
     }
     this->attach_ota_listener();
@@ -474,12 +474,12 @@ class WakePartitionLoader {
                (this->slot2_model_name_ == "Okay Nabu" ? this->slot2_sensitivity_.c_str() : this->slot1_sensitivity_.c_str()));
     }
     if (this->cancel_model_) {
-      this->cancel_model_->set_probability_cutoff(102);
-      ESP_LOGI(TAG, "Applied Cancel cutoff 102");
+      this->cancel_model_->set_probability_cutoff(140);
+      ESP_LOGI(TAG, "Applied Cancel cutoff 140");
     }
     for (auto &s : this->slots_) {
       if (s.model) {
-        uint8_t c = (s.name == "Cancel" || s.name == "cancel_keywords") ? 102 : get_cutoff_for_model(s.name, s.base_cutoff);
+        uint8_t c = (s.name == "Cancel" || s.name == "cancel_keywords") ? 140 : get_cutoff_for_model(s.name, s.base_cutoff);
         s.model->set_probability_cutoff(c);
         ESP_LOGI(TAG, "Applied '%s' cutoff %u", s.name.c_str(), c);
       }
