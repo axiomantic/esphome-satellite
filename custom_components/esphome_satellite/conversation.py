@@ -24,8 +24,10 @@ from .const import (
     CONF_DOWNSTREAM_AGENT,
     CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
+    CONF_SLOT1_ALIASES,
     CONF_SLOT1_ENABLED,
     CONF_SLOT1_THRESHOLD,
+    CONF_SLOT2_ALIASES,
     CONF_SLOT2_ENABLED,
     CONF_SLOT2_THRESHOLD,
     CONF_SYSTEMONE_TOKEN,
@@ -38,11 +40,9 @@ from .const import (
     DEFAULT_THRESHOLD,
     DEFAULT_TIMEOUT,
     DOMAIN,
-    QUESTION_TEMPLATE_GENERAL,
-    QUESTION_TEMPLATE_SLOT1,
-    QUESTION_TEMPLATE_SLOT2,
-    QUESTION_TEMPLATE_WAKE_VERIFICATION,
-    make_wake_verification_criteria,
+    expand_wake_phrase,
+    make_followup_prompt,
+    make_initial_prompt,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -133,6 +133,11 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 is_followup = True
             self._active_followup_satellites.pop(satellite_id, None)
 
+        if not is_followup and satellite_id:
+            sat_entity = self.hass.states.get(satellite_id)
+            if sat_entity and sat_entity.state in ("follow_up", "followup", "continuing"):
+                is_followup = True
+
         # Resolve satellite slot, wake word, and active threshold
         slot_index, wake_word = self._resolve_satellite_context(satellite_id)
         
@@ -146,27 +151,16 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
-        # In follow-up mode, the turn is an active response to the assistant prompt
-        if is_followup:
-            _LOGGER.info(
-                "[Gatekeeper] Passing active follow-up turn on satellite %s (Slot %d): '%s'",
-                satellite_id,
-                slot_index + 1,
-                text,
-            )
-            await self._notify_wake_word_verified(satellite_id)
-            return await self._delegate_downstream(user_input)
-
         eval_text = text
-
         threshold = self._get_slot_threshold(slot_index)
         target_ww = self._get_slot_wake_word(slot_index, wake_word)
-        if wake_word and target_ww and not target_ww.startswith("Assistant Slot"):
-            question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(wake_word=target_ww)
-            criteria = make_wake_verification_criteria(target_ww)
+        user_aliases = self._get_slot_user_aliases(slot_index)
+        all_aliases = expand_wake_phrase(target_ww, user_aliases)
+
+        if is_followup:
+            question_text, criteria = make_followup_prompt(target_ww)
         else:
-            question_text = self._select_question_template(slot_index, wake_word)
-            criteria = None
+            question_text, criteria = make_initial_prompt(target_ww, all_aliases)
 
         # Evaluate through System 1
         try:
@@ -199,9 +193,10 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         # Addressed utterance confirmed (Default-Drop / Fail-Closed)
         if choice in (CHOICE_ADDRESSED, "addressed") and confidence >= threshold:
             _LOGGER.info(
-                "[Gatekeeper] APPROVED addressed utterance on satellite %s (Slot %d, conf=%.2f, rtt=%.1fms): '%s'",
+                "[Gatekeeper] APPROVED addressed utterance on satellite %s (Slot %d, is_followup=%s, conf=%.2f, rtt=%.1fms): '%s'",
                 satellite_id,
                 slot_index + 1,
+                is_followup,
                 confidence,
                 rtt_ms,
                 text,
@@ -209,14 +204,14 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
 
             # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
-            wake_words = wake_word.split() if wake_word else []
+            wake_words = target_ww.split() if target_ww else []
             words = text.split()
-            if len(words) <= len(wake_words) + 1:
+            if not is_followup and len(words) <= len(wake_words) + 1:
                 _LOGGER.info(
                     "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
                     satellite_id,
                     slot_index + 1,
-                    wake_word,
+                    target_ww,
                 )
                 if conv_id:
                     self._active_followup_convs[conv_id] = now
@@ -400,12 +395,25 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
 
         return (active_slot, wake_word)
 
-    def _select_question_template(self, slot_index: int, wake_word: str) -> str:
-        """Select calibrated question template based on slot and wake word."""
-        target_ww = self._get_slot_wake_word(slot_index, wake_word)
+    def _get_slot_user_aliases(self, slot_index: int) -> list[str]:
+        """Retrieve user-configured phonetic aliases for specific slot."""
+        options = self._entry.options
+        data = self._entry.data
+        raw = ""
         if slot_index == 0:
-            return QUESTION_TEMPLATE_SLOT1.format(wake_word=target_ww)
-        return QUESTION_TEMPLATE_SLOT2.format(wake_word=target_ww)
+            raw = options.get(CONF_SLOT1_ALIASES, data.get(CONF_SLOT1_ALIASES, ""))
+            if not raw:
+                raw = options.get("slot1_patterns", data.get("slot1_patterns", ""))
+        elif slot_index == 1:
+            raw = options.get(CONF_SLOT2_ALIASES, data.get(CONF_SLOT2_ALIASES, ""))
+            if not raw:
+                raw = options.get("slot2_patterns", data.get("slot2_patterns", ""))
+
+        if isinstance(raw, list):
+            return [str(s).strip() for s in raw if str(s).strip()]
+        if isinstance(raw, str):
+            return [s.strip() for s in raw.split(",") if s.strip()]
+        return []
 
     def _get_slot_threshold(self, slot_index: int) -> float:
         """Retrieve threshold for specific slot, inheriting default threshold if not overridden."""
@@ -440,11 +448,12 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
 
     async def _delegate_downstream(self, user_input: ConversationInput) -> ConversationResult:
         """Delegate conversational turn to configured downstream conversation agent."""
+        satellite_id = getattr(user_input, "satellite_id", None)
         downstream_agent_id = self._entry.options.get(
             CONF_DOWNSTREAM_AGENT,
             self._entry.data.get(CONF_DOWNSTREAM_AGENT),
         )
-        return await conversation.async_converse(
+        res = await conversation.async_converse(
             hass=self.hass,
             text=user_input.text,
             conversation_id=user_input.conversation_id,
@@ -453,3 +462,16 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             agent_id=downstream_agent_id,
             device_id=user_input.device_id,
         )
+        if getattr(res, "continue_conversation", False):
+            now = time.monotonic()
+            conv_id = user_input.conversation_id or getattr(res, "conversation_id", None)
+            if conv_id:
+                self._active_followup_convs[conv_id] = now
+            if satellite_id:
+                self._active_followup_satellites[satellite_id] = now
+            _LOGGER.info(
+                "[Gatekeeper] Downstream agent requested continuous conversation. Registered follow-up for conv=%s, sat=%s",
+                conv_id,
+                satellite_id,
+            )
+        return res

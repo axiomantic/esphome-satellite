@@ -1,11 +1,14 @@
 """Speculative Streaming STT Proxy Entity for ESPHome Voice Satellites."""
 from __future__ import annotations
 
+import array
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterable
 import io
 import logging
+import math
 import re
+from typing import Final
 import wave
 
 from homeassistant.components.stt import (
@@ -14,6 +17,7 @@ from homeassistant.components.stt import (
     AudioCodecs,
     AudioFormats,
     AudioSampleRates,
+    SpeechAudioProcessing,
     SpeechMetadata,
     SpeechResult,
     SpeechResultState,
@@ -50,6 +54,12 @@ from .const import (
 from .systemone_client import SystemOneClient, SystemOneClientError
 
 _LOGGER = logging.getLogger(__name__)
+
+# Two-Phase Voice Activity & Silence Invariants
+INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 10.0  # Allow up to 10s post-wake pause before speech begins
+END_OF_SPEECH_SILENCE_SECONDS: Final = 3.0    # Allow up to 3.0s pause between words / end-of-speech
+MAX_RECORDING_TIMEOUT_SECONDS: Final = 30.0   # Hard ceiling for voice stream
+SPEECH_RMS_THRESHOLD: Final = 450.0           # Voice activity threshold for 16-bit PCM
 
 
 def pcm_to_wav(
@@ -165,6 +175,20 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         )
 
     @property
+    def audio_processing(self) -> SpeechAudioProcessing:
+        """Return audio processing configuration.
+
+        Disables external VAD so Home Assistant's VoiceCommandSegmenter does not cut off
+        the audio stream during post-wake hesitation pauses before user speech starts.
+        Two-phase VAD is handled directly by this entity.
+        """
+        return SpeechAudioProcessing(
+            requires_external_vad=False,
+            prefers_auto_gain_enabled=True,
+            prefers_noise_reduction_enabled=True,
+        )
+
+    @property
     def supported_languages(self) -> list[str]:
         """Return supported languages, delegating to downstream STT if available."""
         downstream = self._get_downstream_entity()
@@ -259,13 +283,73 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             )
             return SpeechResult(text=None, result=SpeechResultState.ERROR)
 
+        sample_rate = getattr(metadata, "sample_rate", 16000)
+        rate_hz = int(getattr(sample_rate, "value", sample_rate))
+        bit_rate = getattr(metadata, "bit_rate", 16)
+        bytes_per_sample = int(getattr(bit_rate, "value", bit_rate)) // 8
+        channels = getattr(metadata, "channel", 1)
+        num_channels = int(getattr(channels, "value", channels))
+        bytes_per_sec = max(1, rate_hz * bytes_per_sample * num_channels)
+
         chunk_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=128)
         verified_event = asyncio.Event()
 
-        # Step 1: Fork live generator into dual pipe
+        # Step 1: Fork live generator into dual pipe with two-phase VAD silence gating
         async def _tee_audio_stream() -> AsyncGenerator[bytes, None]:
+            in_speech = False
+            initial_silence_elapsed = 0.0
+            end_silence_elapsed = 0.0
+            total_elapsed = 0.0
+            speech_consec_chunks = 0
+
             try:
                 async for chunk in stream:
+                    if not chunk:
+                        continue
+
+                    chunk_sec = len(chunk) / bytes_per_sec
+                    total_elapsed += chunk_sec
+                    if total_elapsed >= MAX_RECORDING_TIMEOUT_SECONDS:
+                        _LOGGER.info(
+                            "[Speculative STT] Maximum recording duration (%.1fs) reached; terminating stream",
+                            MAX_RECORDING_TIMEOUT_SECONDS,
+                        )
+                        break
+
+                    chunk_rms = self._calculate_pcm_rms(chunk)
+                    is_speech = chunk_rms >= SPEECH_RMS_THRESHOLD
+
+                    if not in_speech:
+                        if is_speech:
+                            speech_consec_chunks += 1
+                            if speech_consec_chunks >= 3:
+                                in_speech = True
+                                _LOGGER.debug(
+                                    "[Speculative STT] Voice command started after %.2fs post-wake pause (RMS=%.1f)",
+                                    initial_silence_elapsed,
+                                    chunk_rms,
+                                )
+                        else:
+                            speech_consec_chunks = 0
+                            initial_silence_elapsed += chunk_sec
+                            if initial_silence_elapsed >= INITIAL_SPEECH_TIMEOUT_SECONDS:
+                                _LOGGER.info(
+                                    "[Speculative STT] Initial speech pause timeout (%.1fs) reached without speech; terminating stream",
+                                    INITIAL_SPEECH_TIMEOUT_SECONDS,
+                                )
+                                break
+                    else:
+                        if is_speech:
+                            end_silence_elapsed = 0.0
+                        else:
+                            end_silence_elapsed += chunk_sec
+                            if end_silence_elapsed >= END_OF_SPEECH_SILENCE_SECONDS:
+                                _LOGGER.info(
+                                    "[Speculative STT] End-of-speech silence (%.1fs) detected; completing stream",
+                                    END_OF_SPEECH_SILENCE_SECONDS,
+                                )
+                                break
+
                     if not verified_event.is_set() and not chunk_queue.full():
                         chunk_queue.put_nowait(chunk)
                     yield chunk
@@ -670,3 +754,19 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 "[Speculative STT] Could not notify satellite %s: %s", satellite_id, err
             )
         return False
+
+    @staticmethod
+    def _calculate_pcm_rms(chunk: bytes) -> float:
+        """Calculate Root Mean Square (RMS) amplitude for 16-bit PCM mono audio."""
+        if not chunk or len(chunk) < 2:
+            return 0.0
+        try:
+            samples = array.array("h")
+            samples.frombytes(chunk)
+            if not samples:
+                return 0.0
+            sum_sq = sum(s * s for s in samples)
+            return math.sqrt(sum_sq / len(samples))
+        except Exception:
+            return 0.0
+

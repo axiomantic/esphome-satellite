@@ -143,6 +143,12 @@ if "homeassistant" not in sys.modules:
         _attr_has_entity_name = True
         _attr_name = "STT"
 
+    class MockSpeechAudioProcessing:
+        def __init__(self, requires_external_vad=True, prefers_auto_gain_enabled=True, prefers_noise_reduction_enabled=True):
+            self.requires_external_vad = requires_external_vad
+            self.prefers_auto_gain_enabled = prefers_auto_gain_enabled
+            self.prefers_noise_reduction_enabled = prefers_noise_reduction_enabled
+
     sys.modules["homeassistant.components.stt"] = MagicMock()
     sys.modules["homeassistant.components.stt"].AudioFormats = MockAudioFormats
     sys.modules["homeassistant.components.stt"].AudioCodecs = MockAudioCodecs
@@ -153,6 +159,7 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.components.stt"].SpeechMetadata = MockSpeechMetadata
     sys.modules["homeassistant.components.stt"].SpeechResult = MockSpeechResult
     sys.modules["homeassistant.components.stt"].SpeechToTextEntity = MockSpeechToTextEntity
+    sys.modules["homeassistant.components.stt"].SpeechAudioProcessing = MockSpeechAudioProcessing
     def mock_get_stt_engine(hass, engine_id):
         if not hass or not hasattr(hass, "data"):
             return None
@@ -1747,8 +1754,62 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("or a command", QUESTION_TEMPLATE_SLOT1)
         self.assertNotIn("or a command", QUESTION_TEMPLATE_SLOT2)
 
+    def test_expand_wake_phrase_rule_based_and_additive_aliases(self):
+        """Verify rule-based orthographic expansions and additive user-configured aliases."""
+        from custom_components.esphome_satellite.const import expand_wake_phrase
+
+        # Test forward acronym: Jay Dee -> JD
+        jd_expanded = expand_wake_phrase("Hey Jay Dee Vance")
+        self.assertIn("Hey JD Vance", jd_expanded)
+        self.assertIn("Hey Jay Dee Vance", jd_expanded)
+
+        # Test title expansion: Mr. -> Mister
+        clemens_expanded = expand_wake_phrase("Mr. Clemens")
+        self.assertIn("Mister Clemens", clemens_expanded)
+        self.assertIn("Mr. Clemens", clemens_expanded)
+
+        # Test additive user aliases (default empty, additive when provided)
+        with_aliases = expand_wake_phrase("Hey Jay Dee Vance", ["A baby dance", "PJ Vance"])
+        self.assertIn("Hey JD Vance", with_aliases)
+        self.assertIn("Hey Jay Dee Vance", with_aliases)
+        self.assertIn("A baby dance", with_aliases)
+        self.assertIn("PJ Vance", with_aliases)
+
+    def test_prompt_factories_generic_and_followup(self):
+        """Verify initial and follow-up prompt structure conforms to requirements."""
+        from custom_components.esphome_satellite.const import (
+            CHOICE_ADDRESSED,
+            CHOICE_AMBIENT,
+            make_followup_prompt,
+            make_initial_prompt,
+        )
+
+        instr_init, crit_init = make_initial_prompt("Hey Jay Dee Vance", ["Hey JD Vance", "A baby dance"])
+        self.assertIn("Hey Jay Dee Vance", instr_init)
+        self.assertIn("Hey JD Vance", instr_init)
+        self.assertIn("A baby dance", instr_init)
+        self.assertIn(CHOICE_ADDRESSED, crit_init)
+        self.assertIn(CHOICE_AMBIENT, crit_init)
+
+        instr_follow, crit_follow = make_followup_prompt("Hey Jay Dee Vance")
+        self.assertIn("follow-up", instr_follow.lower())
+        self.assertIn("NOT need to repeat the wake word", instr_follow)
+        self.assertIn(CHOICE_ADDRESSED, crit_follow)
+        self.assertIn(CHOICE_AMBIENT, crit_follow)
+
+    def test_speech_audio_processing_requires_external_vad_disabled(self):
+        """Verify ESPHomeSatelliteSpeculativeSTT disables requires_external_vad."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        entry.options = {}
+        entry.data = {}
+        client = MagicMock()
+        stt_entity = ESPHomeSatelliteSpeculativeSTT(MagicMock(), entry, client)
+        self.assertFalse(stt_entity.audio_processing.requires_external_vad)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

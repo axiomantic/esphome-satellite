@@ -1390,7 +1390,7 @@ number:
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.58
+    initial_value: 0.50
     restore_value: true
     optimistic: true
     mode: slider
@@ -1408,7 +1408,7 @@ number:
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.58
+    initial_value: 0.50
     restore_value: true
     optimistic: true
     mode: slider
