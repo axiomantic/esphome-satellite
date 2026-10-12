@@ -42,6 +42,8 @@ from .const import (
     DEFAULT_THRESHOLD,
     DEFAULT_TIMEOUT,
     QUESTION_TEMPLATE_GENERAL,
+    QUESTION_TEMPLATE_WAKE_VERIFICATION,
+    make_wake_verification_criteria,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -335,6 +337,90 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 except asyncio.CancelledError:
                     pass
 
+    def _resolve_active_satellite_context(self) -> tuple[str | None, str | None]:
+        """Resolve the currently active assist_satellite entity ID and reported wake word.
+
+        Extracts the exact wake phrase reported by the hardware wake circuit.
+        Returns:
+            tuple[satellite_entity_id, reported_wake_word]
+        """
+        if not hasattr(self.hass.states, "async_all"):
+            return (None, None)
+
+        try:
+            # 1. Search for assist_satellite currently in active streaming/listening state
+            active_states = [
+                s for s in self.hass.states.async_all("assist_satellite")
+                if s.state in ("listening", "recording", "streaming")
+            ]
+            if not active_states:
+                all_sats = [
+                    s for s in self.hass.states.async_all("assist_satellite")
+                    if s.state not in ("unavailable", "unknown")
+                ]
+                if len(all_sats) == 1:
+                    active_states = all_sats
+
+            if not active_states:
+                return (None, None)
+
+            # Pick the most recently updated active satellite
+            sat_state = max(active_states, key=lambda s: getattr(s, "last_updated", 0))
+            sat_id = sat_state.entity_id
+
+            # 2. Extract reported wake word from entity attributes
+            wake_word = None
+            if isinstance(getattr(sat_state, "attributes", None), dict):
+                raw_ww = sat_state.attributes.get("wake_word")
+                if isinstance(raw_ww, str) and raw_ww.strip():
+                    wake_word = raw_ww.strip()
+            if wake_word:
+                return (sat_id, wake_word)
+
+            # 3. Check active slot sensor and select entities via device registry linkage
+            active_slot = sat_state.attributes.get("active_pipeline_index", 0)
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry = ent_reg.async_get(sat_id) if ent_reg else None
+            device_id = entry.device_id if entry else None
+
+            if device_id and ent_reg:
+                dev_entries = []
+                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
+                    res = ent_reg.async_entries_for_device(device_id)
+                    if isinstance(res, list):
+                        dev_entries = res
+                if not dev_entries and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
+                    try:
+                        res = er.async_entries_for_device(ent_reg, device_id)
+                        if isinstance(res, list):
+                            dev_entries = res
+                    except Exception:
+                        pass
+
+                for dev_entry in dev_entries:
+                    if dev_entry.domain == "sensor" and "active_assistant_slot" in dev_entry.entity_id:
+                        slot_state = self.hass.states.get(dev_entry.entity_id)
+                        if slot_state and slot_state.state not in (None, "unknown", "unavailable"):
+                            try:
+                                active_slot = max(0, int(float(slot_state.state)) - 1)
+                            except (ValueError, TypeError):
+                                pass
+
+                for dev_entry in dev_entries:
+                    if dev_entry.domain == "select":
+                        is_slot2 = "wake_word_2" in dev_entry.entity_id or "slot_2_wake_word" in dev_entry.entity_id
+                        is_slot1 = ("wake_word" in dev_entry.entity_id and not is_slot2) or "slot_1_wake_word" in dev_entry.entity_id
+                        if (active_slot == 1 and is_slot2) or (active_slot == 0 and is_slot1):
+                            ww_state = self.hass.states.get(dev_entry.entity_id)
+                            if ww_state and ww_state.state not in (None, "unknown", "unavailable", "no_wake_word"):
+                                return (sat_id, str(ww_state.state).strip())
+
+            return (sat_id, None)
+        except Exception as err:
+            _LOGGER.debug("[Speculative STT] Context resolution error: %s", err)
+            return (None, None)
+
     async def _speculative_verification_loop(
         self,
         metadata: SpeechMetadata,
@@ -357,6 +443,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         stride_bytes = int(bytes_per_second * 0.20)  # Re-evaluate every 200ms
         last_eval_len = 0
 
+        sat_id, target_wake_word = self._resolve_active_satellite_context()
+        _LOGGER.debug(
+            "[Speculative STT] Speculative verification started: sat_id=%s, target_wake_word=%s",
+            sat_id,
+            target_wake_word,
+        )
+
         while True:
             try:
                 chunk = await queue.get()
@@ -375,6 +468,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 and (len(pcm_accumulator) - last_eval_len) >= stride_bytes
             ):
                 last_eval_len = len(pcm_accumulator)
+
+                if not target_wake_word:
+                    sat_id, target_wake_word = self._resolve_active_satellite_context()
+
                 partial_text = await self._transcribe_partial_slice(
                     metadata=metadata,
                     pcm_data=bytes(pcm_accumulator),
@@ -384,22 +481,33 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     sample_width=bytes_per_sample,
                 )
 
-                if partial_text and len(partial_text.split()) >= 2:
+                if partial_text and len(partial_text.strip().split()) >= 1:
                     try:
+                        if target_wake_word:
+                            question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(
+                                wake_word=target_wake_word
+                            )
+                            criteria = make_wake_verification_criteria(target_wake_word)
+                        else:
+                            question_text = QUESTION_TEMPLATE_GENERAL
+                            criteria = None
+
                         choice, conf, rtt_ms = await self._client.classify_addressing(
                             text=partial_text,
-                            question_text=QUESTION_TEMPLATE_GENERAL,
-                            min_confidence=0.80,
+                            question_text=question_text,
+                            min_confidence=0.50,
+                            criteria=criteria,
                         )
-                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.80:
+                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.50:
                             _LOGGER.info(
-                                "[Speculative STT] Early address confirmed by System 1 (conf=%.2f in %.1fms): '%s'",
+                                "[Speculative STT] Phonetic wake verification confirmed by System 1 for '%s' (conf=%.2f in %.1fms): '%s'",
+                                target_wake_word or "assistant",
                                 conf,
                                 rtt_ms,
                                 partial_text,
                             )
                             verified_event.set()
-                            await self._notify_satellite_verified()
+                            await self._notify_satellite_verified(sat_id)
                             break  # Terminate speculative loop once verified
                     except (SystemOneClientError, Exception) as err:
                         _LOGGER.debug(
@@ -493,7 +601,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             if not device_name:
                 return False
 
-            mac_match = re.search(r"([0-9a-fA-F]{6})", device_name)
+            mac_match = re.search(r"([0-9a-fA-F]{6})", device_name) if isinstance(device_name, str) else None
+            uid = getattr(entry, "unique_id", None)
+            if not mac_match and isinstance(uid, str):
+                clean_uid = uid.replace(":", "").lower()
+                mac_match = re.search(r"([0-9a-fA-F]{6})", clean_uid)
             mac_suffix = mac_match.group(1).lower() if mac_match else ""
 
             services = self.hass.services.async_services().get("esphome", {})
@@ -506,6 +618,12 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             elif mac_suffix:
                 for svc in services:
                     if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
+                        target_svc = svc
+                        break
+
+            if not target_svc:
+                for svc in services:
+                    if svc.endswith("_wake_word_verified"):
                         target_svc = svc
                         break
 

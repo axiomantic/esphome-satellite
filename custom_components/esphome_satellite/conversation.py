@@ -43,6 +43,8 @@ from .const import (
     QUESTION_TEMPLATE_GENERAL,
     QUESTION_TEMPLATE_SLOT1,
     QUESTION_TEMPLATE_SLOT2,
+    QUESTION_TEMPLATE_WAKE_VERIFICATION,
+    make_wake_verification_criteria,
 )
 from .systemone_client import SystemOneClient, SystemOneClientError
 
@@ -157,50 +159,24 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
 
-        # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
-        norm_text = re.sub(r"[^\w\s]", "", text.strip().lower())
-        norm_wake = re.sub(r"[^\w\s]", "", wake_word.strip().lower()) if wake_word else ""
-        words = norm_text.split()
-        wake_words = set(norm_wake.split()) if norm_wake else set()
-
-        is_wake_only = False
-        if not words:
-            is_wake_only = True
-        elif wake_words:
-            non_wake = [w for w in words if w not in wake_words and w not in ("hey", "ok", "okay", "hi", "hello", "yo")]
-            if len(non_wake) == 0:
-                is_wake_only = True
-
-        if is_wake_only:
-            _LOGGER.info(
-                "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
-                satellite_id,
-                slot_index + 1,
-                wake_word,
-            )
-            await self._notify_wake_word_verified(satellite_id)
-            if conv_id:
-                self._active_followup_convs[conv_id] = now
-            self._active_followup_satellites[satellite_id] = now
-            resp = intent.IntentResponse(language=user_input.language)
-            resp.async_set_speech("Yes?")
-            return ConversationResult(
-                response=resp,
-                conversation_id=user_input.conversation_id,
-                continue_conversation=True,
-            )
-
         eval_text = text
 
         threshold = self._get_slot_threshold(slot_index)
-        question_template = self._select_question_template(slot_index, wake_word)
+        target_ww = self._get_slot_wake_word(slot_index, wake_word)
+        if wake_word and target_ww and not target_ww.startswith("Assistant Slot"):
+            question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(wake_word=target_ww)
+            criteria = make_wake_verification_criteria(target_ww)
+        else:
+            question_text = self._select_question_template(slot_index, wake_word)
+            criteria = None
 
         # Evaluate through System 1
         try:
             choice, confidence, rtt_ms = await self._client.classify_addressing(
                 text=eval_text,
-                question_text=question_template,
+                question_text=question_text,
                 min_confidence=threshold,
+                criteria=criteria,
             )
         except SystemOneClientError as err:
             fallback = self._entry.options.get(
@@ -233,6 +209,28 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 text,
             )
             await self._notify_wake_word_verified(satellite_id)
+
+            # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
+            wake_words = wake_word.split() if wake_word else []
+            words = text.split()
+            if len(words) <= len(wake_words) + 1:
+                _LOGGER.info(
+                    "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
+                    satellite_id,
+                    slot_index + 1,
+                    wake_word,
+                )
+                if conv_id:
+                    self._active_followup_convs[conv_id] = now
+                self._active_followup_satellites[satellite_id] = now
+                resp = intent.IntentResponse(language=user_input.language)
+                resp.async_set_speech("Yes?")
+                return ConversationResult(
+                    response=resp,
+                    conversation_id=user_input.conversation_id,
+                    continue_conversation=True,
+                )
+
             return await self._delegate_downstream(user_input)
 
         # Any utterance that is ambient, low-confidence, or abstained is silently dropped
@@ -339,16 +337,40 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             ent_reg = er.async_get(self.hass)
             entry = ent_reg.async_get(satellite_id)
             if entry and entry.device_id:
-                for dev_entry in er.async_entries_for_device(ent_reg, entry.device_id):
+                dev_entries = []
+                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
+                    res = ent_reg.async_entries_for_device(entry.device_id)
+                    if isinstance(res, list):
+                        dev_entries = res
+                if not dev_entries and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
+                    try:
+                        res = er.async_entries_for_device(ent_reg, entry.device_id)
+                        if isinstance(res, list):
+                            dev_entries = res
+                    except Exception:
+                        pass
+
+                for dev_entry in dev_entries:
                     if dev_entry.domain == "sensor" and "active_assistant_slot" in dev_entry.entity_id:
                         slot_sensor = self.hass.states.get(dev_entry.entity_id)
                         if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
                             try:
-                                return (max(0, int(float(slot_sensor.state)) - 1), wake_word)
+                                active_slot = max(0, int(float(slot_sensor.state)) - 1)
                             except (ValueError, TypeError):
                                 pass
+
+                if not wake_word:
+                    for dev_entry in dev_entries:
+                        if dev_entry.domain == "select":
+                            is_slot2 = "wake_word_2" in dev_entry.entity_id or "slot_2_wake_word" in dev_entry.entity_id
+                            is_slot1 = ("wake_word" in dev_entry.entity_id and not is_slot2) or "slot_1_wake_word" in dev_entry.entity_id
+                            if (active_slot == 1 and is_slot2) or (active_slot == 0 and is_slot1):
+                                ww_state = self.hass.states.get(dev_entry.entity_id)
+                                if ww_state and ww_state.state not in (None, "unknown", "unavailable", "no_wake_word"):
+                                    wake_word = str(ww_state.state).strip()
+                                    break
         except Exception as err:
-            _LOGGER.debug("[Gatekeeper] Device-linked slot sensor lookup failed: %s", err)
+            _LOGGER.debug("[Gatekeeper] Device-linked context lookup failed: %s", err)
 
         # 3. Fallback candidate checks by entity name or MAC suffix
         sat_part = satellite_id.split(".")[-1]

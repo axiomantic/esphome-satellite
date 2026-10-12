@@ -81,9 +81,10 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.helpers"].intent.IntentResponse = MockIntentResponse
 
     class MockConversationResult:
-        def __init__(self, response, conversation_id=None):
+        def __init__(self, response, conversation_id=None, continue_conversation=False):
             self.response = response
             self.conversation_id = conversation_id
+            self.continue_conversation = continue_conversation
 
     sys.modules["homeassistant.components.conversation"].ConversationResult = MockConversationResult
 
@@ -183,6 +184,7 @@ from custom_components.esphome_satellite.const import (
     CHOICE_ADDRESSED,
     CHOICE_AMBIENT,
     CLASSIFICATION_CRITERIA,
+    CONF_DEFAULT_THRESHOLD,
     CONF_DOWNSTREAM_AGENT,
     CONF_DOWNSTREAM_STT,
     CONF_EARLY_WAKE_VERIFICATION,
@@ -1467,6 +1469,260 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
         # 4. Frame alignment violation: even bytes, but not a multiple of 640 bytes (20ms)
         with self.assertRaisesRegex(ValueError, "Frame alignment violation"):
             validate_audio_frame_alignment(b"\x00" * 700)
+
+
+class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
+    """Test suite for dynamic phonetic wake phrase verification and context resolution."""
+
+    def setUp(self):
+        self.mock_hass = MagicMock()
+        self.mock_hass.states = MagicMock()
+        self.mock_hass.services = MagicMock()
+        self.mock_hass.data = {}
+
+        self.mock_entry = MagicMock()
+        self.mock_entry.entry_id = "test_entry_dynamic_wake"
+        self.mock_entry.data = {
+            CONF_SYSTEMONE_URL: "http://localhost:8000/v1/systemone",
+            CONF_DOWNSTREAM_STT: "stt.faster_whisper",
+            CONF_DOWNSTREAM_AGENT: "conversation.downstream_llm",
+            CONF_SPECULATIVE_CHUNK_MS: 500,
+            CONF_EARLY_WAKE_VERIFICATION: True,
+            CONF_DEFAULT_THRESHOLD: 0.5,
+        }
+        self.mock_entry.options = {}
+
+        self.mock_client = MagicMock(spec=SystemOneClient)
+
+    async def test_speculative_stt_phonetic_wake_verification(self):
+        """Verify speculative STT passes dynamic wake phrase to System 1 and fires satellite signal."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        mock_satellite_state.last_updated = 1000.0
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_reg_entry = MagicMock()
+        mock_reg_entry.config_entry_id = "esphome_living_room_entry"
+        mock_reg_entry.unique_id = "28:84:85:ba:2c:6c-assist_satellite"
+
+        mock_config_entry = MagicMock()
+        mock_config_entry.domain = "esphome"
+        mock_config_entry.data = {"device_name": "living-room"}
+
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get = MagicMock(return_value=mock_reg_entry)
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_ent_reg):
+            self.mock_hass.config_entries.async_get_entry = MagicMock(
+                return_value=mock_config_entry
+            )
+            self.mock_hass.services.has_service = MagicMock(return_value=True)
+            self.mock_hass.services.async_call = AsyncMock()
+
+            mock_downstream = MagicMock()
+
+            async def downstream_stream_handler(metadata, stream):
+                chunks = []
+                async for chunk in stream:
+                    chunks.append(chunk)
+                total_len = sum(len(c) for c in chunks)
+                if total_len >= 16000:
+                    return SpeechResult(text="Mister Clemens turn on the lights", result=SpeechResultState.SUCCESS)
+                return SpeechResult(text="Mister Clemens", result=SpeechResultState.SUCCESS)
+
+            mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_stream_handler)
+            self.mock_hass.data["stt"] = MagicMock()
+            self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+            # System 1 verifies phonetic match
+            self.mock_client.classify_addressing = AsyncMock(
+                return_value=(CHOICE_ADDRESSED, 0.75, 20.0)
+            )
+
+            stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+                self.mock_hass,
+                self.mock_entry,
+                self.mock_client,
+                speculative_chunk_ms=500,
+            )
+
+            async def audio_stream():
+                for _ in range(20):
+                    yield b"\x01\x02" * 512
+                    await asyncio.sleep(0.005)
+
+            metadata = SpeechMetadata()
+            result = await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+
+            # Verify System 1 was called with dynamic wake verification question and criteria
+            self.mock_client.classify_addressing.assert_called()
+            call_kwargs = self.mock_client.classify_addressing.call_args.kwargs
+            self.assertIn("Mr. Clemens", call_kwargs["question_text"])
+            self.assertIn("Mr. Clemens", call_kwargs["criteria"][CHOICE_ADDRESSED])
+
+            # Verify satellite service was called to transition FSM to StreamingSpeechVerified
+            self.mock_hass.services.async_call.assert_called_with(
+                "esphome",
+                "living_room_wake_word_verified",
+                blocking=False,
+            )
+
+    async def test_speculative_stt_context_resolution_from_device_registry(self):
+        """Verify wake word is dynamically resolved from device slot sensor and select entity."""
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {}  # Empty wake_word attribute
+        mock_satellite_state.last_updated = 1000.0
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_reg_entry = MagicMock()
+        mock_reg_entry.device_id = "dev_123"
+
+        dev_sensor = MagicMock()
+        dev_sensor.domain = "sensor"
+        dev_sensor.entity_id = "sensor.living_room_active_assistant_slot"
+
+        dev_select1 = MagicMock()
+        dev_select1.domain = "select"
+        dev_select1.entity_id = "select.living_room_wake_word"
+
+        dev_select2 = MagicMock()
+        dev_select2.domain = "select"
+        dev_select2.entity_id = "select.living_room_wake_word_2"
+
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get = MagicMock(return_value=mock_reg_entry)
+        mock_ent_reg.async_entries_for_device = MagicMock(
+            return_value=[dev_sensor, dev_select1, dev_select2]
+        )
+
+        # Slot 2 is active
+        mock_slot_state = MagicMock()
+        mock_slot_state.state = "2.0"
+
+        # Slot 2 wake word is Hey Computer
+        mock_ww2_state = MagicMock()
+        mock_ww2_state.state = "Hey Computer"
+
+        def mock_get_state(entity_id):
+            if entity_id == "sensor.living_room_active_assistant_slot":
+                return mock_slot_state
+            if entity_id == "select.living_room_wake_word_2":
+                return mock_ww2_state
+            return None
+
+        self.mock_hass.states.get = MagicMock(side_effect=mock_get_state)
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_ent_reg):
+            stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+                self.mock_hass,
+                self.mock_entry,
+                self.mock_client,
+            )
+            sat_id, target_ww = stt_proxy._resolve_active_satellite_context()
+            self.assertEqual(sat_id, "assist_satellite.living_room")
+            self.assertEqual(target_ww, "Hey Computer")
+
+    async def test_gatekeeper_wake_and_pause_handling(self):
+        """Verify Gatekeeper recognizes wake-and-pause prompt and opens follow-up."""
+        gatekeeper = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.get = MagicMock(return_value=mock_satellite_state)
+
+        # System 1 confirms phonetic wake phrase is present
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 0.77, 20.0)
+        )
+
+        user_input = MagicMock()
+        user_input.text = "Mr. Clemens"
+        user_input.satellite_id = "assist_satellite.living_room"
+        user_input.conversation_id = "conv_123"
+        user_input.language = "en"
+
+        with patch.object(gatekeeper, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify:
+            result = await gatekeeper.async_process(user_input)
+
+            mock_notify.assert_called_with("assist_satellite.living_room")
+            self.assertTrue(result.continue_conversation)
+            self.assertEqual(result.response.speech["plain"]["speech"], "Yes?")
+
+    async def test_gatekeeper_wake_plus_command_delegation(self):
+        """Verify Gatekeeper delegates wake + instruction downstream to conversation agent."""
+        gatekeeper = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.get = MagicMock(return_value=mock_satellite_state)
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 0.70, 22.0)
+        )
+
+        user_input = MagicMock()
+        user_input.text = "Mr. Clemens turn on the living room light"
+        user_input.satellite_id = "assist_satellite.living_room"
+        user_input.conversation_id = "conv_456"
+        user_input.language = "en"
+
+        with patch.object(gatekeeper, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(gatekeeper, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            mock_delegate.return_value = MagicMock()
+
+            await gatekeeper.async_process(user_input)
+
+            mock_notify.assert_called_with("assist_satellite.living_room")
+            mock_delegate.assert_called_with(user_input)
+
+    async def test_gatekeeper_ambient_speech_dropped(self):
+        """Verify ambient background speech is silently dropped without notifying satellite."""
+        gatekeeper = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.get = MagicMock(return_value=mock_satellite_state)
+
+        # System 1 determines speech is ambient
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_AMBIENT, 0.85, 22.0)
+        )
+
+        user_input = MagicMock()
+        user_input.text = "The weather outside is really nice today"
+        user_input.satellite_id = "assist_satellite.living_room"
+        user_input.conversation_id = "conv_789"
+        user_input.language = "en"
+
+        with patch.object(gatekeeper, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(gatekeeper, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            result = await gatekeeper.async_process(user_input)
+
+            mock_notify.assert_not_called()
+            mock_delegate.assert_not_called()
+            self.assertEqual(result.response.speech["plain"]["speech"], "")
 
 
 if __name__ == "__main__":
