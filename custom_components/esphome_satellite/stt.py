@@ -29,6 +29,8 @@ from .const import (
     CONF_DOWNSTREAM_STT,
     CONF_EARLY_WAKE_VERIFICATION,
     CONF_ENFORCE_WAKE_WORD,
+    CONF_SLOT1_THRESHOLD,
+    CONF_SLOT2_THRESHOLD,
     CONF_SPECULATIVE_CHUNK_MS,
     CONF_SYSTEMONE_TOKEN,
     CONF_SYSTEMONE_URL,
@@ -381,6 +383,60 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             _LOGGER.debug("[Speculative STT] Context resolution error: %s", err)
             return (None, None)
 
+    def _resolve_active_slot_index(self, sat_id: str | None) -> int:
+        """Resolve active slot index (0-indexed) for satellite."""
+        if not sat_id or not hasattr(self.hass.states, "get"):
+            return 0
+
+        sat_state = self.hass.states.get(sat_id)
+        active_slot = 0
+        if sat_state and isinstance(getattr(sat_state, "attributes", None), dict):
+            active_slot = sat_state.attributes.get("active_pipeline_index", 0)
+
+        try:
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry = ent_reg.async_get(sat_id) if ent_reg else None
+            device_id = entry.device_id if entry else None
+            if device_id and ent_reg:
+                dev_entries = []
+                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
+                    res = ent_reg.async_entries_for_device(device_id)
+                    if isinstance(res, list):
+                        dev_entries = res
+                if not dev_entries and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
+                    try:
+                        res = er.async_entries_for_device(ent_reg, device_id)
+                        if isinstance(res, list):
+                            dev_entries = res
+                    except Exception:
+                        pass
+                for dev_entry in dev_entries:
+                    if dev_entry.domain == "sensor" and "active_assistant_slot" in dev_entry.entity_id:
+                        slot_state = self.hass.states.get(dev_entry.entity_id)
+                        if slot_state and slot_state.state not in (None, "unknown", "unavailable"):
+                            try:
+                                return max(0, int(float(slot_state.state)) - 1)
+                            except (ValueError, TypeError):
+                                pass
+        except Exception:
+            pass
+
+        return active_slot
+
+    def _get_slot_threshold(self, slot_index: int = 0) -> float:
+        """Retrieve threshold for specific slot, inheriting default threshold if not overridden."""
+        options = self._entry.options
+        data = self._entry.data
+        default_thresh = options.get(
+            CONF_DEFAULT_THRESHOLD, data.get(CONF_DEFAULT_THRESHOLD, DEFAULT_THRESHOLD)
+        )
+        if slot_index == 0:
+            return float(options.get(CONF_SLOT1_THRESHOLD, default_thresh))
+        if slot_index == 1:
+            return float(options.get(CONF_SLOT2_THRESHOLD, default_thresh))
+        return float(default_thresh)
+
     async def _speculative_verification_loop(
         self,
         metadata: SpeechMetadata,
@@ -446,8 +502,17 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     sample_width=bytes_per_sample,
                 )
 
-                if partial_text and len(partial_text.strip().split()) >= 1:
+                if partial_text:
+                    words = partial_text.strip().split()
+                    target_words = target_wake_word.strip().split() if target_wake_word else []
+                    min_words = min(2, len(target_words)) if target_words else 2
+                    if len(words) < min_words:
+                        continue
+
                     try:
+                        active_slot = self._resolve_active_slot_index(sat_id)
+                        threshold = self._get_slot_threshold(active_slot)
+
                         if target_wake_word:
                             question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(
                                 wake_word=target_wake_word
@@ -460,10 +525,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                         choice, conf, rtt_ms = await self._client.classify_addressing(
                             text=partial_text,
                             question_text=question_text,
-                            min_confidence=0.50,
+                            min_confidence=threshold,
                             criteria=criteria,
                         )
-                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= 0.50:
+                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= threshold:
                             _LOGGER.info(
                                 "[Speculative STT] Phonetic wake verification confirmed by System 1 for '%s' (conf=%.2f in %.1fms): '%s'",
                                 target_wake_word or "assistant",

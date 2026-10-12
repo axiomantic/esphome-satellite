@@ -25,7 +25,7 @@ CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = ""
-DEFAULT_THRESHOLD: Final = 0.50
+DEFAULT_THRESHOLD: Final = 0.80
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
 DEFAULT_ENFORCE_WAKE_WORD: Final = True
@@ -78,7 +78,7 @@ QUESTION_TEMPLATE_SLOT1: Final = (
     "This is raw speech-to-text (STT) from a voice satellite triggered on wake phrase '{wake_word}'. "
     "It probably contains phonetic mistranscriptions (e.g. 'and' instead of 'add', homophones, or misheard words). "
     "Assume it does, and infer what the user was trying to say. "
-    "With the understanding that if it contains wake phrase '{wake_word}' or a command, "
+    "With the understanding that if it contains wake phrase '{wake_word}', "
     "it most likely is an instruction and everything following '{wake_word}' is the instruction. "
     "Is this an addressed instruction or query to {wake_word}?"
 )
@@ -87,7 +87,7 @@ QUESTION_TEMPLATE_SLOT2: Final = (
     "This is raw speech-to-text (STT) from a voice satellite triggered on wake phrase '{wake_word}'. "
     "It probably contains phonetic mistranscriptions (e.g. 'and' instead of 'add', homophones, or misheard words). "
     "Assume it does, and infer what the user was trying to say. "
-    "With the understanding that if it contains wake phrase '{wake_word}' or a command, "
+    "With the understanding that if it contains wake phrase '{wake_word}', "
     "it most likely is an instruction and everything following '{wake_word}' is the instruction. "
     "Is this an addressed instruction or query to {wake_word}?"
 )

@@ -1649,6 +1649,106 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.response.speech["plain"]["speech"], "")
 
 
+    async def test_speculative_stt_short_fragment_skipped(self):
+        """Verify single-word fragments are skipped in speculative STT when wake target is multi-word."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_downstream = MagicMock()
+        # Downstream STT produces single-word fragment "Yeah."
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            return_value=SpeechResult(text="Yeah.", result=SpeechResultState.SUCCESS)
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        self.mock_client.classify_addressing = AsyncMock()
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        async def audio_stream():
+            for _ in range(5):
+                yield b"\x01\x02" * 512
+                await asyncio.sleep(0.005)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock) as mock_notify:
+            await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+            # Single-word fragment must not trigger System 1 or verify satellite
+            self.mock_client.classify_addressing.assert_not_called()
+            mock_notify.assert_not_called()
+
+    async def test_speculative_stt_threshold_enforcement(self):
+        """Verify speculative STT does not verify satellite when System 1 confidence is below threshold."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            return_value=SpeechResult(text="Yeah really", result=SpeechResultState.SUCCESS)
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        # System 1 returns weak confidence 0.56 below DEFAULT_THRESHOLD (0.80)
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 0.56, 15.0)
+        )
+
+        # Set default threshold to 0.80
+        self.mock_entry.options = {CONF_DEFAULT_THRESHOLD: 0.80}
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        async def audio_stream():
+            for _ in range(5):
+                yield b"\x01\x02" * 512
+                await asyncio.sleep(0.005)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock) as mock_notify:
+            await stt_proxy.async_process_audio_stream(metadata, audio_stream())
+            mock_notify.assert_not_called()
+
+    def test_slot_template_criteria_no_command_loophole(self):
+        """Verify prompt templates do not contain the ambiguous 'or a command' loophole."""
+        from custom_components.esphome_satellite.const import (
+            QUESTION_TEMPLATE_SLOT1,
+            QUESTION_TEMPLATE_SLOT2,
+        )
+        self.assertNotIn("or a command", QUESTION_TEMPLATE_SLOT1)
+        self.assertNotIn("or a command", QUESTION_TEMPLATE_SLOT2)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
