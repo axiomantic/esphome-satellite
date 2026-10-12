@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
 from typing import Any
 import aiohttp
@@ -70,7 +71,7 @@ class SystemOneClient:
         if self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
-        session = async_get_clientsession(self._hass)
+        session = async_get_clientsession(self._hass, family=socket.AF_INET)
         start_time = time.perf_counter()
 
         try:
