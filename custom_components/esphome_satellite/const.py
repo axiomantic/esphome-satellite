@@ -25,7 +25,7 @@ CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = ""
-DEFAULT_THRESHOLD: Final = 0.80
+DEFAULT_THRESHOLD: Final = 0.65
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
 DEFAULT_ENFORCE_WAKE_WORD: Final = True

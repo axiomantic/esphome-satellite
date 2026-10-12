@@ -1713,13 +1713,13 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.mock_hass.data["stt"] = MagicMock()
         self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
 
-        # System 1 returns weak confidence 0.56 below DEFAULT_THRESHOLD (0.80)
+        # System 1 returns weak confidence 0.56 below DEFAULT_THRESHOLD (0.65)
         self.mock_client.classify_addressing = AsyncMock(
             return_value=(CHOICE_ADDRESSED, 0.56, 15.0)
         )
 
-        # Set default threshold to 0.80
-        self.mock_entry.options = {CONF_DEFAULT_THRESHOLD: 0.80}
+        # Set default threshold to 0.65
+        self.mock_entry.options = {CONF_DEFAULT_THRESHOLD: 0.65}
 
         stt_proxy = ESPHomeSatelliteSpeculativeSTT(
             self.mock_hass,
