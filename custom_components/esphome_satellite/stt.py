@@ -28,6 +28,7 @@ from .const import (
     CONF_DEFAULT_THRESHOLD,
     CONF_DOWNSTREAM_STT,
     CONF_EARLY_WAKE_VERIFICATION,
+    CONF_ENFORCE_WAKE_WORD,
     CONF_SLOT1_PATTERNS,
     CONF_SLOT2_PATTERNS,
     CONF_SPECULATIVE_CHUNK_MS,
@@ -36,6 +37,7 @@ from .const import (
     CONF_TIMEOUT_SECONDS,
     DEFAULT_DOWNSTREAM_STT,
     DEFAULT_EARLY_WAKE_VERIFICATION,
+    DEFAULT_ENFORCE_WAKE_WORD,
     DEFAULT_SPECULATIVE_CHUNK_MS,
     DEFAULT_SYSTEMONE_TOKEN,
     DEFAULT_SYSTEMONE_URL,
@@ -127,6 +129,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         downstream_stt_id: str | None = None,
         speculative_chunk_ms: int | None = None,
         early_wake_verification: bool | None = None,
+        enforce_wake_word: bool | None = None,
     ) -> None:
         """Initialize the speculative STT proxy."""
         self.hass = hass
@@ -135,6 +138,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         self._override_downstream_stt_id = downstream_stt_id
         self._override_speculative_chunk_ms = speculative_chunk_ms
         self._override_early_wake_verification = early_wake_verification
+        self._override_enforce_wake_word = enforce_wake_word
         self._attr_unique_id = f"{entry.entry_id}_speculative_stt"
 
     @property
@@ -170,6 +174,18 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 self._entry.data.get(
                     CONF_EARLY_WAKE_VERIFICATION, DEFAULT_EARLY_WAKE_VERIFICATION
                 ),
+            )
+        )
+
+    @property
+    def enforce_wake_word(self) -> bool:
+        """Return whether wake word enforcement is active."""
+        if self._override_enforce_wake_word is not None:
+            return self._override_enforce_wake_word
+        return bool(
+            self._entry.options.get(
+                CONF_ENFORCE_WAKE_WORD,
+                self._entry.data.get(CONF_ENFORCE_WAKE_WORD, DEFAULT_ENFORCE_WAKE_WORD),
             )
         )
 
@@ -312,20 +328,26 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 metadata, _tee_audio_stream()
             )
 
-            # Step 4: On speech end, trim transcript to post-wake phrase instruction
+            # Step 4: If wake word enforcement is active (default), preserve the full
+            # transcript intact so Gatekeeper and downstream agents receive the complete
+            # utterance including the wake phrase.
+            # If enforcement is explicitly disabled and custom trimming patterns exist,
+            # trim wake word prefix from transcript.
             if (
-                downstream_result
+                not self.enforce_wake_word
+                and downstream_result
                 and downstream_result.result == SpeechResultState.SUCCESS
                 and downstream_result.text
             ):
                 patterns = self._get_active_wake_patterns()
-                trimmed = trim_wake_word(downstream_result.text, patterns)
-                _LOGGER.debug(
-                    "[Speculative STT] Post-speech trimmed: '%s' -> '%s'",
-                    downstream_result.text,
-                    trimmed,
-                )
-                return SpeechResult(text=trimmed, result=SpeechResultState.SUCCESS)
+                if patterns:
+                    trimmed = trim_wake_word(downstream_result.text, patterns)
+                    _LOGGER.debug(
+                        "[Speculative STT] Post-speech trimmed: '%s' -> '%s'",
+                        downstream_result.text,
+                        trimmed,
+                    )
+                    return SpeechResult(text=trimmed, result=SpeechResultState.SUCCESS)
 
             return downstream_result
 
@@ -469,8 +491,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             ):
                 last_eval_len = len(pcm_accumulator)
 
-                if not target_wake_word:
-                    sat_id, target_wake_word = self._resolve_active_satellite_context()
+                # Dynamically re-resolve active satellite context on each evaluation stride
+                # to pick up slot transitions arriving over the network after audio stream initiation
+                fresh_sat_id, fresh_wake_word = self._resolve_active_satellite_context()
+                if fresh_wake_word:
+                    target_wake_word = fresh_wake_word
+                if fresh_sat_id:
+                    sat_id = fresh_sat_id
 
                 partial_text = await self._transcribe_partial_slice(
                     metadata=metadata,

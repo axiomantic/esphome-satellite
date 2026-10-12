@@ -1120,7 +1120,8 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
         self.mock_hass.data["stt"] = MagicMock()
         self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
         self.mock_entry.options = {
-            CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b"
+            CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b",
+            CONF_ENFORCE_WAKE_WORD: False,
         }
         stt_proxy = ESPHomeSatelliteSpeculativeSTT(
             self.mock_hass,
@@ -1138,9 +1139,52 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
 
         # Verify downstream STT received all chunks
         self.assertEqual(len(captured_chunks), 5)
-        # Verify returned result was trimmed of wake word
+        # Verify returned result was trimmed of wake word when enforcement is disabled
         self.assertEqual(result.result, SpeechResultState.SUCCESS)
         self.assertEqual(result.text, "turn off the television")
+
+    async def test_stt_process_audio_stream_preserves_wake_word_when_enforced(self):
+        """Verify downstream transcript preserves wake phrase intact when wake word enforcement is active."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_downstream = MagicMock()
+
+        async def downstream_stream_handler(metadata, stream):
+            async for _ in stream:
+                pass
+            return SpeechResult(
+                text="Mr. Clemens, turn off the television",
+                result=SpeechResultState.SUCCESS,
+            )
+
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=downstream_stream_handler
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+        self.mock_entry.options = {
+            CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b",
+            CONF_ENFORCE_WAKE_WORD: True,
+        }
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        async def dummy_audio_stream():
+            for i in range(5):
+                yield b"\x01\x02" * 512
+
+        metadata = SpeechMetadata()
+        result = await stt_proxy.async_process_audio_stream(metadata, dummy_audio_stream())
+
+        self.assertEqual(result.result, SpeechResultState.SUCCESS)
+        self.assertEqual(result.text, "Mr. Clemens, turn off the television")
 
     async def test_stt_speculative_verification_triggers_satellite_notification(self):
         """Verify 500ms sliding window triggers System 1 and fires satellite verified service."""
@@ -1198,7 +1242,8 @@ class TestSpeculativeSTTProxy(unittest.IsolatedAsyncioTestCase):
             self.mock_hass.data["stt"] = MagicMock()
             self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
             self.mock_entry.options = {
-                CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b"
+                CONF_SLOT1_PATTERNS: r"\b(?:mr\.?\s+)?clemens\b",
+                CONF_ENFORCE_WAKE_WORD: False,
             }
 
             stt_proxy = ESPHomeSatelliteSpeculativeSTT(
