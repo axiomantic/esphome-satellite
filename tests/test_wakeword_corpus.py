@@ -494,11 +494,11 @@ class TestWakewordCorpus(unittest.TestCase):
         el_voices = get_available_builtin_voices("elevenlabs")
         self.assertGreaterEqual(len(el_voices), 15)
         defaults = [v["name"] for v in el_voices if v.get("default")]
-        self.assertIn("Rachel", defaults)
+        self.assertIn("Alice", defaults)
         self.assertIn("Adam", defaults)
         self.assertIn("Sarah", defaults)
         self.assertIn("George", defaults)
-        self.assertIn("Mimi", defaults)
+        self.assertIn("Liam", defaults)
         self.assertIn("Matilda", defaults)
 
         # F5-TTS built-in reference voices (manifest-driven)
