@@ -5,9 +5,12 @@ import array
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterable
 import io
+import json
 import logging
 import math
+from pathlib import Path
 import re
+import time
 from typing import Final
 import wave
 
@@ -293,6 +296,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
         chunk_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=128)
         verified_event = asyncio.Event()
+        captured_chunks: list[bytes] = []
 
         # Step 1: Fork live generator into dual pipe with two-phase VAD silence gating
         async def _tee_audio_stream() -> AsyncGenerator[bytes, None]:
@@ -306,6 +310,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 async for chunk in stream:
                     if not chunk:
                         continue
+
+                    captured_chunks.append(chunk)
 
                     chunk_sec = len(chunk) / bytes_per_sec
                     total_elapsed += chunk_sec
@@ -370,10 +376,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         )
 
         # Step 3: Run downstream STT on primary stream and return verbatim result intact
+        sat_id, target_ww = self._resolve_active_satellite_context()
+        speech_result: SpeechResult | None = None
         try:
-            return await downstream_entity.async_process_audio_stream(
+            speech_result = await downstream_entity.async_process_audio_stream(
                 metadata, _tee_audio_stream()
             )
+            return speech_result
 
         finally:
             if not speculative_task.done():
@@ -382,6 +391,104 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     await speculative_task
                 except asyncio.CancelledError:
                     pass
+
+            if sat_id is None:
+                sat_id, target_ww = self._resolve_active_satellite_context()
+
+            if captured_chunks:
+                asyncio.create_task(
+                    self._async_save_recorded_audio(
+                        metadata=metadata,
+                        audio_data=b"".join(captured_chunks),
+                        satellite_id=sat_id,
+                        wake_word=target_ww,
+                        text=getattr(speech_result, "text", None) if speech_result else None,
+                    )
+                )
+
+    async def _async_save_recorded_audio(
+        self,
+        metadata: SpeechMetadata,
+        audio_data: bytes,
+        satellite_id: str | None,
+        wake_word: str | None,
+        text: str | None,
+    ) -> None:
+        """Save captured microphone audio stream to disk as WAV and JSON metadata."""
+        def _write_files() -> None:
+            if hasattr(self.hass, "config") and hasattr(self.hass.config, "path"):
+                rec_dir = Path(self.hass.config.path("www", "recordings"))
+            else:
+                rec_dir = Path("/tmp/recordings")
+
+            rec_dir.mkdir(parents=True, exist_ok=True)
+
+            ts_slug = time.strftime("%Y%m%d_%H%M%S")
+            sat_clean = (satellite_id.split(".")[-1] if satellite_id else "unknown_sat").replace(" ", "_")
+            ww_clean = (wake_word or "unknown_ww").replace(" ", "_").replace(".", "")
+            base_name = f"{ts_slug}_{sat_clean}_{ww_clean}"
+
+            wav_path = rec_dir / f"{base_name}.wav"
+            json_path = rec_dir / f"{base_name}.json"
+
+            sample_rate = getattr(metadata, "sample_rate", 16000)
+            rate_hz = int(getattr(sample_rate, "value", sample_rate))
+            bit_rate = getattr(metadata, "bit_rate", 16)
+            bytes_per_sample = int(getattr(bit_rate, "value", bit_rate)) // 8
+            channels = getattr(metadata, "channel", 1)
+            num_channels = int(getattr(channels, "value", channels))
+
+            with wave.open(str(wav_path), "wb") as wf:
+                wf.setnchannels(num_channels)
+                wf.setsampwidth(bytes_per_sample)
+                wf.setframerate(rate_hz)
+                wf.writeframes(audio_data)
+
+            duration_sec = len(audio_data) / max(1, rate_hz * bytes_per_sample * num_channels)
+            meta = {
+                "timestamp": ts_slug,
+                "satellite_id": satellite_id,
+                "wake_word": wake_word,
+                "duration_sec": round(duration_sec, 2),
+                "sample_rate": rate_hz,
+                "channels": num_channels,
+                "bytes": len(audio_data),
+                "text": text,
+                "wav_file": f"{base_name}.wav",
+                "wav_url": f"/local/recordings/{base_name}.wav",
+            }
+            with open(json_path, "w", encoding="utf-8") as jf:
+                json.dump(meta, jf, indent=2)
+
+            _LOGGER.info(
+                "[Speculative STT] Saved recorded audio (%.2fs) from %s to %s",
+                duration_sec,
+                satellite_id or "unknown",
+                wav_path.name,
+            )
+
+            # Prune old recordings (keep last 50)
+            try:
+                wav_files = sorted(rec_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime)
+                if len(wav_files) > 50:
+                    for old_wav in wav_files[:-50]:
+                        old_wav.unlink(missing_ok=True)
+                        old_json = old_wav.with_suffix(".json")
+                        old_json.unlink(missing_ok=True)
+            except Exception as prune_err:
+                _LOGGER.warning("[Speculative STT] Error pruning recordings: %s", prune_err)
+
+        try:
+            if hasattr(self.hass, "async_add_executor_job"):
+                res = self.hass.async_add_executor_job(_write_files)
+                if asyncio.iscoroutine(res) or hasattr(res, "__await__"):
+                    await res
+                else:
+                    await asyncio.to_thread(_write_files)
+            else:
+                await asyncio.to_thread(_write_files)
+        except Exception as err:
+            _LOGGER.warning("[Speculative STT] Failed to save recorded audio: %s", err)
 
     def _resolve_active_satellite_context(self) -> tuple[str | None, str | None]:
         """Resolve the currently active assist_satellite entity ID and reported wake word.

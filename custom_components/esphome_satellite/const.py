@@ -214,22 +214,22 @@ def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) 
 
 def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, dict[str, str]]:
     """Build dynamic question and criteria for the initial turn, interpolating phonetic variants."""
-    # Present up to 12 representative phonetic variants and aliases as examples in prompt
-    sample = known_aliases[:12] if len(known_aliases) > 12 else known_aliases
+    # Present up to 6 distinct representative phonetic variants and aliases
+    filtered = [a for a in known_aliases if a.lower() != wake_word.lower()]
+    sample = filtered[:6] if len(filtered) > 6 else filtered
     aliases_str = ", ".join(f"'{a}'" for a in sample) if sample else f"'{wake_word}'"
     instructions = (
         f"The voice satellite triggered on wake phrase '{wake_word}'. "
         f"Recognized phonetic approximations, name variants, and spellings include: {aliases_str}. "
-        f"Is this utterance an addressed request to the assistant (including jokes, questions, device controls, timers, "
-        f"or phonetic approximations of the wake phrase like {aliases_str}), "
-        "or is it ambient bystander conversation between humans, talking out loud to oneself, dictating/typing, or TV chatter?"
+        f"Is this utterance directly addressing the assistant '{wake_word}' (or its variants), "
+        "or is it ambient bystander conversation, talking to oneself, or TV/room chatter?"
     )
     criteria = {
         CHOICE_ADDRESSED: (
-            f"Spoken command, timer, question, request (e.g. tell me a joke, turn on lights), or addressing the assistant '{wake_word}'."
+            f"Directly speaking to or commanding the assistant '{wake_word}' (e.g. questions, device commands, timers, jokes)."
         ),
         CHOICE_AMBIENT: (
-            "Casual bystander conversation between humans, talking aloud to oneself, dictating/typing, or TV chatter."
+            "Side conversation between humans, self-talk, dictating/typing, or background chatter."
         ),
     }
     return instructions, criteria
