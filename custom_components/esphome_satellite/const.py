@@ -27,7 +27,7 @@ CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = ""
-DEFAULT_THRESHOLD: Final = 0.65
+DEFAULT_THRESHOLD: Final = 0.70
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
 DEFAULT_ENFORCE_WAKE_WORD: Final = True
@@ -140,25 +140,20 @@ def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) 
 
 def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, dict[str, str]]:
     """Build dynamic question and criteria for the initial turn."""
-    aliases_str = ", ".join(f"'{a}'" for a in known_aliases)
+    aliases_str = ", ".join(f"'{a}'" for a in known_aliases) if known_aliases else f"'{wake_word}'"
     instructions = (
-        f"This speech transcript was captured by a voice assistant listening for '{wake_word}'. "
+        f"The voice satellite triggered on wake phrase '{wake_word}'. "
         f"Recognized name variants and spellings include: {aliases_str}. "
-        "Speech recognition frequently produces ambiguous, distorted, or loose phonetic transcriptions for the wake phrase, "
-        "including misheard syllables, compound words, dropped consonants, or sound-alikes. "
-        f"Do not restrict recognition to exact 1:1 phonetic rhymes or literal spellings. Any utterance that begins with an ambiguous or fuzzy phonetic approximation of '{wake_word}' "
-        "and expresses a question, instruction, creative banter, joke, or remark for the assistant is addressed. "
-        "Determine if the speaker is addressing the voice assistant, or if this is unaddressed ambient conversation "
-        "(talking to other people in the room, dinner table talk, third-person references, or media audio)."
+        f"Is this utterance an addressed request to the assistant (including jokes, questions, device controls, timers, "
+        f"or phonetic approximations of the wake phrase like {aliases_str}), "
+        "or is it ambient bystander conversation between humans, talking out loud to oneself, dictating/typing, or TV chatter?"
     )
     criteria = {
         CHOICE_ADDRESSED: (
-            f"The speaker is addressing the voice assistant '{wake_word}' (or loose phonetic variations, spellings, or abbreviations of it) "
-            "with a question, instruction, joke, conversational banter, or request."
+            f"Spoken command, timer, question, request (e.g. tell me a joke, turn on lights), or addressing the assistant '{wake_word}'."
         ),
         CHOICE_AMBIENT: (
-            "Not addressing the assistant (unrelated side conversation between humans in the room, commands to family or pets, "
-            "third-person discussions about someone, or background media audio)."
+            "Casual bystander conversation between humans, talking aloud to oneself, dictating/typing, or TV chatter."
         ),
     }
     return instructions, criteria
@@ -170,14 +165,14 @@ def make_followup_prompt(wake_word: str) -> tuple[str, dict[str, str]]:
         f"In an ongoing voice assistant conversation, the assistant listening for '{wake_word}' just spoke and the microphone is open for a follow-up. "
         f"Because this is an active dialogue, the user does NOT need to repeat the wake word '{wake_word}'. "
         "Determine whether the speaker is responding to the assistant (answering, asking for clarification, reacting to what the assistant said, or giving the next request) "
-        "versus talking to someone else in the room."
+        "versus talking to someone else in the room, talking to oneself, or room chatter."
     )
     criteria = {
         CHOICE_ADDRESSED: (
             "Responding to or conversing with the assistant in the active dialogue (no wake word required; answers, questions, reactions, and commands)."
         ),
         CHOICE_AMBIENT: (
-            "Addressing someone else in the room (e.g. spouse, child, roommate), background noise, or unrelated side chatter."
+            "Addressing someone else in the room (e.g. spouse, child, roommate), talking to oneself, background noise, or unrelated side chatter."
         ),
     }
     return instructions, criteria
