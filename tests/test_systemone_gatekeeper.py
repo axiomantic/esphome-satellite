@@ -1866,6 +1866,38 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             mock_delegate.assert_called_with(user_input)
             self.assertEqual(result, "delegated_result")
 
+    def test_dynamic_phonetic_variant_generation(self):
+        """Verify dynamic generation of phonetic and acoustic variants for detected wake words."""
+        from custom_components.esphome_satellite.const import generate_phonetic_variants, expand_wake_phrase, make_initial_prompt
+
+        # Test Clemens dynamic phonetic variants
+        clemens_variants = generate_phonetic_variants("Mr. Clemens")
+        self.assertIn("Mister Clemens", clemens_variants)
+        self.assertIn("Hey Mister Clemens", clemens_variants)
+        self.assertTrue(any("Clemons" in v for v in clemens_variants))
+        self.assertTrue(any("Klemens" in v for v in clemens_variants))
+        self.assertTrue(any("Mistah" in v or "Mistur" in v for v in clemens_variants))
+
+        # Test Okay Nabu dynamic phonetic variants
+        kt_variants = generate_phonetic_variants("Okay Nabu")
+        self.assertIn("Okay Nabu", kt_variants)
+        self.assertIn("Okay Nabu", kt_variants)
+        self.assertTrue(any("KT" in v for v in kt_variants))
+
+        # Test arbitrary wake phrase without hardcoded knowledge
+        wizard_variants = generate_phonetic_variants("Little Wizard")
+        self.assertIn("Hey Little Wizard", wizard_variants)
+
+        # Verify additive user aliases and interpolation into prompt
+        expanded = expand_wake_phrase("Mr. Clemens", ["Custom Alias"])
+        self.assertIn("Custom Alias", expanded)
+        self.assertIn("Mister Clemens", expanded)
+
+        prompt, criteria = make_initial_prompt("Mr. Clemens", expanded)
+        self.assertIn("The voice satellite triggered on wake phrase 'Mr. Clemens'", prompt)
+        self.assertIn("Recognized phonetic approximations, name variants, and spellings include:", prompt)
+        self.assertIn("Mr. Clemens", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
