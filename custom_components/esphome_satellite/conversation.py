@@ -49,20 +49,39 @@ from .systemone_client import SystemOneClient, SystemOneClientError
 _LOGGER = logging.getLogger(__name__)
 
 
-def extract_instruction_after_wake(text: str, patterns: list[re.Pattern]) -> str | None:
-    """Return the instruction following the wake phrase, or None if only the wake phrase was spoken."""
-    if not text:
-        return None
+def _normalize_phrase(phrase: str) -> str:
+    """Normalize a phrase for robust wake phrase matching."""
+    return " ".join(re.sub(r"[^\w\s]", "", phrase).lower().split())
 
-    for pattern in patterns:
-        match = pattern.search(text)
-        if match:
-            prefix = text[: match.start()].strip()
-            if len(prefix.split()) <= 1:
-                remainder = text[match.end() :].lstrip(" ,;:.-!?")
-                return remainder if remainder else None
 
-    return text.strip()
+def is_wake_and_pause_turn(text: str, target_ww: str, aliases: list[str] | None = None) -> bool:
+    """Check if an utterance consists strictly of the wake phrase (or recognized alias) without a trailing command."""
+    clean_text = _normalize_phrase(text)
+    if not clean_text:
+        return False
+
+    phrases_to_match: set[str] = set()
+    raw_candidates = [target_ww]
+    if aliases:
+        raw_candidates.extend(aliases)
+
+    greeting_prefixes = ("hey ", "hi ", "hello ", "ok ", "okay ")
+
+    for raw in raw_candidates:
+        clean = _normalize_phrase(raw)
+        if not clean:
+            continue
+        phrases_to_match.add(clean)
+        has_prefix = any(clean.startswith(p) for p in greeting_prefixes)
+        if not has_prefix:
+            for p in ("hey ", "hi ", "ok ", "hello "):
+                phrases_to_match.add(f"{p}{clean}")
+        else:
+            for p in greeting_prefixes:
+                if clean.startswith(p):
+                    phrases_to_match.add(clean[len(p) :].strip())
+
+    return clean_text in phrases_to_match
 
 
 async def async_setup_entry(
@@ -204,9 +223,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             await self._notify_wake_word_verified(satellite_id)
 
             # Check if user spoke ONLY the wake word and paused (Wake-and-Pause Mode)
-            wake_words = target_ww.split() if target_ww else []
-            words = text.split()
-            if not is_followup and len(words) <= len(wake_words) + 1:
+            if not is_followup and is_wake_and_pause_turn(text, target_ww, all_aliases):
                 _LOGGER.info(
                     "[Gatekeeper] Wake word prompt acknowledged on satellite %s (Slot %d, wake='%s'). Opening follow-up.",
                     satellite_id,

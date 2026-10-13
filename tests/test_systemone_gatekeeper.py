@@ -1807,6 +1807,65 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         stt_entity = ESPHomeSatelliteSpeculativeSTT(MagicMock(), entry, client)
         self.assertFalse(stt_entity.audio_processing.requires_external_vad)
 
+    def test_is_wake_and_pause_turn_matching(self):
+        """Verify is_wake_and_pause_turn matches wake words and aliases accurately."""
+        from custom_components.esphome_satellite.conversation import is_wake_and_pause_turn
+
+        # Wake phrases and aliases
+        self.assertTrue(is_wake_and_pause_turn("Mr. Clemens.", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertTrue(is_wake_and_pause_turn("Hey Mr Clemens", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertTrue(is_wake_and_pause_turn("Mister Clemens", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertTrue(is_wake_and_pause_turn("Okay Nabu", "Okay Nabu", ["Okay Nabu"]))
+        self.assertTrue(is_wake_and_pause_turn("Okay Nabu", "Okay Nabu", ["Okay Nabu"]))
+        self.assertTrue(is_wake_and_pause_turn("Mark Twain", "Mark Twain", []))
+        self.assertTrue(is_wake_and_pause_turn("Hey Mark Twain", "Mark Twain", []))
+
+        # Short commands must NOT trigger wake-and-pause
+        self.assertFalse(is_wake_and_pause_turn("Lights on", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertFalse(is_wake_and_pause_turn("Turn off lights", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertFalse(is_wake_and_pause_turn("Stop", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertFalse(is_wake_and_pause_turn("Cancel", "Mr. Clemens", ["Mister Clemens"]))
+
+        # Ambient speech must NOT trigger wake-and-pause
+        self.assertFalse(is_wake_and_pause_turn("It won't work.", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertFalse(is_wake_and_pause_turn("Remove the set.", "Mr. Clemens", ["Mister Clemens"]))
+
+        # Wake word + command must NOT trigger wake-and-pause
+        self.assertFalse(is_wake_and_pause_turn("Mr Clemens what time is it", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertFalse(is_wake_and_pause_turn("Okay Nabu tell me a joke", "Okay Nabu", []))
+
+    async def test_gatekeeper_short_command_delegation(self):
+        """Verify 2-word commands like 'Lights on' are delegated downstream and NOT intercepted as Yes?."""
+        gatekeeper = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.get = MagicMock(return_value=mock_satellite_state)
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 0.85, 20.0)
+        )
+
+        user_input = MagicMock()
+        user_input.text = "Lights on"
+        user_input.satellite_id = "assist_satellite.living_room"
+        user_input.conversation_id = "conv_short_cmd"
+        user_input.language = "en"
+
+        with patch.object(gatekeeper, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(gatekeeper, "_delegate_downstream", new_callable=AsyncMock) as mock_delegate:
+            mock_delegate.return_value = "delegated_result"
+
+            result = await gatekeeper.async_process(user_input)
+
+            mock_notify.assert_called_with("assist_satellite.living_room")
+            mock_delegate.assert_called_with(user_input)
+            self.assertEqual(result, "delegated_result")
+
 
 if __name__ == "__main__":
     unittest.main()
