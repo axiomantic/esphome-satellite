@@ -186,6 +186,8 @@ sensor:
     lambda: |-
       return static_cast<float>(id(active_assistant_slot));
     update_interval: 250ms
+    filters:
+      - delta: 0.5
 
 nim:
   source: ../src/nim_esphome_satellite.nim
@@ -922,7 +924,8 @@ select:
 
   - platform: template
     id: slot1_sensitivity
-    name: "Slot 1: Sensitivity"
+    name: "Slot 1: Sensitivity (Legacy)"
+    internal: true
     icon: "mdi:tune"
     entity_category: config
     optimistic: true
@@ -943,7 +946,8 @@ select:
 
   - platform: template
     id: slot2_sensitivity
-    name: "Slot 2: Sensitivity"
+    name: "Slot 2: Sensitivity (Legacy)"
+    internal: true
     icon: "mdi:tune-vertical"
     entity_category: config
     optimistic: true
@@ -1392,13 +1396,13 @@ number:
 
   - platform: template
     id: slot1_cutoff
-    name: "Slot 1: Probability Cutoff"
+    name: "Slot 1: Sensitivity"
     icon: "mdi:tune"
-    entity_category: diagnostic
+    entity_category: config
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.50
+    initial_value: 0.38
     restore_value: true
     optimistic: true
     mode: slider
@@ -1410,13 +1414,13 @@ number:
 
   - platform: template
     id: slot2_cutoff
-    name: "Slot 2: Probability Cutoff"
+    name: "Slot 2: Sensitivity"
     icon: "mdi:tune-vertical"
-    entity_category: diagnostic
+    entity_category: config
     min_value: 0.05
     max_value: 0.99
     step: 0.01
-    initial_value: 0.50
+    initial_value: 0.38
     restore_value: true
     optimistic: true
     mode: slider
