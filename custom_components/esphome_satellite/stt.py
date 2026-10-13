@@ -307,7 +307,18 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             speech_consec_chunks = 0
 
             try:
-                async for chunk in stream:
+                stream_iter = aiter(stream)
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(anext(stream_iter), timeout=2.5)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        _LOGGER.debug(
+                            "[Speculative STT] Audio stream idle timeout (2.5s without chunks from satellite); closing stream"
+                        )
+                        break
+
                     if not chunk:
                         continue
 
