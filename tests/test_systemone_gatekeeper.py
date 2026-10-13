@@ -1898,6 +1898,63 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Recognized phonetic approximations, name variants, and spellings include:", prompt)
         self.assertIn("Mr. Clemens", prompt)
 
+    async def test_save_recorded_audio_creates_wav_and_json(self):
+        """Verify _async_save_recorded_audio correctly writes WAV file and companion JSON metadata."""
+        import tempfile
+        import wave
+        import json
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_hass = MagicMock()
+            mock_hass.config.path = MagicMock(return_value=tmp_dir)
+
+            mock_entry = MagicMock()
+            mock_entry.entry_id = "test_stt_entry"
+            mock_entry.options = {}
+            mock_entry.data = {}
+
+            stt_entity = ESPHomeSatelliteSpeculativeSTT(mock_hass, mock_entry, self.mock_client)
+
+            metadata = MagicMock()
+            metadata.sample_rate = 16000
+            metadata.bit_rate = 16
+            metadata.channel = 1
+
+            # 1 second of 16kHz 16-bit mono silence (32000 bytes)
+            audio_bytes = b"\x00\x00" * 16000
+
+            await stt_entity._async_save_recorded_audio(
+                metadata=metadata,
+                audio_data=audio_bytes,
+                satellite_id="assist_satellite.kitchen_satellite",
+                wake_word="Okay Nabu",
+                text="Okay Nabu what time is it",
+            )
+
+            rec_dir = Path(tmp_dir)
+            wav_files = list(rec_dir.glob("*.wav"))
+            json_files = list(rec_dir.glob("*.json"))
+
+            self.assertEqual(len(wav_files), 1)
+            self.assertEqual(len(json_files), 1)
+
+            # Inspect WAV
+            with wave.open(str(wav_files[0]), "rb") as wf:
+                self.assertEqual(wf.getnchannels(), 1)
+                self.assertEqual(wf.getsampwidth(), 2)
+                self.assertEqual(wf.getframerate(), 16000)
+                self.assertEqual(wf.getnframes(), 16000)
+
+            # Inspect JSON
+            with open(json_files[0], encoding="utf-8") as jf:
+                meta = json.load(jf)
+                self.assertEqual(meta["satellite_id"], "assist_satellite.kitchen_satellite")
+                self.assertEqual(meta["wake_word"], "Okay Nabu")
+                self.assertEqual(meta["text"], "Okay Nabu what time is it")
+                self.assertEqual(meta["duration_sec"], 1.0)
+                self.assertEqual(meta["sample_rate"], 16000)
+
 
 if __name__ == "__main__":
     unittest.main()
