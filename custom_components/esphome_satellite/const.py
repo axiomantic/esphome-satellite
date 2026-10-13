@@ -72,63 +72,137 @@ TITLE_EXPANSIONS: Final[dict[str, str]] = {
 TITLE_EXPANSIONS_REV: Final[dict[str, str]] = {v.lower(): k.capitalize() for k, v in TITLE_EXPANSIONS.items()}
 
 
-def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) -> list[str]:
-    """Dynamically expand a wake phrase with rule-based title, acronym, and additive user aliases."""
-    expansions: set[str] = set()
-    cleaned = wake_phrase.strip()
+def generate_phonetic_variants(phrase: str) -> list[str]:
+    """Dynamically generate phonetic, acoustic, and orthographic variants for a wake phrase."""
+    variants: set[str] = set()
+    cleaned = phrase.strip()
     if not cleaned:
         return []
-    expansions.add(cleaned)
-    words = cleaned.split()
+    variants.add(cleaned)
 
-    # 1. Title expansions (e.g. Mr. <-> Mister)
-    title_words: list[str] = []
-    has_title = False
-    for w in words:
+    norm = re.sub(r"[^\w\s]", "", cleaned)
+    words = norm.split()
+    if not words:
+        return [cleaned]
+
+    prefixes = {"hey", "hi", "ok", "okay", "hello"}
+    has_prefix = words[0].lower() in prefixes
+    core_words = words[1:] if has_prefix else words
+    core_phrase = " ".join(core_words)
+
+    # 1. Title expansions (e.g. Mr. <-> Mister, Dr. <-> Doctor)
+    expanded_titles = []
+    for w in core_words:
         wl = w.lower()
         if wl in TITLE_EXPANSIONS:
-            title_words.append(TITLE_EXPANSIONS[wl])
-            has_title = True
+            expanded_titles.append(TITLE_EXPANSIONS[wl])
         elif wl in TITLE_EXPANSIONS_REV:
-            title_words.append(TITLE_EXPANSIONS_REV[wl])
-            has_title = True
+            expanded_titles.append(TITLE_EXPANSIONS_REV[wl])
         else:
-            title_words.append(w)
-    if has_title:
-        expansions.add(" ".join(title_words))
+            expanded_titles.append(w)
+    title_variant = " ".join(expanded_titles)
+    if title_variant.lower() != core_phrase.lower():
+        variants.add(title_variant)
 
-    # 2. Acronym forward expansion (e.g. Jay Dee -> JD)
-    words_lower = [w.lower().strip(".,!?") for w in words]
-    acronym_chars = [LETTER_NAMES_REV.get(wl) for wl in words_lower]
-    if any(acronym_chars):
-        new_words: list[str] = []
-        i = 0
-        while i < len(words):
-            if acronym_chars[i] is not None:
-                group = []
-                while i < len(words) and acronym_chars[i] is not None:
-                    group.append(acronym_chars[i])
-                    i += 1
-                new_words.append("".join(group))
-            else:
-                new_words.append(words[i])
+    # 2. Acronym expansions
+    acronym_rev = []
+    has_acr = False
+    for w in core_words:
+        w_clean = w.strip(".,!?")
+        if w_clean.isupper() and len(w_clean) >= 2 and all(c in LETTER_NAMES for c in w_clean):
+            acronym_rev.extend([LETTER_NAMES[c].capitalize() for c in w_clean])
+            has_acr = True
+        else:
+            acronym_rev.append(w)
+    if has_acr:
+        variants.add(" ".join(acronym_rev))
+
+    acr_fwd = []
+    i = 0
+    while i < len(core_words):
+        wl = core_words[i].lower()
+        if wl in LETTER_NAMES_REV:
+            grp = []
+            while i < len(core_words) and core_words[i].lower() in LETTER_NAMES_REV:
+                grp.append(LETTER_NAMES_REV[core_words[i].lower()])
                 i += 1
-        expansions.add(" ".join(new_words))
-
-    # 3. Acronym reverse expansion (e.g. JD -> Jay Dee)
-    expanded_letters: list[str] = []
-    has_acronym = False
-    for w in words:
-        clean_w = w.strip(".,!?")
-        if clean_w.isupper() and len(clean_w) >= 2 and all(c in LETTER_NAMES for c in clean_w):
-            expanded_letters.extend([LETTER_NAMES[c].capitalize() for c in clean_w])
-            has_acronym = True
+            acr_fwd.append("".join(grp))
         else:
-            expanded_letters.append(w)
-    if has_acronym:
-        expansions.add(" ".join(expanded_letters))
+            acr_fwd.append(core_words[i])
+            i += 1
+    if len(acr_fwd) != len(core_words) or any(w.isupper() for w in acr_fwd):
+        variants.add(" ".join(acr_fwd))
 
-    # 4. User-provided aliases (additive)
+    # 3. Phonetic spelling permutations on base/core variants
+    base_pool = list(variants)
+    for base in base_pool:
+        bw = base.split()
+        for idx, w in enumerate(bw):
+            wl = w.lower().strip(".,!?")
+            alts: set[str] = set()
+            # Unstressed er/or/ar/ur/ah
+            if wl.endswith("er"):
+                alts.add(wl[:-2] + "ur")
+                alts.add(wl[:-2] + "ar")
+                alts.add(wl[:-2] + "ah")
+            elif wl.endswith("ur") or wl.endswith("ar"):
+                alts.add(wl[:-2] + "er")
+            # Unstressed ens/ons/ins/ence/uns/enz
+            if wl.endswith("ens"):
+                alts.add(wl[:-3] + "ons")
+                alts.add(wl[:-3] + "ins")
+                alts.add(wl[:-3] + "ence")
+                alts.add(wl[:-3] + "uns")
+                alts.add(wl[:-3] + "enz")
+            elif wl.endswith("ons") or wl.endswith("ins"):
+                alts.add(wl[:-3] + "ens")
+            # Double consonant m / mm
+            if "em" in wl and "emm" not in wl:
+                alts.add(wl.replace("em", "emm"))
+            # ance / ans / ence
+            if wl.endswith("ance"):
+                alts.add(wl[:-4] + "ans")
+                alts.add(wl[:-4] + "ence")
+            elif wl.endswith("ans"):
+                alts.add(wl[:-3] + "ance")
+            # Hard c / k
+            if wl.startswith("cl"):
+                alts.add("kl" + wl[2:])
+            elif wl.startswith("kl"):
+                alts.add("cl" + wl[2:])
+            # ph / f
+            if "ph" in wl:
+                alts.add(wl.replace("ph", "f"))
+
+            for alt in alts:
+                new_bw = list(bw)
+                new_bw[idx] = alt.capitalize() if w[0].isupper() else alt
+                variants.add(" ".join(new_bw))
+
+    # 4. Prefix permutations for core phrases
+    all_core = list(variants)
+    for v in all_core:
+        vw = v.split()
+        if vw and vw[0].lower() not in prefixes:
+            variants.add(f"Hey {v}")
+            variants.add(f"Ok {v}")
+        elif vw and vw[0].lower() in prefixes and len(vw) > 1:
+            variants.add(" ".join(vw[1:]))
+
+    # 5. Compound words (e.g. MisterClemens, JayDee)
+    for v in list(variants):
+        vw = v.split()
+        if len(vw) == 2 and vw[0].lower() not in prefixes:
+            variants.add("".join(vw))
+
+    return sorted(list(variants))
+
+
+def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) -> list[str]:
+    """Dynamically generate phonetic variants for the wake phrase and append additive user aliases."""
+    expansions: set[str] = set(generate_phonetic_variants(wake_phrase))
+
+    # User-provided aliases (strictly additive)
     if user_aliases:
         for alias in user_aliases:
             a = alias.strip()
@@ -139,11 +213,13 @@ def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) 
 
 
 def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, dict[str, str]]:
-    """Build dynamic question and criteria for the initial turn."""
-    aliases_str = ", ".join(f"'{a}'" for a in known_aliases) if known_aliases else f"'{wake_word}'"
+    """Build dynamic question and criteria for the initial turn, interpolating phonetic variants."""
+    # Present up to 12 representative phonetic variants and aliases as examples in prompt
+    sample = known_aliases[:12] if len(known_aliases) > 12 else known_aliases
+    aliases_str = ", ".join(f"'{a}'" for a in sample) if sample else f"'{wake_word}'"
     instructions = (
         f"The voice satellite triggered on wake phrase '{wake_word}'. "
-        f"Recognized name variants and spellings include: {aliases_str}. "
+        f"Recognized phonetic approximations, name variants, and spellings include: {aliases_str}. "
         f"Is this utterance an addressed request to the assistant (including jokes, questions, device controls, timers, "
         f"or phonetic approximations of the wake phrase like {aliases_str}), "
         "or is it ambient bystander conversation between humans, talking out loud to oneself, dictating/typing, or TV chatter?"
@@ -217,7 +293,6 @@ QUESTION_TEMPLATE_SLOT1: Final = (
 QUESTION_TEMPLATE_SLOT2: Final = QUESTION_TEMPLATE_SLOT1
 
 
-
 # Audio Stream & Frame Invariants (16kHz 16-bit Mono)
 AUDIO_SAMPLE_RATE: Final = 16000
 AUDIO_SAMPLE_WIDTH: Final = 2  # 16-bit signed PCM
@@ -247,4 +322,3 @@ def validate_audio_frame_alignment(chunk: bytes) -> tuple[int, int]:
     samples = length // AUDIO_SAMPLE_WIDTH
     frames = length // AUDIO_FRAME_BYTES
     return (samples, frames)
-
