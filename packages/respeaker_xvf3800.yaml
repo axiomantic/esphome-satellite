@@ -46,7 +46,7 @@ esphome:
         - lambda: |-
             esphome::migrate_legacy_nvs_preferences(
                 id(voice_volume), id(slot1_volume), id(slot1_cancel_sound), id(slot1_wake_chime_sound),
-                id(slot1_processing_sound), id(slot1_sensitivity),
+                id(slot1_processing_sound), nullptr,
                 id(slot1_wake_chime), id(slot1_cancel_sound_switch));
             esphome::xvf3800::XVF3800Hardware::instance().init(id(bus_a));
             esphome::get_pcm_sound_player().set_speaker(id(board_speaker));
@@ -104,10 +104,6 @@ esphome:
                 id(slot2_wake_word).publish_state(s2);
               }
             });
-            esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-                1, id(slot1_sensitivity).current_option(), id(clemens_model), id(nabu_model));
-            esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-                2, id(slot2_sensitivity).current_option(), id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
                 1, id(slot1_cutoff).state, id(clemens_model), id(nabu_model));
             esphome::wake_loader::get_wake_partition_loader().set_slot_cutoff_override(
@@ -922,49 +918,6 @@ select:
           id(va).set_slot_wake_words(id(slot1_wake_word).current_option(), x);
           global_preferences->sync();
 
-  - platform: template
-    id: slot1_sensitivity
-    name: "Slot 1: Sensitivity (Legacy)"
-    internal: true
-    icon: "mdi:tune"
-    entity_category: config
-    optimistic: true
-    initial_option: "Moderately sensitive"
-    restore_value: true
-    options:
-      - "Extreme sensitivity"
-      - "Very sensitive"
-      - "Moderately sensitive"
-      - "Slightly sensitive"
-    set_action:
-      - lambda: |-
-          esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-              1, x, id(clemens_model), id(nabu_model));
-          float p = esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(1) / 255.0f;
-          id(slot1_cutoff).publish_state(p);
-          global_preferences->sync();
-
-  - platform: template
-    id: slot2_sensitivity
-    name: "Slot 2: Sensitivity (Legacy)"
-    internal: true
-    icon: "mdi:tune-vertical"
-    entity_category: config
-    optimistic: true
-    initial_option: "Moderately sensitive"
-    restore_value: true
-    options:
-      - "Extreme sensitivity"
-      - "Very sensitive"
-      - "Moderately sensitive"
-      - "Slightly sensitive"
-    set_action:
-      - lambda: |-
-          esphome::wake_loader::get_wake_partition_loader().set_slot_sensitivity(
-              2, x, id(clemens_model), id(nabu_model));
-          float p = esphome::wake_loader::get_wake_partition_loader().get_active_cutoff_for_slot(2) / 255.0f;
-          id(slot2_cutoff).publish_state(p);
-          global_preferences->sync();
 
   - platform: template
     id: slot1_processing_sound
