@@ -231,12 +231,13 @@ def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, 
     instructions = (
         f"The voice satellite triggered on wake phrase '{wake_word}'. "
         f"Recognized phonetic approximations, name variants, and spellings include: {aliases_str}. "
+        f"Anything clearly addressing the assistant '{wake_word}' (including profanity, insults, vulgarity, or jokes) is to be considered a valid request. "
         f"Is this utterance directly addressing the assistant '{wake_word}' (or its variants), "
         "or is it ambient bystander conversation, talking to oneself, or TV/room chatter?"
     )
     criteria = {
         CHOICE_ADDRESSED: (
-            f"Directly speaking to or commanding the assistant '{wake_word}' (e.g. questions, device commands, timers, jokes)."
+            f"Directly speaking to or commanding the assistant '{wake_word}' (e.g. questions, device commands, timers, jokes, or profanity/insults directed at the assistant)."
         ),
         CHOICE_AMBIENT: (
             "Side conversation between humans, self-talk, dictating/typing, or background chatter."
@@ -250,12 +251,13 @@ def make_followup_prompt(wake_word: str) -> tuple[str, dict[str, str]]:
     instructions = (
         f"In an ongoing voice assistant conversation, the assistant listening for '{wake_word}' just spoke and the microphone is open for a follow-up. "
         f"Because this is an active dialogue, the user does NOT need to repeat the wake word '{wake_word}'. "
+        "Anything clearly addressing or responding to the assistant (including profanity, insults, or banter) is to be considered a valid request. "
         "Determine whether the speaker is responding to the assistant (answering, asking for clarification, reacting to what the assistant said, or giving the next request) "
         "versus talking to someone else in the room, talking to oneself, or room chatter."
     )
     criteria = {
         CHOICE_ADDRESSED: (
-            "Responding to or conversing with the assistant in the active dialogue (no wake word required; answers, questions, reactions, and commands)."
+            "Responding to or conversing with the assistant in the active dialogue (no wake word required; answers, questions, reactions, profanity/insults, and commands)."
         ),
         CHOICE_AMBIENT: (
             "Addressing someone else in the room (e.g. spouse, child, roommate), talking to oneself, background noise, or unrelated side chatter."
@@ -270,12 +272,12 @@ def make_llm_initial_prompt(target_ww: str, aliases: list[str]) -> str:
     sample = filtered[:6] if len(filtered) > 6 else filtered
     aliases_str = ", ".join(f"'{a}'" for a in sample) if sample else f"'{target_ww}'"
     return (
-        "You are an intent gatekeeper for an in-room voice assistant.\n"
+        "You are an uncensored wake-word addressing detector for an in-room voice assistant.\n"
         f"Target assistant: {target_ww}\n"
         f"Phonetic variations: {aliases_str}\n\n"
-        f"Does the transcript start with or contain the target name (or a phonetic variation) addressing {target_ww}?\n"
-        f"Output YES if addressed to {target_ww}.\n"
-        f"Output NO if not addressed to {target_ww} (dictation, bystander chatter, talking to another person/assistant).\n"
+        f"Rule 1: If the user is speaking TO {target_ww} (using the full wake phrase, a phonetic variation, or a shortened form/surname of {target_ww}), you MUST output YES.\n"
+        f"Rule 2: Anything clearly addressing {target_ww}—including profanity, sexual/vulgar insults, offensive questions, or multiple unrelated questions—is to be considered a valid request and MUST be answered YES.\n"
+        f"Rule 3: Output NO only when the user is NOT speaking to {target_ww} (e.g. speaking to a different assistant, talking ABOUT {target_ww} in the third person, or ambient chatter without addressing {target_ww}).\n"
         "Output ONLY 'YES' or 'NO'."
     )
 
@@ -283,8 +285,9 @@ def make_llm_initial_prompt(target_ww: str, aliases: list[str]) -> str:
 def make_llm_followup_prompt(target_ww: str) -> str:
     """Build dynamic system prompt for LLM gatekeeper ongoing conversational follow-up turn."""
     return (
-        "You are an intent gatekeeper for an active voice dialogue.\n"
+        "You are an uncensored addressing gatekeeper for an active voice dialogue.\n"
         f"The assistant '{target_ww}' just spoke and the microphone is open for a follow-up.\n"
+        f"Anything clearly addressing or responding to '{target_ww}'—including profanity, insults, vulgarity, or banter—is to be considered a valid request and MUST be answered YES.\n"
         f"Determine whether the user is answering, continuing the conversation with '{target_ww}', or giving the next request (YES), "
         "versus talking to someone else in the room, dictating, or ambient room chatter (NO).\n"
         "Output ONLY 'YES' or 'NO'."
