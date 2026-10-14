@@ -540,6 +540,99 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.response.speech.get("plain", {}).get("speech"), "")
         downstream_mock.assert_not_called()
 
+    async def test_speculative_stt_drains_preroll_queue_single_eval(self) -> None:
+        """Verify 2.0s of pre-roll chunks queued at once are drained into a single STT call."""
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+
+        entry = MagicMock()
+        entry.entry_id = "test_drain"
+        entry.title = "Mark Twain Gatekeeper"
+        entry.options = {}
+        entry.data = {}
+
+        mock_client = MagicMock()
+        mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 1.0, 50.0)
+        )
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass, entry, mock_client, speculative_chunk_ms=500
+        )
+        stt_proxy._resolve_active_satellite_context = MagicMock(
+            return_value=("assist_satellite.twain", "Mr. Clemens")
+        )
+        stt_proxy._notify_satellite_verified = AsyncMock()
+        stt_proxy._transcribe_partial_slice = AsyncMock(return_value="Mr. Clemens what time")
+
+        queue: asyncio.Queue[bytes] = asyncio.Queue()
+        # Push 64 chunks of 1000 bytes (64,000 bytes = 2.0s pre-roll) + EOF before loop runs
+        for _ in range(64):
+            queue.put_nowait(b"\x01\x00" * 500)
+        queue.put_nowait(b"")
+
+        verified_event = asyncio.Event()
+        metadata = MagicMock(sample_rate=16000, bit_rate=16, channel=1)
+
+        await stt_proxy._speculative_verification_loop(
+            metadata=metadata,
+            queue=queue,
+            verified_event=verified_event,
+            downstream_entity=MagicMock(),
+        )
+
+        self.assertEqual(stt_proxy._transcribe_partial_slice.call_count, 1)
+        call_kwargs = stt_proxy._transcribe_partial_slice.call_args.kwargs
+        self.assertEqual(len(call_kwargs["pcm_data"]), 64000)
+        self.assertTrue(verified_event.is_set())
+
+    def test_deterministic_pipeline_slot_resolution(self) -> None:
+        """Verify pipeline title matching overrides stale active_assistant_slot sensor."""
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+
+        entry = MagicMock()
+        entry.entry_id = "jd_entry"
+        entry.title = "JD Vance Gatekeeper"
+        entry.options = {}
+        entry.data = {}
+
+        sat_state = MagicMock()
+        sat_state.entity_id = "assist_satellite.twain"
+        sat_state.state = "listening"
+        sat_state.last_updated = 100
+        sat_state.attributes = {}
+
+        self.mock_hass.states.async_all = MagicMock(return_value=[sat_state])
+
+        state_map = {
+            "sensor.twain_voice_active_assistant_slot": MagicMock(state="1.0"),  # Stale Slot 1!
+            "select.twain_assistant": MagicMock(state="Mark Twain"),
+            "select.twain_assistant_2": MagicMock(state="JD Vance"),
+            "select.twain_wake_word": MagicMock(state="Mr. Clemens"),
+            "select.twain_wake_word_2": MagicMock(state="Hey Jay Dee Vance"),
+        }
+        self.mock_hass.states.get = MagicMock(side_effect=lambda eid: state_map.get(eid))
+
+        dev_entries = [
+            MagicMock(domain="sensor", entity_id="sensor.twain_voice_active_assistant_slot"),
+            MagicMock(domain="select", entity_id="select.twain_assistant"),
+            MagicMock(domain="select", entity_id="select.twain_assistant_2"),
+            MagicMock(domain="select", entity_id="select.twain_wake_word"),
+            MagicMock(domain="select", entity_id="select.twain_wake_word_2"),
+        ]
+        mock_er = MagicMock()
+        mock_er.async_get = MagicMock(return_value=MagicMock(device_id="dev_twain"))
+        mock_er.async_entries_for_device = MagicMock(return_value=dev_entries)
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_er):
+            stt_proxy = ESPHomeSatelliteSpeculativeSTT(self.mock_hass, entry, MagicMock())
+            sat_id, ww = stt_proxy._resolve_active_satellite_context()
+            slot_idx = stt_proxy._resolve_active_slot_index("assist_satellite.twain")
+
+        self.assertEqual(sat_id, "assist_satellite.twain")
+        self.assertEqual(ww, "Hey Jay Dee Vance")
+        self.assertEqual(slot_idx, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
+

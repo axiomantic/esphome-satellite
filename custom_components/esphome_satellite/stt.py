@@ -63,9 +63,10 @@ from .systemone_client import GatekeeperClientError, SystemOneClientError
 _LOGGER = logging.getLogger(__name__)
 
 # Two-Phase Voice Activity & Silence Invariants
-INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 10.0  # Allow up to 10s post-wake pause before speech begins
-END_OF_SPEECH_SILENCE_SECONDS: Final = 3.0    # Allow up to 3.0s pause between words / end-of-speech
-MAX_RECORDING_TIMEOUT_SECONDS: Final = 30.0   # Hard ceiling for voice stream
+PRE_ROLL_DURATION_SECONDS: Final = 2.0        # 2.0s pre-roll wake word buffer prepended by satellite
+INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 5.0   # Allow up to 5.0s post-wake pause before speech begins
+END_OF_SPEECH_SILENCE_SECONDS: Final = 1.2    # Complete stream after 1.2s of post-speech silence
+MAX_RECORDING_TIMEOUT_SECONDS: Final = 10.5   # Complete stream cleanly before 10s hardware watchdog
 SPEECH_RMS_THRESHOLD: Final = 450.0           # Voice activity threshold for 16-bit PCM
 
 
@@ -325,39 +326,44 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                         )
                         break
 
-                    chunk_rms = self._calculate_pcm_rms(chunk)
-                    is_speech = chunk_rms >= SPEECH_RMS_THRESHOLD
+                    # Only evaluate post-wake command VAD after the 2.0s pre-roll wake word buffer
+                    if total_elapsed > PRE_ROLL_DURATION_SECONDS:
+                        chunk_rms = self._calculate_pcm_rms(chunk)
+                        is_speech = chunk_rms >= SPEECH_RMS_THRESHOLD
 
-                    if not in_speech:
-                        if is_speech:
-                            speech_consec_chunks += 1
-                            if speech_consec_chunks >= 3:
-                                in_speech = True
-                                _LOGGER.debug(
-                                    "[Speculative STT] Voice command started after %.2fs post-wake pause (RMS=%.1f)",
-                                    initial_silence_elapsed,
-                                    chunk_rms,
-                                )
+                        if not in_speech:
+                            if is_speech:
+                                speech_consec_chunks += 1
+                                if speech_consec_chunks >= 3:
+                                    in_speech = True
+                                    _LOGGER.debug(
+                                        "[Speculative STT] Voice command started after %.2fs post-wake pause (RMS=%.1f)",
+                                        initial_silence_elapsed,
+                                        chunk_rms,
+                                    )
+                            else:
+                                speech_consec_chunks = 0
+                                initial_silence_elapsed += chunk_sec
+                                if initial_silence_elapsed >= INITIAL_SPEECH_TIMEOUT_SECONDS:
+                                    _LOGGER.info(
+                                        "[Speculative STT] Initial speech pause timeout (%.1fs) reached without speech; terminating stream",
+                                        INITIAL_SPEECH_TIMEOUT_SECONDS,
+                                    )
+                                    break
                         else:
-                            speech_consec_chunks = 0
-                            initial_silence_elapsed += chunk_sec
-                            if initial_silence_elapsed >= INITIAL_SPEECH_TIMEOUT_SECONDS:
-                                _LOGGER.info(
-                                    "[Speculative STT] Initial speech pause timeout (%.1fs) reached without speech; terminating stream",
-                                    INITIAL_SPEECH_TIMEOUT_SECONDS,
-                                )
-                                break
-                    else:
-                        if is_speech:
-                            end_silence_elapsed = 0.0
-                        else:
-                            end_silence_elapsed += chunk_sec
-                            if end_silence_elapsed >= END_OF_SPEECH_SILENCE_SECONDS:
-                                _LOGGER.info(
-                                    "[Speculative STT] End-of-speech silence (%.1fs) detected; completing stream",
-                                    END_OF_SPEECH_SILENCE_SECONDS,
-                                )
-                                break
+                            if is_speech:
+                                speech_consec_chunks += 1
+                                if speech_consec_chunks >= 3:
+                                    end_silence_elapsed = 0.0
+                            else:
+                                speech_consec_chunks = 0
+                                end_silence_elapsed += chunk_sec
+                                if end_silence_elapsed >= END_OF_SPEECH_SILENCE_SECONDS:
+                                    _LOGGER.info(
+                                        "[Speculative STT] End-of-speech silence (%.1fs) detected; completing stream",
+                                        END_OF_SPEECH_SILENCE_SECONDS,
+                                    )
+                                    break
 
                     if not verified_event.is_set() and not chunk_queue.full():
                         chunk_queue.put_nowait(chunk)
@@ -395,8 +401,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 except asyncio.CancelledError:
                     pass
 
-            if sat_id is None:
-                sat_id, target_ww = self._resolve_active_satellite_context()
+            fresh_sat_id, fresh_ww = self._resolve_active_satellite_context()
+            if fresh_sat_id:
+                sat_id = fresh_sat_id
+            if fresh_ww:
+                target_ww = fresh_ww
 
             if captured_chunks:
                 asyncio.create_task(
@@ -563,6 +572,21 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             except (ValueError, TypeError):
                                 pass
 
+                # If this config entry corresponds to a specific assistant pipeline selected on a slot,
+                # prefer that slot deterministically to avoid Wi-Fi sensor update race conditions at t=0ms.
+                entry_title = getattr(self._entry, "title", None)
+                if isinstance(entry_title, str) and entry_title.strip():
+                    title_lower = entry_title.strip().lower()
+                    for dev_entry in dev_entries:
+                        if dev_entry.domain == "select" and "assistant" in dev_entry.entity_id and "wake_word" not in dev_entry.entity_id:
+                            sel_state = self.hass.states.get(dev_entry.entity_id)
+                            if sel_state and isinstance(sel_state.state, str):
+                                pipe_name = sel_state.state.strip().lower()
+                                if pipe_name and pipe_name not in ("unknown", "unavailable", "preferred") and pipe_name in title_lower:
+                                    is_slot2_pipe = dev_entry.entity_id.endswith("_2") or "slot_2" in dev_entry.entity_id
+                                    active_slot = 1 if is_slot2_pipe else 0
+                                    break
+
                 for dev_entry in dev_entries:
                     if dev_entry.domain == "select":
                         is_slot2 = "wake_word_2" in dev_entry.entity_id or "slot_2_wake_word" in dev_entry.entity_id
@@ -605,6 +629,19 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             dev_entries = res
                     except Exception:
                         pass
+
+                entry_title = getattr(self._entry, "title", None)
+                if isinstance(entry_title, str) and entry_title.strip():
+                    title_lower = entry_title.strip().lower()
+                    for dev_entry in dev_entries:
+                        if dev_entry.domain == "select" and "assistant" in dev_entry.entity_id and "wake_word" not in dev_entry.entity_id:
+                            sel_state = self.hass.states.get(dev_entry.entity_id)
+                            if sel_state and isinstance(sel_state.state, str):
+                                pipe_name = sel_state.state.strip().lower()
+                                if pipe_name and pipe_name not in ("unknown", "unavailable", "preferred") and pipe_name in title_lower:
+                                    is_slot2_pipe = dev_entry.entity_id.endswith("_2") or "slot_2" in dev_entry.entity_id
+                                    return 1 if is_slot2_pipe else 0
+
                 for dev_entry in dev_entries:
                     if dev_entry.domain == "sensor" and "active_assistant_slot" in dev_entry.entity_id:
                         slot_state = self.hass.states.get(dev_entry.entity_id)
@@ -669,6 +706,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         bytes_per_second = rate_hz * bytes_per_sample * num_channels
         window_bytes = int(bytes_per_second * (self.speculative_chunk_ms / 1000.0))
         stride_bytes = int(bytes_per_second * 0.20)  # Re-evaluate every 200ms
+        max_speculative_bytes = int(bytes_per_second * 4.5)  # Stop speculative partial STT after 4.5s
         last_eval_len = 0
 
         sat_id, target_wake_word = self._resolve_active_satellite_context()
@@ -688,12 +726,23 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 break
 
             pcm_accumulator.extend(chunk)
+            eof_seen = False
+            while not queue.empty():
+                try:
+                    extra = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                if not extra:
+                    eof_seen = True
+                    break
+                pcm_accumulator.extend(extra)
 
             # Evaluate when window threshold is met and satellite is not yet verified
             if (
                 not verified_event.is_set()
                 and len(pcm_accumulator) >= window_bytes
                 and (len(pcm_accumulator) - last_eval_len) >= stride_bytes
+                and len(pcm_accumulator) <= max_speculative_bytes
             ):
                 last_eval_len = len(pcm_accumulator)
 
@@ -719,6 +768,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     target_words = target_wake_word.strip().split() if target_wake_word else []
                     min_words = min(2, len(target_words)) if target_words else 2
                     if len(words) < min_words:
+                        if eof_seen:
+                            break
                         continue
 
                     try:
@@ -761,6 +812,9 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             "[Speculative STT] Speculative classification check failed: %s",
                             err,
                         )
+
+            if eof_seen:
+                break
 
     async def _transcribe_partial_slice(
         self,
