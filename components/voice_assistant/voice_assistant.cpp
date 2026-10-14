@@ -760,8 +760,20 @@ void VoiceAssistant::request_stop() {
       break;
     case State::AWAITING_RESPONSE:
       this->signal_stop_();
+      this->set_state_(State::IDLE, State::IDLE);
       break;
     case State::STREAMING_RESPONSE:
+    case State::RESPONSE_FINISHED:
+#ifdef USE_SPEAKER
+      if (this->speaker_ != nullptr) {
+        this->speaker_->stop();
+        this->cancel_timeout("speaker-timeout");
+        this->cancel_timeout("playing");
+        this->clear_buffers_();
+        this->wait_for_stream_end_ = false;
+        this->stream_ended_ = false;
+      }
+#endif
 #ifdef USE_MEDIA_PLAYER
       // Stop any ongoing media player announcement
       if (this->media_player_ != nullptr) {
@@ -775,9 +787,9 @@ void VoiceAssistant::request_stop() {
         this->signal_stop_();
       }
 #endif
+      this->signal_stop_();
+      this->set_state_(State::IDLE, State::IDLE);
       break;
-    case State::RESPONSE_FINISHED:
-      break;  // Let the incoming audio stream finish then it will go to idle.
   }
 }
 
@@ -1002,6 +1014,7 @@ void VoiceAssistant::on_event(const api::VoiceAssistantEventResponse &msg) {
       if (this->speaker_ != nullptr) {
         this->speaker_->set_audio_stream_info(audio::AudioStreamInfo(16, 1, SAMPLE_RATE_HZ));
         this->wait_for_stream_end_ = true;
+        this->stream_ended_ = false;
         ESP_LOGD(TAG, "TTS stream start");
         this->defer([this] { this->tts_stream_start_trigger_.trigger(); });
       }
@@ -1010,7 +1023,7 @@ void VoiceAssistant::on_event(const api::VoiceAssistantEventResponse &msg) {
     }
     case api::enums::VOICE_ASSISTANT_TTS_STREAM_END: {
 #ifdef USE_SPEAKER
-      if (this->speaker_ != nullptr) {
+      if (this->speaker_ != nullptr && this->wait_for_stream_end_) {
         this->stream_ended_ = true;
         ESP_LOGD(TAG, "TTS stream end");
       }
