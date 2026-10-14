@@ -31,7 +31,7 @@ sequenceDiagram
     participant Sat as ESP32 Satellite (XVF3800)
     participant HA as Home Assistant Core (Assist Pipeline)
     participant Gate as Gatekeeper (custom_components/esphome_satellite)
-    participant Sys1 as System 1 Daemon (Laya / Jev on flanopticon)
+    participant Sys1 as System 1 Daemon (Laya / Jev)
     participant Down as Downstream Agent (LLM / HA Assist)
 
     User->>Sat: Ambient speech (e.g., "Mister Clemens had three boats...")
@@ -111,7 +111,7 @@ CONF_TIMEOUT_SECONDS: Final = "timeout_seconds"
 CONF_FALLBACK_BEHAVIOR: Final = "fallback_behavior"
 
 # Default Configuration Values
-DEFAULT_SYSTEMONE_URL: Final = "http://flanopticon.lan:8000/v1/systemone"
+DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_THRESHOLD: Final = 0.60
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "allow"  # "allow" (fail-open) | "drop" (fail-closed)

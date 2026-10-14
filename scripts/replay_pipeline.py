@@ -38,15 +38,13 @@ if spec and spec.loader:
 else:
     expand_wake_phrase = lambda w, a=None: [w]  # type: ignore
     make_initial_prompt = lambda w, a: (f"Is this utterance addressing {w}?", {})  # type: ignore
-    DEFAULT_TOKEN = "660ffbac0245bfdd9744385963696d8e64875494ea205f419a6462ebb827b4c1"
-    DEFAULT_SYS1_URL = "http://laya.flanopticon.lan/v1/systemone"
+    DEFAULT_TOKEN = ""
+    DEFAULT_SYS1_URL = "http://localhost:8000/v1/systemone"
 
-DEFAULT_SYS1_URL = "http://laya.flanopticon.lan/v1/systemone"
-DEFAULT_TOKEN = "660ffbac0245bfdd9744385963696d8e64875494ea205f419a6462ebb827b4c1"
-DEFAULT_WYOMING_HOST = "flanopticon.lan"
+DEFAULT_WYOMING_HOST = "localhost"
 DEFAULT_WYOMING_PORT = 10300
-DEFAULT_HA_HOST = "10.0.2.136"
-DEFAULT_HA_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI3MjQyY2Y3OTYxNGQ0Yjc2YTFjYmFlMzNjZDhjNTEwZiIsImlhdCI6MTc4ODY1NDg3MSwiZXhwIjoyMTA0MDE0ODcxfQ.dummy"
+DEFAULT_HA_HOST = "localhost"
+DEFAULT_HA_TOKEN = ""
 
 
 def calculate_audio_stats(wav_path: Path) -> dict:
