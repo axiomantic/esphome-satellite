@@ -100,6 +100,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Gatekeeper"
+    _attr_supports_streaming = True
 
     def __init__(
         self,

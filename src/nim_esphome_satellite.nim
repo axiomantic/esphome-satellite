@@ -1389,8 +1389,8 @@ proc satelliteLoop*(now: uint32) =
         nim_satellite_speech_ended()
     else:
       let silenceElapsed = diffMs(now, lastSpeechActivityMs)
-      if silenceElapsed >= 10000:
-        warn("SatelliteFSM", "Watchdog: Listening state timed out after 10s of silence. Returning to Idle.")
+      if silenceElapsed >= 15000:
+        warn("SatelliteFSM", "Watchdog: Listening state timed out after 15s of silence. Returning to Idle.")
         notifyHardwareAbort()
         nim_satellite_silence_timeout()
   of rsVerifying:
@@ -1431,8 +1431,8 @@ proc satelliteLoop*(now: uint32) =
         nim_satellite_speech_ended()
     else:
       let silenceElapsed = diffMs(now, lastSpeechActivityMs)
-      if silenceElapsed >= 12000:
-        warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 12s of silence. Returning to Idle.")
+      if silenceElapsed >= 15000:
+        warn("SatelliteFSM", "Watchdog: FollowUp state timed out after 15s of silence. Returning to Idle.")
         notifyHardwareAbort()
         let idle = onFollowUpTimeout(fsm.followUpState)
         fsm = SatelliteFSMInstance(state: rsIdle, idleState: idle)
