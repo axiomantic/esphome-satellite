@@ -247,7 +247,7 @@ class TestSystemOneGatekeeper(unittest.IsolatedAsyncioTestCase):
         """Verify request payload uses Laya 'criteria' schema per emergent design addendum."""
         client = SystemOneClient(
             self.mock_hass,
-            "http://flanopticon.lan:8000/v1/systemone",
+            "http://localhost:8000/v1/systemone",
             auth_token="test_token_123",
             timeout_seconds=2.0,
         )
@@ -1759,9 +1759,9 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         from custom_components.esphome_satellite.const import expand_wake_phrase
 
         # Test forward acronym: Jay Dee -> JD
-        jd_expanded = expand_wake_phrase("Hey Jay Dee Vance")
-        self.assertIn("Hey JD Vance", jd_expanded)
-        self.assertIn("Hey Jay Dee Vance", jd_expanded)
+        jd_expanded = expand_wake_phrase("Hey Jay Dee Lance")
+        self.assertIn("Hey JD Lance", jd_expanded)
+        self.assertIn("Hey Jay Dee Lance", jd_expanded)
 
         # Test title expansion: Mr. -> Mister
         clemens_expanded = expand_wake_phrase("Mr. Clemens")
@@ -1769,11 +1769,11 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mr. Clemens", clemens_expanded)
 
         # Test additive user aliases (default empty, additive when provided)
-        with_aliases = expand_wake_phrase("Hey Jay Dee Vance", ["A baby dance", "PJ Vance"])
-        self.assertIn("Hey JD Vance", with_aliases)
-        self.assertIn("Hey Jay Dee Vance", with_aliases)
+        with_aliases = expand_wake_phrase("Hey Jay Dee Lance", ["A baby dance", "PJ Lance"])
+        self.assertIn("Hey JD Lance", with_aliases)
+        self.assertIn("Hey Jay Dee Lance", with_aliases)
         self.assertIn("A baby dance", with_aliases)
-        self.assertIn("PJ Vance", with_aliases)
+        self.assertIn("PJ Lance", with_aliases)
 
     def test_prompt_factories_generic_and_followup(self):
         """Verify initial and follow-up prompt structure conforms to requirements."""
@@ -1784,14 +1784,14 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             make_initial_prompt,
         )
 
-        instr_init, crit_init = make_initial_prompt("Hey Jay Dee Vance", ["Hey JD Vance", "A baby dance"])
-        self.assertIn("Hey Jay Dee Vance", instr_init)
-        self.assertIn("Hey JD Vance", instr_init)
+        instr_init, crit_init = make_initial_prompt("Hey Jay Dee Lance", ["Hey JD Lance", "A baby dance"])
+        self.assertIn("Hey Jay Dee Lance", instr_init)
+        self.assertIn("Hey JD Lance", instr_init)
         self.assertIn("A baby dance", instr_init)
         self.assertIn(CHOICE_ADDRESSED, crit_init)
         self.assertIn(CHOICE_AMBIENT, crit_init)
 
-        instr_follow, crit_follow = make_followup_prompt("Hey Jay Dee Vance")
+        instr_follow, crit_follow = make_followup_prompt("Hey Jay Dee Lance")
         self.assertIn("follow-up", instr_follow.lower())
         self.assertIn("NOT need to repeat the wake word", instr_follow)
         self.assertIn(CHOICE_ADDRESSED, crit_follow)
@@ -1815,8 +1815,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(is_wake_and_pause_turn("Mr. Clemens.", "Mr. Clemens", ["Mister Clemens"]))
         self.assertTrue(is_wake_and_pause_turn("Hey Mr Clemens", "Mr. Clemens", ["Mister Clemens"]))
         self.assertTrue(is_wake_and_pause_turn("Mister Clemens", "Mr. Clemens", ["Mister Clemens"]))
-        self.assertTrue(is_wake_and_pause_turn("Hey JD Vance", "Hey JD Vance", ["Jay Dee Vance"]))
-        self.assertTrue(is_wake_and_pause_turn("JD Vance", "Hey JD Vance", ["Jay Dee Vance"]))
+        self.assertTrue(is_wake_and_pause_turn("Hey JD Lance", "Hey JD Lance", ["Jay Dee Lance"]))
+        self.assertTrue(is_wake_and_pause_turn("JD Lance", "Hey JD Lance", ["Jay Dee Lance"]))
         self.assertTrue(is_wake_and_pause_turn("Mark Twain", "Mark Twain", []))
         self.assertTrue(is_wake_and_pause_turn("Hey Mark Twain", "Mark Twain", []))
 
@@ -1832,7 +1832,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
 
         # Wake word + command must NOT trigger wake-and-pause
         self.assertFalse(is_wake_and_pause_turn("Mr Clemens what time is it", "Mr. Clemens", ["Mister Clemens"]))
-        self.assertFalse(is_wake_and_pause_turn("Hey JD Vance tell me a joke", "Hey JD Vance", []))
+        self.assertFalse(is_wake_and_pause_turn("Hey JD Lance tell me a joke", "Hey JD Lance", []))
 
     async def test_gatekeeper_short_command_delegation(self):
         """Verify 2-word commands like 'Lights on' are delegated downstream and NOT intercepted as Yes?."""
@@ -1878,11 +1878,11 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("Klemens" in v for v in clemens_variants))
         self.assertTrue(any("Mistah" in v or "Mistur" in v for v in clemens_variants))
 
-        # Test JD Vance dynamic phonetic variants
-        jd_variants = generate_phonetic_variants("Hey JD Vance")
-        self.assertIn("Hey Jay Dee Vance", jd_variants)
-        self.assertIn("JD Vance", jd_variants)
-        self.assertTrue(any("Vans" in v for v in jd_variants))
+        # Test acronym + -ance dynamic phonetic variants
+        jd_variants = generate_phonetic_variants("Hey JD Lance")
+        self.assertIn("Hey Jay Dee Lance", jd_variants)
+        self.assertIn("JD Lance", jd_variants)
+        self.assertTrue(any("Lans" in v for v in jd_variants))
 
         # Test arbitrary wake phrase without hardcoded knowledge
         wizard_variants = generate_phonetic_variants("Little Wizard")
@@ -1928,8 +1928,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
                 metadata=metadata,
                 audio_data=audio_bytes,
                 satellite_id="assist_satellite.kitchen_satellite",
-                wake_word="Hey Jay Dee Vance",
-                text="Hey JD Vance what time is it",
+                wake_word="Hey Jay Dee Lance",
+                text="Hey JD Lance what time is it",
             )
 
             rec_dir = Path(tmp_dir)
@@ -1950,8 +1950,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             with open(json_files[0], encoding="utf-8") as jf:
                 meta = json.load(jf)
                 self.assertEqual(meta["satellite_id"], "assist_satellite.kitchen_satellite")
-                self.assertEqual(meta["wake_word"], "Hey Jay Dee Vance")
-                self.assertEqual(meta["text"], "Hey JD Vance what time is it")
+                self.assertEqual(meta["wake_word"], "Hey Jay Dee Lance")
+                self.assertEqual(meta["text"], "Hey JD Lance what time is it")
                 self.assertEqual(meta["duration_sec"], 1.0)
                 self.assertEqual(meta["sample_rate"], 16000)
 

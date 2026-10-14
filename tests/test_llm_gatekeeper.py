@@ -232,14 +232,14 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
         c1 = GatekeeperLlmClient(self.mock_hass, "http://localhost:8080")
         self.assertEqual(c1.endpoint_url, "http://localhost:8080/v1/chat/completions")
 
-        c2 = GatekeeperLlmClient(self.mock_hass, "http://flanopticon.lan:8080/v1")
-        self.assertEqual(c2.endpoint_url, "http://flanopticon.lan:8080/v1/chat/completions")
+        c2 = GatekeeperLlmClient(self.mock_hass, "http://llm.local:8080/v1")
+        self.assertEqual(c2.endpoint_url, "http://llm.local:8080/v1/chat/completions")
 
-        c3 = GatekeeperLlmClient(self.mock_hass, "http://flanopticon.lan:8080/v1/")
-        self.assertEqual(c3.endpoint_url, "http://flanopticon.lan:8080/v1/chat/completions")
+        c3 = GatekeeperLlmClient(self.mock_hass, "http://llm.local:8080/v1/")
+        self.assertEqual(c3.endpoint_url, "http://llm.local:8080/v1/chat/completions")
 
-        c4 = GatekeeperLlmClient(self.mock_hass, "http://flanopticon.lan:8080/v1/chat/completions")
-        self.assertEqual(c4.endpoint_url, "http://flanopticon.lan:8080/v1/chat/completions")
+        c4 = GatekeeperLlmClient(self.mock_hass, "http://llm.local:8080/v1/chat/completions")
+        self.assertEqual(c4.endpoint_url, "http://llm.local:8080/v1/chat/completions")
 
     async def test_classify_empty_text(self):
         """Empty or whitespace text is immediately classified as ambient with zero network I/O."""
@@ -259,9 +259,9 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
         mock_get_session.return_value = self.mock_session
         client = GatekeeperLlmClient(
             self.mock_hass,
-            "http://flanopticon.lan:8080/v1",
+            "http://llm.local:8080/v1",
             auth_token="secret",
-            model="stheno-8b",
+            model="llama-3.1-8b",
         )
 
         mock_resp = AsyncMock()
@@ -284,9 +284,9 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
         # Verify POST payload and headers
         self.mock_session.post.assert_called_once()
         args, kwargs = self.mock_session.post.call_args
-        self.assertEqual(args[0], "http://flanopticon.lan:8080/v1/chat/completions")
+        self.assertEqual(args[0], "http://llm.local:8080/v1/chat/completions")
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer secret")
-        self.assertEqual(kwargs["json"]["model"], "stheno-8b")
+        self.assertEqual(kwargs["json"]["model"], "llama-3.1-8b")
         self.assertEqual(kwargs["json"]["max_tokens"], 2)
         self.assertEqual(kwargs["json"]["temperature"], 0.0)
 
@@ -294,7 +294,7 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
     async def test_classify_no_ambient(self, mock_get_session):
         """Valid NO response from LLM classifies as CHOICE_AMBIENT."""
         mock_get_session.return_value = self.mock_session
-        client = GatekeeperLlmClient(self.mock_hass, "http://flanopticon.lan:8080/v1")
+        client = GatekeeperLlmClient(self.mock_hass, "http://llm.local:8080/v1")
 
         mock_resp = AsyncMock()
         mock_resp.status = 200
@@ -315,7 +315,7 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
     async def test_classify_http_error_raises(self, mock_get_session):
         """HTTP error raises GatekeeperLlmClientError."""
         mock_get_session.return_value = self.mock_session
-        client = GatekeeperLlmClient(self.mock_hass, "http://flanopticon.lan:8080/v1")
+        client = GatekeeperLlmClient(self.mock_hass, "http://llm.local:8080/v1")
 
         mock_resp = AsyncMock()
         mock_resp.status = 500
@@ -329,7 +329,7 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
     async def test_classify_timeout_raises(self, mock_get_session):
         """Timeout raises GatekeeperLlmClientError."""
         mock_get_session.return_value = self.mock_session
-        client = GatekeeperLlmClient(self.mock_hass, "http://flanopticon.lan:8080/v1", timeout_seconds=0.1)
+        client = GatekeeperLlmClient(self.mock_hass, "http://llm.local:8080/v1", timeout_seconds=0.1)
 
         self.mock_session.post.return_value.__aenter__.side_effect = TimeoutError()
 
@@ -362,18 +362,18 @@ class TestClientFactory(unittest.TestCase):
         mock_entry = MagicMock()
         mock_entry.data = {
             CONF_GATEKEEPER_ENGINE: GATEKEEPER_ENGINE_LLM,
-            CONF_LLM_URL: "http://flanopticon.lan:8080/v1",
+            CONF_LLM_URL: "http://llm.local:8080/v1",
             CONF_LLM_TOKEN: "tok123",
-            CONF_LLM_MODEL: "stheno-8b",
+            CONF_LLM_MODEL: "llama-3.1-8b",
             CONF_TIMEOUT_SECONDS: 2.0,
         }
         mock_entry.options = {}
 
         client = create_gatekeeper_client(self.mock_hass, mock_entry)
         self.assertIsInstance(client, GatekeeperLlmClient)
-        self.assertEqual(client.endpoint_url, "http://flanopticon.lan:8080/v1/chat/completions")
+        self.assertEqual(client.endpoint_url, "http://llm.local:8080/v1/chat/completions")
         self.assertEqual(client.token, "tok123")
-        self.assertEqual(client.model, "stheno-8b")
+        self.assertEqual(client.model, "llama-3.1-8b")
         self.assertEqual(client.timeout, 2.0)
 
     def test_factory_creates_systemone_client(self):
@@ -422,13 +422,13 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
         self.mock_entry.data = {
             CONF_DOWNSTREAM_AGENT: "conversation.mock_downstream",
             CONF_GATEKEEPER_ENGINE: GATEKEEPER_ENGINE_LLM,
-            CONF_LLM_URL: "http://flanopticon.lan:8080/v1",
-            CONF_LLM_MODEL: "stheno-8b",
+            CONF_LLM_URL: "http://llm.local:8080/v1",
+            CONF_LLM_MODEL: "llama-3.1-8b",
             CONF_FALLBACK_BEHAVIOR: DEFAULT_FALLBACK,
         }
         self.mock_entry.options = {
             CONF_SLOT1_ALIASES: "clemens, clemons, clement",
-            CONF_SLOT2_ALIASES: "jd vance, jd",
+            CONF_SLOT2_ALIASES: "jarvis, jay dee",
         }
 
         self.sat_state = MagicMock()
@@ -590,8 +590,8 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
         from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
 
         entry = MagicMock()
-        entry.entry_id = "jd_entry"
-        entry.title = "JD Vance Gatekeeper"
+        entry.entry_id = "slot2_entry"
+        entry.title = "Assistant Two Gatekeeper"
         entry.options = {}
         entry.data = {}
 
@@ -606,9 +606,9 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
         state_map = {
             "sensor.twain_voice_active_assistant_slot": MagicMock(state="1.0"),  # Stale Slot 1!
             "select.twain_assistant": MagicMock(state="Mark Twain"),
-            "select.twain_assistant_2": MagicMock(state="JD Vance"),
+            "select.twain_assistant_2": MagicMock(state="Assistant Two"),
             "select.twain_wake_word": MagicMock(state="Mr. Clemens"),
-            "select.twain_wake_word_2": MagicMock(state="Hey Jay Dee Vance"),
+            "select.twain_wake_word_2": MagicMock(state="Hey Jay Dee"),
         }
         self.mock_hass.states.get = MagicMock(side_effect=lambda eid: state_map.get(eid))
 
@@ -629,7 +629,7 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
             slot_idx = stt_proxy._resolve_active_slot_index("assist_satellite.twain")
 
         self.assertEqual(sat_id, "assist_satellite.twain")
-        self.assertEqual(ww, "Hey Jay Dee Vance")
+        self.assertEqual(ww, "Hey Jay Dee")
         self.assertEqual(slot_idx, 1)
 
 
