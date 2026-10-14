@@ -3,12 +3,19 @@
     "step": {
       "user": {
         "title": "ESPHome Satellite Gatekeeper",
-        "description": "Configure the System 1 Neural Gatekeeper to protect downstream conversational agents from ambient chatter and false wakeups.",
+        "description": "Configure the Neural Gatekeeper to protect downstream conversational agents from ambient chatter and false wakeups.",
         "data": {
           "downstream_agent": "Downstream Conversation Agent",
+          "gatekeeper_engine": "Gatekeeper Engine",
+          "llm_url": "LLM Endpoint URL",
+          "llm_model": "LLM Model",
+          "llm_token": "LLM API Bearer Token",
           "systemone_url": "System 1 Endpoint URL",
           "systemone_token": "API Bearer Token",
-          "default_threshold": "Default Ambient Classification Threshold"
+          "default_threshold": "Default Ambient Classification Threshold",
+          "downstream_stt": "Downstream STT Entity",
+          "speculative_chunk_ms": "Speculative STT Chunk Interval (ms)",
+          "early_wake_verification": "Early Speculative Wake Verification"
         }
       }
     }
@@ -20,15 +27,24 @@
         "description": "Configure per-slot thresholds, timeouts, and fallback policies.",
         "data": {
           "downstream_agent": "Downstream Conversation Agent",
+          "gatekeeper_engine": "Gatekeeper Engine",
+          "llm_url": "LLM Endpoint URL",
+          "llm_model": "LLM Model",
+          "llm_token": "LLM API Bearer Token",
           "systemone_url": "System 1 Endpoint URL",
           "systemone_token": "API Bearer Token",
           "slot1_enabled": "Enable Gatekeeper on Slot 1",
           "slot1_threshold": "Slot 1 Confidence Threshold",
+          "slot1_aliases": "Slot 1 Phonetic Aliases (comma-separated)",
           "slot2_enabled": "Enable Gatekeeper on Slot 2",
           "slot2_threshold": "Slot 2 Confidence Threshold",
-          "timeout_seconds": "System 1 Timeout (seconds)",
-          "fallback_behavior": "Fallback Policy on System 1 Failure",
-          "enforce_wake_word": "Enforce Wake Word Presence (Fast-Path Rejection)"
+          "slot2_aliases": "Slot 2 Phonetic Aliases (comma-separated)",
+          "timeout_seconds": "Timeout (seconds)",
+          "fallback_behavior": "Fallback Policy on Engine Failure",
+          "enforce_wake_word": "Enforce Wake Word Presence (Fast-Path Rejection)",
+          "downstream_stt": "Downstream STT Entity",
+          "speculative_chunk_ms": "Speculative STT Chunk Interval (ms)",
+          "early_wake_verification": "Early Speculative Wake Verification"
         }
       }
     }

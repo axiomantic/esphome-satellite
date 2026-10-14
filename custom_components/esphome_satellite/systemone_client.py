@@ -17,8 +17,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-class SystemOneClientError(Exception):
-    """Base exception for System 1 client communication failures."""
+class GatekeeperClientError(Exception):
+    """Base exception for all Gatekeeper client communication failures."""
+
+class SystemOneClientError(GatekeeperClientError):
+    """Exception for System 1 client communication failures."""
 
 class SystemOneClient:
     """Async client communicating with the System 1 inference endpoint."""
@@ -33,14 +36,33 @@ class SystemOneClient:
         self._hass = hass
         self._endpoint_url = endpoint_url
         self._auth_token = auth_token
+        self._timeout_seconds = timeout_seconds
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+
+    @property
+    def endpoint_url(self) -> str:
+        """Inference endpoint URL."""
+        return self._endpoint_url
+
+    @property
+    def token(self) -> str | None:
+        """Bearer authentication token."""
+        return self._auth_token
+
+    @property
+    def timeout(self) -> float:
+        """Request timeout in seconds."""
+        return self._timeout_seconds
 
     async def classify_addressing(
         self,
         text: str,
-        question_text: str,
+        question_text: str = "",
         min_confidence: float = 0.60,
         criteria: dict[str, str] | None = None,
+        target_wake_word: str | None = None,
+        phonetic_variants: list[str] | None = None,
+        is_followup: bool = False,
     ) -> tuple[str, float, float]:
         """Classify whether the utterance is addressed or ambient conversation.
         

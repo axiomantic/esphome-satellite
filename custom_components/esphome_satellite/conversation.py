@@ -44,7 +44,8 @@ from .const import (
     make_followup_prompt,
     make_initial_prompt,
 )
-from .systemone_client import SystemOneClient, SystemOneClientError
+from .client_factory import create_gatekeeper_client, GatekeeperClient
+from .systemone_client import GatekeeperClientError, SystemOneClientError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,19 +91,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the ESPHome Satellite Gatekeeper entity from a config entry."""
-    client = SystemOneClient(
-        hass=hass,
-        endpoint_url=entry.options.get(
-            CONF_SYSTEMONE_URL, entry.data.get(CONF_SYSTEMONE_URL, DEFAULT_SYSTEMONE_URL)
-        ),
-        auth_token=entry.options.get(
-            CONF_SYSTEMONE_TOKEN, entry.data.get(CONF_SYSTEMONE_TOKEN, DEFAULT_SYSTEMONE_TOKEN)
-        ),
-        timeout_seconds=entry.options.get(
-            CONF_TIMEOUT_SECONDS, entry.data.get(CONF_TIMEOUT_SECONDS, DEFAULT_TIMEOUT)
-        ),
-    )
-
+    client = create_gatekeeper_client(hass, entry)
     async_add_entities([ESPHomeSatelliteGatekeeperEntity(hass, entry, client)])
 
 
@@ -116,7 +105,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        client: SystemOneClient,
+        client: GatekeeperClient,
     ) -> None:
         self.hass = hass
         self._entry = entry
@@ -181,29 +170,32 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         else:
             question_text, criteria = make_initial_prompt(target_ww, all_aliases)
 
-        # Evaluate through System 1
+        # Evaluate through Gatekeeper engine (System 1 or LLM)
         try:
             choice, confidence, rtt_ms = await self._client.classify_addressing(
                 text=eval_text,
                 question_text=question_text,
                 min_confidence=threshold,
                 criteria=criteria,
+                target_wake_word=target_ww,
+                phonetic_variants=all_aliases,
+                is_followup=is_followup,
             )
-        except SystemOneClientError as err:
+        except GatekeeperClientError as err:
             fallback = self._entry.options.get(
                 CONF_FALLBACK_BEHAVIOR,
                 self._entry.data.get(CONF_FALLBACK_BEHAVIOR, DEFAULT_FALLBACK),
             )
             if fallback == "drop":
                 _LOGGER.warning(
-                    "[Gatekeeper] System 1 unavailable (%s). Fail-closed: dropping utterance '%s'",
+                    "[Gatekeeper] Gatekeeper engine unavailable (%s). Fail-closed: dropping utterance '%s'",
                     err,
                     text,
                 )
                 return self._create_silent_drop_result(user_input)
             
             _LOGGER.warning(
-                "[Gatekeeper] System 1 unavailable (%s). Fail-open: passing to downstream agent",
+                "[Gatekeeper] Gatekeeper engine unavailable (%s). Fail-open: passing to downstream agent",
                 err,
             )
             await self._notify_wake_word_verified(satellite_id)
