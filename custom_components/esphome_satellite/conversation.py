@@ -361,6 +361,19 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                             except (ValueError, TypeError):
                                 pass
 
+                entry_title = getattr(self._entry, "title", None)
+                if isinstance(entry_title, str) and entry_title.strip():
+                    title_lower = entry_title.strip().lower()
+                    for dev_entry in dev_entries:
+                        if dev_entry.domain == "select" and "assistant" in dev_entry.entity_id and "wake_word" not in dev_entry.entity_id:
+                            sel_state = self.hass.states.get(dev_entry.entity_id)
+                            if sel_state and isinstance(sel_state.state, str):
+                                pipe_name = sel_state.state.strip().lower()
+                                if pipe_name and pipe_name not in ("unknown", "unavailable", "preferred") and pipe_name in title_lower:
+                                    is_slot2_pipe = dev_entry.entity_id.endswith("_2") or "slot_2" in dev_entry.entity_id
+                                    active_slot = 1 if is_slot2_pipe else 0
+                                    break
+
                 if not wake_word:
                     for dev_entry in dev_entries:
                         if dev_entry.domain == "select":
