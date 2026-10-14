@@ -13,6 +13,10 @@ from .const import (
     CONF_EARLY_WAKE_VERIFICATION,
     CONF_ENFORCE_WAKE_WORD,
     CONF_FALLBACK_BEHAVIOR,
+    CONF_GATEKEEPER_ENGINE,
+    CONF_LLM_MODEL,
+    CONF_LLM_TOKEN,
+    CONF_LLM_URL,
     CONF_SLOT1_ALIASES,
     CONF_SLOT1_ENABLED,
     CONF_SLOT1_THRESHOLD,
@@ -27,12 +31,18 @@ from .const import (
     DEFAULT_EARLY_WAKE_VERIFICATION,
     DEFAULT_ENFORCE_WAKE_WORD,
     DEFAULT_FALLBACK,
+    DEFAULT_GATEKEEPER_ENGINE,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_LLM_TOKEN,
+    DEFAULT_LLM_URL,
     DEFAULT_SPECULATIVE_CHUNK_MS,
     DEFAULT_SYSTEMONE_TOKEN,
     DEFAULT_SYSTEMONE_URL,
     DEFAULT_THRESHOLD,
     DEFAULT_TIMEOUT,
     DOMAIN,
+    GATEKEEPER_ENGINE_LLM,
+    GATEKEEPER_ENGINE_SYSTEMONE,
 )
 
 class ESPHomeSatelliteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -56,7 +66,35 @@ class ESPHomeSatelliteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DOWNSTREAM_AGENT,
                     default="conversation.home_assistant",
                 ): selector.ConversationAgentSelector(),
-                vol.Required(
+                vol.Optional(
+                    CONF_GATEKEEPER_ENGINE,
+                    default=DEFAULT_GATEKEEPER_ENGINE,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"label": "System 1 (Laya / Jev)", "value": GATEKEEPER_ENGINE_SYSTEMONE},
+                            {"label": "Local LLM (OpenAI-Compatible)", "value": GATEKEEPER_ENGINE_LLM},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_LLM_URL,
+                    default=DEFAULT_LLM_URL,
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.URL)
+                ),
+                vol.Optional(
+                    CONF_LLM_MODEL,
+                    default=DEFAULT_LLM_MODEL,
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_LLM_TOKEN,
+                    default=DEFAULT_LLM_TOKEN,
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(
                     CONF_SYSTEMONE_URL,
                     default=DEFAULT_SYSTEMONE_URL,
                 ): selector.TextSelector(
@@ -146,6 +184,34 @@ class ESPHomeSatelliteOptionsFlow(config_entries.OptionsFlow):
                     default=options.get(CONF_DOWNSTREAM_AGENT, data.get(CONF_DOWNSTREAM_AGENT, "conversation.home_assistant")),
                 ): selector.ConversationAgentSelector(),
                 vol.Required(
+                    CONF_GATEKEEPER_ENGINE,
+                    default=options.get(CONF_GATEKEEPER_ENGINE, data.get(CONF_GATEKEEPER_ENGINE, DEFAULT_GATEKEEPER_ENGINE)),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"label": "System 1 (Laya / Jev)", "value": GATEKEEPER_ENGINE_SYSTEMONE},
+                            {"label": "Local LLM (OpenAI-Compatible)", "value": GATEKEEPER_ENGINE_LLM},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_LLM_URL,
+                    default=options.get(CONF_LLM_URL, data.get(CONF_LLM_URL, DEFAULT_LLM_URL)),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.URL)
+                ),
+                vol.Optional(
+                    CONF_LLM_MODEL,
+                    default=options.get(CONF_LLM_MODEL, data.get(CONF_LLM_MODEL, DEFAULT_LLM_MODEL)),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_LLM_TOKEN,
+                    description={"suggested_value": options.get(CONF_LLM_TOKEN, data.get(CONF_LLM_TOKEN, DEFAULT_LLM_TOKEN))},
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(
                     CONF_SYSTEMONE_URL,
                     default=options.get(CONF_SYSTEMONE_URL, data.get(CONF_SYSTEMONE_URL, DEFAULT_SYSTEMONE_URL)),
                 ): selector.TextSelector(

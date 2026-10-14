@@ -23,10 +23,22 @@ CONF_ENFORCE_WAKE_WORD: Final = "enforce_wake_word"
 CONF_DOWNSTREAM_STT: Final = "downstream_stt"
 CONF_SPECULATIVE_CHUNK_MS: Final = "speculative_chunk_ms"
 CONF_EARLY_WAKE_VERIFICATION: Final = "early_wake_verification"
+CONF_GATEKEEPER_ENGINE: Final = "gatekeeper_engine"
+CONF_LLM_URL: Final = "llm_url"
+CONF_LLM_TOKEN: Final = "llm_token"
+CONF_LLM_MODEL: Final = "llm_model"
+
+# Gatekeeper Engines
+GATEKEEPER_ENGINE_SYSTEMONE: Final = "systemone"
+GATEKEEPER_ENGINE_LLM: Final = "llm"
+DEFAULT_GATEKEEPER_ENGINE: Final = GATEKEEPER_ENGINE_SYSTEMONE
 
 # Default Configuration Values
 DEFAULT_SYSTEMONE_URL: Final = "http://localhost:8000/v1/systemone"
 DEFAULT_SYSTEMONE_TOKEN: Final = ""
+DEFAULT_LLM_URL: Final = "http://localhost:8080/v1"
+DEFAULT_LLM_TOKEN: Final = ""
+DEFAULT_LLM_MODEL: Final = ""
 DEFAULT_THRESHOLD: Final = 0.70
 DEFAULT_TIMEOUT: Final = 2.5
 DEFAULT_FALLBACK: Final = "drop"  # "drop" (fail-closed) | "allow" (fail-open)
@@ -250,6 +262,33 @@ def make_followup_prompt(wake_word: str) -> tuple[str, dict[str, str]]:
         ),
     }
     return instructions, criteria
+
+
+def make_llm_initial_prompt(target_ww: str, aliases: list[str]) -> str:
+    """Build dynamic system prompt for LLM gatekeeper initial turn."""
+    filtered = [a for a in aliases if a.lower() != target_ww.lower()]
+    sample = filtered[:6] if len(filtered) > 6 else filtered
+    aliases_str = ", ".join(f"'{a}'" for a in sample) if sample else f"'{target_ww}'"
+    return (
+        "You are an intent gatekeeper for an in-room voice assistant.\n"
+        f"Target assistant: {target_ww}\n"
+        f"Phonetic variations: {aliases_str}\n\n"
+        f"Does the transcript start with or contain the target name (or a phonetic variation) addressing {target_ww}?\n"
+        f"Output YES if addressed to {target_ww}.\n"
+        f"Output NO if not addressed to {target_ww} (dictation, bystander chatter, talking to another person/assistant).\n"
+        "Output ONLY 'YES' or 'NO'."
+    )
+
+
+def make_llm_followup_prompt(target_ww: str) -> str:
+    """Build dynamic system prompt for LLM gatekeeper ongoing conversational follow-up turn."""
+    return (
+        "You are an intent gatekeeper for an active voice dialogue.\n"
+        f"The assistant '{target_ww}' just spoke and the microphone is open for a follow-up.\n"
+        f"Determine whether the user is answering, continuing the conversation with '{target_ww}', or giving the next request (YES), "
+        "versus talking to someone else in the room, dictating, or ambient room chatter (NO).\n"
+        "Output ONLY 'YES' or 'NO'."
+    )
 
 
 # Speculative STT Question Templates & Criteria

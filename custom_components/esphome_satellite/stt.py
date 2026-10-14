@@ -53,8 +53,12 @@ from .const import (
     QUESTION_TEMPLATE_GENERAL,
     QUESTION_TEMPLATE_WAKE_VERIFICATION,
     make_wake_verification_criteria,
+    CONF_SLOT1_ALIASES,
+    CONF_SLOT2_ALIASES,
+    expand_wake_phrase,
 )
-from .systemone_client import SystemOneClient, SystemOneClientError
+from .client_factory import create_gatekeeper_client, GatekeeperClient
+from .systemone_client import GatekeeperClientError, SystemOneClientError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,19 +91,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the ESPHome Satellite Speculative STT entity from a config entry."""
-    client = SystemOneClient(
-        hass=hass,
-        endpoint_url=entry.options.get(
-            CONF_SYSTEMONE_URL, entry.data.get(CONF_SYSTEMONE_URL, DEFAULT_SYSTEMONE_URL)
-        ),
-        auth_token=entry.options.get(
-            CONF_SYSTEMONE_TOKEN, entry.data.get(CONF_SYSTEMONE_TOKEN, DEFAULT_SYSTEMONE_TOKEN)
-        ),
-        timeout_seconds=entry.options.get(
-            CONF_TIMEOUT_SECONDS, entry.data.get(CONF_TIMEOUT_SECONDS, DEFAULT_TIMEOUT)
-        ),
-    )
-
+    client = create_gatekeeper_client(hass, entry)
     async_add_entities([ESPHomeSatelliteSpeculativeSTT(hass, entry, client)])
 
 
@@ -113,7 +105,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        client: SystemOneClient,
+        client: GatekeeperClient,
         downstream_stt_id: str | None = None,
         speculative_chunk_ms: int | None = None,
         early_wake_verification: bool | None = None,
@@ -639,6 +631,24 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             return float(options.get(CONF_SLOT2_THRESHOLD, default_thresh))
         return float(default_thresh)
 
+    def _get_slot_user_aliases(self, slot_index: int) -> list[str]:
+        """Retrieve user-configured phonetic aliases for specific slot."""
+        options = self._entry.options
+        data = self._entry.data
+        raw = ""
+        if slot_index == 0:
+            raw = options.get(CONF_SLOT1_ALIASES, data.get(CONF_SLOT1_ALIASES, ""))
+            if not raw:
+                raw = options.get("slot1_patterns", data.get("slot1_patterns", ""))
+        elif slot_index == 1:
+            raw = options.get(CONF_SLOT2_ALIASES, data.get(CONF_SLOT2_ALIASES, ""))
+            if not raw:
+                raw = options.get("slot2_patterns", data.get("slot2_patterns", ""))
+
+        if not raw:
+            return []
+        return [part.strip() for part in raw.replace("\n", ",").split(",") if part.strip()]
+
     async def _speculative_verification_loop(
         self,
         metadata: SpeechMetadata,
@@ -714,6 +724,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     try:
                         active_slot = self._resolve_active_slot_index(sat_id)
                         threshold = self._get_slot_threshold(active_slot)
+                        user_aliases = self._get_slot_user_aliases(active_slot)
+                        all_aliases = expand_wake_phrase(target_wake_word, user_aliases) if target_wake_word else []
 
                         if target_wake_word:
                             question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(
@@ -729,10 +741,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             question_text=question_text,
                             min_confidence=threshold,
                             criteria=criteria,
+                            target_wake_word=target_wake_word,
+                            phonetic_variants=all_aliases,
+                            is_followup=False,
                         )
                         if choice in (CHOICE_ADDRESSED, "addressed") and conf >= threshold:
                             _LOGGER.info(
-                                "[Speculative STT] Phonetic wake verification confirmed by System 1 for '%s' (conf=%.2f in %.1fms): '%s'",
+                                "[Speculative STT] Phonetic wake verification confirmed for '%s' (conf=%.2f in %.1fms): '%s'",
                                 target_wake_word or "assistant",
                                 conf,
                                 rtt_ms,
@@ -741,7 +756,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             verified_event.set()
                             await self._notify_satellite_verified(sat_id)
                             break  # Terminate speculative loop once verified
-                    except (SystemOneClientError, Exception) as err:
+                    except (GatekeeperClientError, Exception) as err:
                         _LOGGER.debug(
                             "[Speculative STT] Speculative classification check failed: %s",
                             err,
