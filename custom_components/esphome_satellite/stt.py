@@ -50,6 +50,7 @@ from .const import (
     DEFAULT_SYSTEMONE_URL,
     DEFAULT_THRESHOLD,
     DEFAULT_TIMEOUT,
+    DOMAIN,
     QUESTION_TEMPLATE_GENERAL,
     QUESTION_TEMPLATE_WAKE_VERIFICATION,
     make_wake_verification_criteria,
@@ -123,6 +124,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         self._override_early_wake_verification = early_wake_verification
         self._override_enforce_wake_word = enforce_wake_word
         self._attr_unique_id = f"{entry.entry_id}_speculative_stt"
+        domain_data = hass.data.setdefault(DOMAIN, {}) if isinstance(getattr(hass, "data", None), dict) else {}
+        self._active_followup_convs: dict[str, float] = domain_data.setdefault("followup_convs", {})
+        self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
+        self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
 
     @property
     def downstream_stt_id(self) -> str:
@@ -392,6 +397,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 except asyncio.QueueFull:
                     pass
 
+        sat_id, target_ww = self._resolve_active_satellite_context()
+        is_followup_stream = self._check_and_refresh_followup_start(sat_id)
+        if is_followup_stream:
+            verified_event.set()
+
         # Step 2: Spawn background speculative evaluation loop
         speculative_task = asyncio.create_task(
             self._speculative_verification_loop(
@@ -404,7 +414,6 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         )
 
         # Step 3: Run downstream STT on primary stream and return verbatim result intact
-        sat_id, target_ww = self._resolve_active_satellite_context()
         speech_result: SpeechResult | None = None
         downstream_task = asyncio.create_task(
             downstream_entity.async_process_audio_stream(
@@ -462,6 +471,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             if fresh_ww:
                 target_ww = fresh_ww
 
+            self._finalize_followup_stream(sat_id, is_followup_stream, speech_result)
+
             if captured_chunks:
                 asyncio.create_task(
                     self._async_save_recorded_audio(
@@ -472,6 +483,118 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                         text=getattr(speech_result, "text", None) if speech_result else None,
                     )
                 )
+
+    def _get_satellite_fsm_state(self, satellite_id: str | None) -> str:
+        """Return lowercase FSM state string from companion status_satellite_state sensor if available."""
+        if not satellite_id or not hasattr(self.hass.states, "get"):
+            return ""
+
+        followup_states = {"follow up", "follow_up", "followup", "continuing"}
+        sat_entity = self.hass.states.get(satellite_id)
+        if sat_entity and isinstance(sat_entity.state, str) and sat_entity.state.strip().lower() in followup_states:
+            return sat_entity.state.strip().lower()
+
+        try:
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry = ent_reg.async_get(satellite_id) if ent_reg else None
+            if entry and entry.device_id:
+                dev_entries = []
+                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
+                    res = ent_reg.async_entries_for_device(entry.device_id)
+                    if isinstance(res, list):
+                        dev_entries = res
+                if not dev_entries and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
+                    try:
+                        res = er.async_entries_for_device(ent_reg, entry.device_id)
+                        if isinstance(res, list):
+                            dev_entries = res
+                    except Exception:
+                        pass
+                for dev_entry in dev_entries:
+                    if (
+                        getattr(dev_entry, "domain", None) == "sensor"
+                        and isinstance(getattr(dev_entry, "entity_id", None), str)
+                        and "status_satellite_state" in dev_entry.entity_id
+                    ):
+                        st = self.hass.states.get(dev_entry.entity_id)
+                        if st and isinstance(st.state, str) and st.state not in ("unknown", "unavailable"):
+                            return st.state.strip().lower()
+        except Exception:
+            pass
+
+        sat_part = satellite_id.split(".")[-1]
+        base_part = re.sub(r"_voice_satellite$", "", sat_part)
+        for cand_id in (
+            f"sensor.{sat_part}_status_satellite_state",
+            f"sensor.{base_part}_status_satellite_state",
+        ):
+            st = self.hass.states.get(cand_id)
+            if st and isinstance(st.state, str) and st.state not in ("unknown", "unavailable"):
+                return st.state.strip().lower()
+
+        return ""
+
+    def _check_and_refresh_followup_start(self, satellite_id: str | None) -> bool:
+        """Detect if incoming STT stream is a follow-up turn and reset timer at TTS playback end."""
+        if not satellite_id:
+            return False
+
+        followup_states = {"follow up", "follow_up", "followup", "continuing"}
+        fsm_state = self._get_satellite_fsm_state(satellite_id)
+        in_followup_dict = satellite_id in self._active_followup_satellites
+
+        # If hardware explicitly woke from Idle on a wake word, it's a fresh initial turn
+        if fsm_state in ("listening", "streaming speech verified", "woken"):
+            if in_followup_dict:
+                conv_id = self._followup_sat_to_conv.pop(satellite_id, None)
+                self._active_followup_satellites.pop(satellite_id, None)
+                if conv_id:
+                    self._active_followup_convs.pop(conv_id, None)
+            return False
+
+        if fsm_state in followup_states or in_followup_dict:
+            now = time.monotonic()
+            self._active_followup_satellites[satellite_id] = now
+            conv_id = self._followup_sat_to_conv.get(satellite_id)
+            if conv_id:
+                self._active_followup_convs[conv_id] = now
+            _LOGGER.info(
+                "[Speculative STT] Follow-up listening started on %s (conv=%s); timer started after TTS playback end",
+                satellite_id,
+                conv_id,
+            )
+            return True
+
+        return False
+
+    def _finalize_followup_stream(
+        self,
+        satellite_id: str | None,
+        is_followup_stream: bool,
+        speech_result: SpeechResult | None,
+    ) -> None:
+        """Refresh follow-up timer when follow-up speech completes, or clear if silent timeout."""
+        if not satellite_id:
+            return
+
+        followup_states = {"follow up", "follow_up", "followup", "continuing"}
+        fsm_state = self._get_satellite_fsm_state(satellite_id)
+        if not (is_followup_stream or fsm_state in followup_states):
+            return
+
+        text = (getattr(speech_result, "text", None) or "").strip() if speech_result else ""
+        conv_id = self._followup_sat_to_conv.get(satellite_id)
+        if text:
+            now = time.monotonic()
+            self._active_followup_satellites[satellite_id] = now
+            if conv_id:
+                self._active_followup_convs[conv_id] = now
+        else:
+            self._active_followup_satellites.pop(satellite_id, None)
+            self._followup_sat_to_conv.pop(satellite_id, None)
+            if conv_id:
+                self._active_followup_convs.pop(conv_id, None)
 
     async def _async_save_recorded_audio(
         self,

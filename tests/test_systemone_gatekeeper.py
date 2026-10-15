@@ -2074,6 +2074,95 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.result, SpeechResultState.SUCCESS)
         self.assertEqual(result.text, "Mr. Clemens")
 
+    async def test_followup_timer_resets_when_tts_finishes_and_stt_starts(self):
+        """Verify follow-up timer resets when TTS finishes (follow-up STT starts) even after >30s TTS monologue."""
+        import time
+        from custom_components.esphome_satellite.conversation import (
+            ConversationInput,
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+        from custom_components.esphome_satellite.stt import (
+            ESPHomeSatelliteSpeculativeSTT,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        self.mock_hass.data = {}
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.living_room_voice_satellite"
+        conv_id = "conv_123"
+
+        # Simulate Turn 1 finishing 45 seconds ago (before a 38s TTS monologue + 7s user speech)
+        past_ts = time.monotonic() - 45.0
+        conv_entity._active_followup_convs[conv_id] = past_ts
+        conv_entity._active_followup_satellites[sat_id] = past_ts
+        conv_entity._followup_sat_to_conv[sat_id] = conv_id
+
+        # Companion FSM status sensor reports "Follow Up" when TTS finishes
+        fsm_sensor = MagicMock()
+        fsm_sensor.state = "Follow Up"
+
+        def get_state(eid):
+            if eid == "sensor.living_room_status_satellite_state":
+                return fsm_sensor
+            if eid == sat_id:
+                sat = MagicMock()
+                sat.state = "listening"
+                sat.attributes = {"wake_word": "Okay Nabu", "active_pipeline_index": 0}
+                return sat
+            return None
+
+        self.mock_hass.states.get = MagicMock(side_effect=get_state)
+
+        # Follow-up STT stream starts when TTS ends -> refreshes timer
+        is_fu = stt_proxy._check_and_refresh_followup_start(sat_id)
+        self.assertTrue(is_fu)
+        stt_proxy._finalize_followup_stream(
+            sat_id,
+            is_fu,
+            SpeechResult(text="Well, very interesting stuff. Where are you right now?", result=SpeechResultState.SUCCESS),
+        )
+
+        # Even if FSM sensor transitions to "Thinking" right as conversation.async_process runs,
+        # the refreshed timer keeps is_followup=True
+        fsm_sensor.state = "Thinking"
+        self.mock_client.classify_addressing = AsyncMock(return_value=(CHOICE_ADDRESSED, 0.99, 12.0))
+
+        user_input = MagicMock()
+        user_input.text = "Well, very interesting stuff. Where are you right now?"
+        user_input.conversation_id = conv_id
+        user_input.device_id = "dev_1"
+        user_input.satellite_id = sat_id
+        user_input.language = "en"
+        user_input.agent_id = "conversation.gatekeeper"
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch.object(conv_entity, "_delegate_downstream", new_callable=AsyncMock) as mock_del:
+            await conv_entity.async_process(user_input)
+
+        self.mock_client.classify_addressing.assert_awaited_once()
+        call_kwargs = self.mock_client.classify_addressing.await_args.kwargs
+        self.assertTrue(call_kwargs["is_followup"])
+        mock_del.assert_awaited_once()
+
+        # If a subsequent follow-up window times out with empty speech, the follow-up state is cleared
+        stt_proxy._finalize_followup_stream(
+            sat_id,
+            True,
+            SpeechResult(text="", result=SpeechResultState.SUCCESS),
+        )
+        self.assertNotIn(sat_id, conv_entity._active_followup_satellites)
+        self.assertNotIn(conv_id, conv_entity._active_followup_convs)
+
 
 if __name__ == "__main__":
     unittest.main()
