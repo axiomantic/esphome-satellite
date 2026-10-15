@@ -1868,21 +1868,39 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
 
     def test_dynamic_phonetic_variant_generation(self):
         """Verify dynamic generation of phonetic and acoustic variants for detected wake words."""
-        from custom_components.esphome_satellite.const import generate_phonetic_variants, expand_wake_phrase, make_initial_prompt
+        from custom_components.esphome_satellite.const import (
+            _select_diverse_examples,
+            expand_wake_phrase,
+            generate_phonetic_variants,
+            make_initial_prompt,
+        )
 
-        # Test Clemens dynamic phonetic variants
+        # Test Clemens dynamic phonetic variants and homophones
         clemens_variants = generate_phonetic_variants("Mr. Clemens")
         self.assertIn("Mister Clemens", clemens_variants)
         self.assertIn("Hey Mister Clemens", clemens_variants)
         self.assertTrue(any("Clemons" in v for v in clemens_variants))
         self.assertTrue(any("Klemens" in v for v in clemens_variants))
         self.assertTrue(any("Mistah" in v or "Mistur" in v for v in clemens_variants))
+        self.assertTrue(any("Missed her" in v for v in clemens_variants))
+        self.assertTrue(any("Clamons" in v for v in clemens_variants))
+        self.assertTrue(any("Clements" in v for v in clemens_variants))
+        self.assertTrue(any("Lemons" in v for v in clemens_variants))
 
-        # Test acronym + -ance dynamic phonetic variants
-        jd_variants = generate_phonetic_variants("Hey JD Lance")
-        self.assertIn("Hey Jay Dee Lance", jd_variants)
+        # Test acronym + -ance dynamic phonetic variants and spoken-initialism substitutions
+        jd_variants = generate_phonetic_variants("Hey Jay Dee Lance")
+        self.assertIn("Hey JD Lance", jd_variants)
+        self.assertIn("Hey J.D. Lance", jd_variants)
         self.assertIn("JD Lance", jd_variants)
         self.assertTrue(any("Lans" in v for v in jd_variants))
+        self.assertTrue(any("Jerry" in v for v in jd_variants))
+        self.assertTrue(any("Jady" in v for v in jd_variants))
+        self.assertTrue(any("Shady" in v for v in jd_variants))
+
+        # Verify _select_diverse_examples spans across the sorted list rather than only taking 'Hey ...'
+        diverse_sample = _select_diverse_examples("Mr. Clemens", clemens_variants, count=8)
+        self.assertEqual(len(diverse_sample), 8)
+        self.assertFalse(all(s.startswith("Hey ") for s in diverse_sample))
 
         # Test arbitrary wake phrase without hardcoded knowledge
         wizard_variants = generate_phonetic_variants("Little Wizard")
@@ -1896,6 +1914,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         prompt, criteria = make_initial_prompt("Mr. Clemens", expanded)
         self.assertIn("The voice satellite triggered on wake phrase 'Mr. Clemens'", prompt)
         self.assertIn("Recognized phonetic approximations, name variants, and spellings include:", prompt)
+        self.assertIn("phonetic mis-dictations and homophones are the rule rather than the exception", prompt)
+        self.assertIn("not close to exhaustive", prompt)
         self.assertIn("Mr. Clemens", prompt)
 
     async def test_save_recorded_audio_creates_wav_and_json(self):
