@@ -591,51 +591,70 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(verified_event.is_set())
 
     def test_deterministic_pipeline_slot_resolution(self) -> None:
-        """Verify pipeline title matching overrides stale active_assistant_slot sensor."""
+        """Verify pipeline title matching overrides stale MAC-suffixed active_assistant_slot sensor in both STT and Conversation entities."""
         from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
 
         entry = MagicMock()
         entry.entry_id = "slot2_entry"
-        entry.title = "Assistant Two Gatekeeper"
+        entry.title = "Okay Nabu Gatekeeper"
         entry.options = {}
         entry.data = {}
 
+        sat_id = "assist_satellite.voice_satellite_a1b2c3_assist_satellite"
         sat_state = MagicMock()
-        sat_state.entity_id = "assist_satellite.twain"
+        sat_state.entity_id = sat_id
         sat_state.state = "listening"
         sat_state.last_updated = 100
         sat_state.attributes = {}
 
-        self.mock_hass.states.async_all = MagicMock(return_value=[sat_state])
+        stale_slot_sensor = MagicMock(
+            entity_id="sensor.voice_satellite_a1b2c3_active_assistant_slot",
+            state="1.0",  # Stale Slot 1!
+        )
+
+        def async_all_side_effect(domain=None):
+            if domain == "assist_satellite":
+                return [sat_state]
+            if domain == "sensor":
+                return [stale_slot_sensor]
+            return []
+
+        self.mock_hass.states.async_all = MagicMock(side_effect=async_all_side_effect)
 
         state_map = {
-            "sensor.twain_voice_active_assistant_slot": MagicMock(state="1.0"),  # Stale Slot 1!
-            "select.twain_assistant": MagicMock(state="Mark Twain"),
-            "select.twain_assistant_2": MagicMock(state="Assistant Two"),
-            "select.twain_wake_word": MagicMock(state="Mr. Clemens"),
-            "select.twain_wake_word_2": MagicMock(state="Hey Kay Tee"),
+            sat_id: sat_state,
+            "sensor.voice_satellite_a1b2c3_active_assistant_slot": stale_slot_sensor,
+            "select.voice_satellite_a1b2c3_assistant": MagicMock(state="Mark Twain"),
+            "select.voice_satellite_a1b2c3_assistant_2": MagicMock(state="Okay Nabu"),
+            "select.voice_satellite_a1b2c3_wake_word": MagicMock(state="Mr. Clemens"),
+            "select.voice_satellite_a1b2c3_wake_word_2": MagicMock(state="Okay Nabu"),
         }
         self.mock_hass.states.get = MagicMock(side_effect=lambda eid: state_map.get(eid))
 
         dev_entries = [
-            MagicMock(domain="sensor", entity_id="sensor.twain_voice_active_assistant_slot"),
-            MagicMock(domain="select", entity_id="select.twain_assistant"),
-            MagicMock(domain="select", entity_id="select.twain_assistant_2"),
-            MagicMock(domain="select", entity_id="select.twain_wake_word"),
-            MagicMock(domain="select", entity_id="select.twain_wake_word_2"),
+            MagicMock(domain="sensor", entity_id="sensor.voice_satellite_a1b2c3_active_assistant_slot"),
+            MagicMock(domain="select", entity_id="select.voice_satellite_a1b2c3_assistant"),
+            MagicMock(domain="select", entity_id="select.voice_satellite_a1b2c3_assistant_2"),
+            MagicMock(domain="select", entity_id="select.voice_satellite_a1b2c3_wake_word"),
+            MagicMock(domain="select", entity_id="select.voice_satellite_a1b2c3_wake_word_2"),
         ]
         mock_er = MagicMock()
-        mock_er.async_get = MagicMock(return_value=MagicMock(device_id="dev_twain"))
+        mock_er.async_get = MagicMock(return_value=MagicMock(device_id="dev_a1b2c3"))
         mock_er.async_entries_for_device = MagicMock(return_value=dev_entries)
 
         with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_er):
             stt_proxy = ESPHomeSatelliteSpeculativeSTT(self.mock_hass, entry, MagicMock())
-            sat_id, ww = stt_proxy._resolve_active_satellite_context()
-            slot_idx = stt_proxy._resolve_active_slot_index("assist_satellite.twain")
+            resolved_sat_id, ww = stt_proxy._resolve_active_satellite_context()
+            slot_idx = stt_proxy._resolve_active_slot_index(sat_id)
 
-        self.assertEqual(sat_id, "assist_satellite.twain")
-        self.assertEqual(ww, "Hey Kay Tee")
+            conv_entity = ESPHomeSatelliteGatekeeperEntity(self.mock_hass, entry, MagicMock())
+            conv_slot_idx, conv_ww = conv_entity._resolve_satellite_context(sat_id)
+
+        self.assertEqual(resolved_sat_id, sat_id)
+        self.assertEqual(ww, "Okay Nabu")
         self.assertEqual(slot_idx, 1)
+        self.assertEqual(conv_slot_idx, 1)
+        self.assertEqual(conv_ww, "Okay Nabu")
 
 
 if __name__ == "__main__":

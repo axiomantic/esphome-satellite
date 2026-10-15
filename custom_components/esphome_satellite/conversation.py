@@ -1,6 +1,7 @@
 """Gatekeeper Conversation Entity for ESPHome Voice Satellites."""
 from __future__ import annotations
 
+import difflib
 import logging
 import re
 import time
@@ -56,7 +57,7 @@ def _normalize_phrase(phrase: str) -> str:
 
 
 def is_wake_and_pause_turn(text: str, target_ww: str, aliases: list[str] | None = None) -> bool:
-    """Check if an utterance consists strictly of the wake phrase (or recognized alias) without a trailing command."""
+    """Check if an utterance consists strictly of the wake phrase (or recognized alias/phonetic mis-dictation) without a trailing command."""
     clean_text = _normalize_phrase(text)
     if not clean_text:
         return False
@@ -82,7 +83,25 @@ def is_wake_and_pause_turn(text: str, target_ww: str, aliases: list[str] | None 
                 if clean.startswith(p):
                     phrases_to_match.add(clean[len(p) :].strip())
 
-    return clean_text in phrases_to_match
+    if clean_text in phrases_to_match:
+        return True
+
+    # Phonetic STT mis-dictation check for wake-and-pause turns already approved by Gatekeeper:
+    # Only consider short utterances whose word count cannot hold a trailing command.
+    words = clean_text.split()
+    target_words = _normalize_phrase(target_ww).split() if target_ww else []
+    max_wake_words = max(len(target_words) + 1, 4)
+    if len(words) > max_wake_words:
+        return False
+
+    for cand in phrases_to_match:
+        if not cand:
+            continue
+        if abs(len(words) - len(cand.split())) <= 1:
+            if difflib.SequenceMatcher(None, clean_text, cand).ratio() >= 0.72:
+                return True
+
+    return False
 
 
 async def async_setup_entry(
@@ -143,6 +162,9 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             if not is_followup and (now - self._active_followup_satellites[satellite_id]) < 30.0:
                 is_followup = True
             self._active_followup_satellites.pop(satellite_id, None)
+            self._followup_sat_to_conv.pop(satellite_id, None)
+        elif is_followup and satellite_id:
+            self._followup_sat_to_conv.pop(satellite_id, None)
 
         if not is_followup and satellite_id and self._is_satellite_in_followup_state(satellite_id):
             is_followup = True
@@ -328,6 +350,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         """Extract active pipeline slot (0-indexed) and wake word from satellite entity."""
         active_slot = 0
         wake_word = ""
+        slot_resolved_by_pipeline = False
 
         # 1. Inspect assist_satellite entity state or attributes
         satellite_entity = self.hass.states.get(satellite_id)
@@ -335,7 +358,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             active_slot = satellite_entity.attributes.get("active_pipeline_index", 0)
             wake_word = satellite_entity.attributes.get("wake_word", "")
 
-        # 2. Check dedicated slot sensor via device registry linkage
+        # 2. Check dedicated slot sensor & pipeline select via device registry linkage
         try:
             from homeassistant.helpers import entity_registry as er
             ent_reg = er.async_get(self.hass)
@@ -374,9 +397,10 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                                 if pipe_name and pipe_name not in ("unknown", "unavailable", "preferred") and pipe_name in title_lower:
                                     is_slot2_pipe = dev_entry.entity_id.endswith("_2") or "slot_2" in dev_entry.entity_id
                                     active_slot = 1 if is_slot2_pipe else 0
+                                    slot_resolved_by_pipeline = True
                                     break
 
-                if not wake_word:
+                if not wake_word or slot_resolved_by_pipeline:
                     for dev_entry in dev_entries:
                         if dev_entry.domain == "select":
                             is_slot2 = "wake_word_2" in dev_entry.entity_id or "slot_2_wake_word" in dev_entry.entity_id
@@ -389,33 +413,34 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         except Exception as err:
             _LOGGER.debug("[Gatekeeper] Device-linked context lookup failed: %s", err)
 
-        # 3. Fallback candidate checks by entity name or MAC suffix
-        sat_part = satellite_id.split(".")[-1]
-        slot_sensor_candidates = [
-            f"sensor.{sat_part}_active_assistant_slot",
-            f"sensor.{sat_part}_voice_active_assistant_slot",
-        ]
+        # 3. Fallback candidate checks by entity name or MAC suffix (only if pipeline didn't deterministically resolve slot)
+        if not slot_resolved_by_pipeline:
+            sat_part = satellite_id.split(".")[-1]
+            slot_sensor_candidates = [
+                f"sensor.{sat_part}_active_assistant_slot",
+                f"sensor.{sat_part}_voice_active_assistant_slot",
+            ]
 
-        # Check for 6-character hex MAC suffix matching in sensor registry
-        mac_match = re.search(r"([0-9a-fA-F]{6})", sat_part)
-        if mac_match and hasattr(self.hass.states, "async_all"):
-            mac_suffix = mac_match.group(1).lower()
-            try:
-                for state in self.hass.states.async_all("sensor"):
-                    if mac_suffix in state.entity_id and "active_assistant_slot" in state.entity_id:
-                        slot_sensor_candidates.append(state.entity_id)
-                        break
-            except Exception:
-                pass
-
-        for cand_id in slot_sensor_candidates:
-            slot_sensor = self.hass.states.get(cand_id)
-            if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
+            # Check for 6-character hex MAC suffix matching in sensor registry
+            mac_match = re.search(r"([0-9a-fA-F]{6})", sat_part)
+            if mac_match and hasattr(self.hass.states, "async_all"):
+                mac_suffix = mac_match.group(1).lower()
                 try:
-                    active_slot = max(0, int(float(slot_sensor.state)) - 1)
-                    break
-                except (ValueError, TypeError):
+                    for state in self.hass.states.async_all("sensor"):
+                        if mac_suffix in state.entity_id and "active_assistant_slot" in state.entity_id:
+                            slot_sensor_candidates.append(state.entity_id)
+                            break
+                except Exception:
                     pass
+
+            for cand_id in slot_sensor_candidates:
+                slot_sensor = self.hass.states.get(cand_id)
+                if slot_sensor and slot_sensor.state not in (None, "unknown", "unavailable"):
+                    try:
+                        active_slot = max(0, int(float(slot_sensor.state)) - 1)
+                        break
+                    except (ValueError, TypeError):
+                        pass
 
         return (active_slot, wake_word)
 

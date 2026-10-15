@@ -1808,7 +1808,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(stt_entity.audio_processing.requires_external_vad)
 
     def test_is_wake_and_pause_turn_matching(self):
-        """Verify is_wake_and_pause_turn matches wake words and aliases accurately."""
+        """Verify is_wake_and_pause_turn matches wake words, aliases, and phonetic STT mis-dictations accurately."""
         from custom_components.esphome_satellite.conversation import is_wake_and_pause_turn
 
         # Wake phrases and aliases
@@ -1820,11 +1820,18 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(is_wake_and_pause_turn("Mark Twain", "Mark Twain", []))
         self.assertTrue(is_wake_and_pause_turn("Hey Mark Twain", "Mark Twain", []))
 
+        # Phonetic STT mis-dictations of wake-and-pause turns (MED-02)
+        self.assertTrue(is_wake_and_pause_turn("Okay Nabu.", "Okay Nabu", ["Okay Nabu", "Okay Nabu"]))
+        self.assertTrue(is_wake_and_pause_turn("Okay Nabu", "Okay Nabu", ["Okay Nabu"]))
+        self.assertTrue(is_wake_and_pause_turn("Hey Mister Clements.", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertTrue(is_wake_and_pause_turn("Missed her lemons.", "Mr. Clemens", ["Missed her clemens"]))
+
         # Short commands must NOT trigger wake-and-pause
         self.assertFalse(is_wake_and_pause_turn("Lights on", "Mr. Clemens", ["Mister Clemens"]))
         self.assertFalse(is_wake_and_pause_turn("Turn off lights", "Mr. Clemens", ["Mister Clemens"]))
         self.assertFalse(is_wake_and_pause_turn("Stop", "Mr. Clemens", ["Mister Clemens"]))
         self.assertFalse(is_wake_and_pause_turn("Cancel", "Mr. Clemens", ["Mister Clemens"]))
+        self.assertFalse(is_wake_and_pause_turn("What time is it", "Okay Nabu", ["Okay Nabu"]))
 
         # Ambient speech must NOT trigger wake-and-pause
         self.assertFalse(is_wake_and_pause_turn("It won't work.", "Mr. Clemens", ["Mister Clemens"]))
@@ -1833,6 +1840,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         # Wake word + command must NOT trigger wake-and-pause
         self.assertFalse(is_wake_and_pause_turn("Mr Clemens what time is it", "Mr. Clemens", ["Mister Clemens"]))
         self.assertFalse(is_wake_and_pause_turn("Hey KT tell me a joke", "Hey KT", []))
+        self.assertFalse(is_wake_and_pause_turn("Okay Nabu, how is the kitchen?", "Okay Nabu", ["Okay Nabu"]))
 
     async def test_gatekeeper_short_command_delegation(self):
         """Verify 2-word commands like 'Lights on' are delegated downstream and NOT intercepted as Yes?."""
@@ -1906,14 +1914,19 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         wizard_variants = generate_phonetic_variants("Little Wizard")
         self.assertIn("Hey Little Wizard", wizard_variants)
 
-        # Verify additive user aliases and interpolation into prompt
-        expanded = expand_wake_phrase("Mr. Clemens", ["Custom Alias"])
+        # Verify additive user aliases are preserved in _select_diverse_examples and interpolated into prompt
+        expanded = expand_wake_phrase("Mr. Clemens", ["Custom Alias", "Special Twain"])
         self.assertIn("Custom Alias", expanded)
+        self.assertIn("Special Twain", expanded)
         self.assertIn("Mister Clemens", expanded)
+        sampled_with_user = _select_diverse_examples("Mr. Clemens", expanded, count=8)
+        self.assertIn("Custom Alias", sampled_with_user)
+        self.assertIn("Special Twain", sampled_with_user)
 
         prompt, criteria = make_initial_prompt("Mr. Clemens", expanded)
         self.assertIn("The voice satellite triggered on wake phrase 'Mr. Clemens'", prompt)
         self.assertIn("Recognized phonetic approximations, name variants, and spellings include:", prompt)
+        self.assertIn("Custom Alias", prompt)
         self.assertIn("phonetic mis-dictations and homophones are the rule rather than the exception", prompt)
         self.assertIn("not close to exhaustive", prompt)
         self.assertIn("Mr. Clemens", prompt)
@@ -1998,9 +2011,9 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             async for chunk in stream:
                 chunks.append(chunk)
             total_len = sum(len(c) for c in chunks)
-            # Partial speculative slice (single chunk yielded by _slice_generator) returns empty quickly
+            # Partial speculative slice (single chunk yielded by _slice_generator) returns non-empty noise transcript
             if len(chunks) == 1:
-                return SpeechResult(text="", result=SpeechResultState.SUCCESS)
+                return SpeechResult(text="Yeah really", result=SpeechResultState.SUCCESS)
             primary_consumed_bytes = total_len
             # Simulate Whisper taking 2.0s on the primary silence stream and hallucinating a phrase
             await asyncio.sleep(2.0)
@@ -2024,19 +2037,21 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             speculative_chunk_ms=500,
         )
 
-        # Stream 10.0s of silence in 100ms chunks (3200 bytes per 100ms at 16kHz 16-bit mono)
-        async def silence_stream():
+        # Stream 10.0s of elevated HVAC room noise (~600 RMS > 450 static threshold) in 100ms chunks
+        # to verify adaptive noise floor still detects post-wake silence and fast-aborts at ~3.5s
+        async def elevated_floor_silence_stream():
             for _ in range(100):
-                yield b"\x00\x00" * 1600
+                yield b"\x58\x02" * 1600  # sample value 600 -> RMS = 600.0
                 await asyncio.sleep(0.002)
 
         metadata = SpeechMetadata()
         with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
-            result = await stt_proxy.async_process_audio_stream(metadata, silence_stream())
+            result = await stt_proxy.async_process_audio_stream(metadata, elevated_floor_silence_stream())
 
         # Must fast-return empty transcript ("") rather than Whisper's "What's going on?"
         self.assertEqual(result.result, SpeechResultState.SUCCESS)
         self.assertEqual(result.text, "")
+        self.mock_client.classify_addressing.assert_awaited_once()
         # Consumed bytes should be ~3.5s (2.0s pre-roll + 1.5s unverified silence = 112,000 bytes), well under 7.0s (224,000 bytes)
         self.assertLessEqual(primary_consumed_bytes, 128000)
 
@@ -2082,8 +2097,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         async def wake_and_pause_stream():
             for i in range(50):
                 yield b"\x00\x00" * 1600
-                if i == 10:
-                    # Allow background speculative task to verify wake word during pre-roll
+                if i == 19:
+                    # Allow background speculative task to verify wake word at end of 2.0s pre-roll
                     await asyncio.sleep(0.02)
 
         metadata = SpeechMetadata()
@@ -2174,7 +2189,12 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(call_kwargs["is_followup"])
         mock_del.assert_awaited_once()
 
+        # Verify _followup_sat_to_conv was also cleaned up upon consumption
+        self.assertNotIn(sat_id, conv_entity._followup_sat_to_conv)
+
         # If a subsequent follow-up window times out with empty speech, the follow-up state is cleared
+        conv_entity._active_followup_satellites[sat_id] = time.monotonic()
+        conv_entity._followup_sat_to_conv[sat_id] = conv_id
         stt_proxy._finalize_followup_stream(
             sat_id,
             True,
@@ -2184,7 +2204,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(conv_id, conv_entity._active_followup_convs)
 
     async def test_stt_preroll_burst_coalescing_and_post_wake_silence_gating(self):
-        """Verify 2.0s pre-roll burst coalesces before speculative STT and post-wake silence is not re-evaluated."""
+        """Verify 2.0s pre-roll burst coalesces before speculative STT and post-wake silence is not re-evaluated when unverified."""
         from homeassistant.components.stt import (
             SpeechMetadata,
             SpeechResult,
@@ -2206,18 +2226,18 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             total_len = sum(len(c) for c in chunks)
             if len(chunks) == 1:
                 speculative_slice_lengths.append(total_len)
-                # Only the full 2.0s (64,000B) pre-roll contains "Okay Nabu."
-                if total_len >= 64000:
+                # Return unverified ambient phrase on 64,000B pre-roll, and verify only if 2.8s (89,600B) speech arrives
+                if total_len >= 89600:
                     return SpeechResult(text="Okay Nabu.", result=SpeechResultState.SUCCESS)
                 return SpeechResult(text="Okay.", result=SpeechResultState.SUCCESS)
-            return SpeechResult(text="Okay Nabu.", result=SpeechResultState.SUCCESS)
+            return SpeechResult(text="Okay.", result=SpeechResultState.SUCCESS)
 
         mock_downstream = MagicMock()
         mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_handler)
         self.mock_hass.data["stt"] = MagicMock()
         self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
 
-        # Only confirm addressed when full "Okay Nabu." is transcribed
+        # Unverified on 64,000B pre-roll ("Okay.") so post-wake silence gating is genuinely exercised (GM-01)
         async def classify_side_effect(text, **kwargs):
             if "Nabu" in text:
                 return (CHOICE_ADDRESSED, 0.99, 12.0)
@@ -2233,24 +2253,23 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         )
 
         # Simulate rapid 2.0s pre-roll burst (20 x 3200B chunks arriving 1ms apart) followed by 1.0s silence
-        async def burst_preroll_stream():
+        async def burst_preroll_then_silence_stream():
             for _ in range(20):
                 yield b"\x10\x00" * 1600
                 await asyncio.sleep(0.001)
             for _ in range(10):
                 yield b"\x00\x00" * 1600
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(0.01)
 
         metadata = SpeechMetadata()
         with patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock) as mock_notify, \
              patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
-            result = await stt_proxy.async_process_audio_stream(metadata, burst_preroll_stream())
+            await stt_proxy.async_process_audio_stream(metadata, burst_preroll_then_silence_stream())
 
-        # Coalescer must evaluate the complete 64,000-byte pre-roll on the very first speculative slice
-        self.assertGreaterEqual(len(speculative_slice_lengths), 1)
-        self.assertGreaterEqual(speculative_slice_lengths[0], 64000)
-        mock_notify.assert_awaited_once_with("assist_satellite.twain")
-        self.assertEqual(result.text, "Okay Nabu.")
+        # Coalescer must evaluate the complete 64,000-byte pre-roll on the very first speculative slice,
+        # and post-wake silence must NOT trigger any subsequent speculative slice even though verified_event is False!
+        self.assertEqual(speculative_slice_lengths, [64000])
+        mock_notify.assert_not_called()
 
 
 if __name__ == "__main__":
