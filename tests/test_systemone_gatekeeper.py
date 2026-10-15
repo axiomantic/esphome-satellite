@@ -1955,9 +1955,129 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(meta["duration_sec"], 1.0)
                 self.assertEqual(meta["sample_rate"], 16000)
 
+    async def test_stt_unverified_silence_fast_aborts_and_returns_empty(self):
+        """Unverified noise trigger followed by 1.5s of silence aborts early and returns empty SpeechResult."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_downstream = MagicMock()
+        primary_consumed_bytes = 0
+
+        async def slow_hallucinating_downstream(metadata, stream):
+            nonlocal primary_consumed_bytes
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            total_len = sum(len(c) for c in chunks)
+            # Partial speculative slice (single chunk yielded by _slice_generator) returns empty quickly
+            if len(chunks) == 1:
+                return SpeechResult(text="", result=SpeechResultState.SUCCESS)
+            primary_consumed_bytes = total_len
+            # Simulate Whisper taking 2.0s on the primary silence stream and hallucinating a phrase
+            await asyncio.sleep(2.0)
+            return SpeechResult(text="What's going on?", result=SpeechResultState.SUCCESS)
+
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=slow_hallucinating_downstream
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        # Speculative check rejects the pre-roll noise
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_AMBIENT, 0.90, 10.0)
+        )
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        # Stream 10.0s of silence in 100ms chunks (3200 bytes per 100ms at 16kHz 16-bit mono)
+        async def silence_stream():
+            for _ in range(100):
+                yield b"\x00\x00" * 1600
+                await asyncio.sleep(0.002)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            result = await stt_proxy.async_process_audio_stream(metadata, silence_stream())
+
+        # Must fast-return empty transcript ("") rather than Whisper's "What's going on?"
+        self.assertEqual(result.result, SpeechResultState.SUCCESS)
+        self.assertEqual(result.text, "")
+        # Consumed bytes should be ~3.5s (2.0s pre-roll + 1.5s unverified silence = 112,000 bytes), well under 7.0s (224,000 bytes)
+        self.assertLessEqual(primary_consumed_bytes, 128000)
+
+    async def test_stt_verified_wake_and_pause_preserves_transcript(self):
+        """Verified wake-and-pause turn allows >1.5s silence and returns full downstream transcript."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.living_room"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        mock_downstream = MagicMock()
+
+        async def downstream_handler(metadata, stream):
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            return SpeechResult(text="Mr. Clemens", result=SpeechResultState.SUCCESS)
+
+        mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_handler)
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        # Speculative check confirms the wake word
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 0.95, 10.0)
+        )
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        # Stream 2.0s pre-roll (20 chunks of 100ms) followed by 3.0s of silence (30 chunks of 100ms)
+        async def wake_and_pause_stream():
+            for i in range(50):
+                yield b"\x00\x00" * 1600
+                if i == 10:
+                    # Allow background speculative task to verify wake word during pre-roll
+                    await asyncio.sleep(0.02)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock), \
+             patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            result = await stt_proxy.async_process_audio_stream(metadata, wake_and_pause_stream())
+
+        self.assertEqual(result.result, SpeechResultState.SUCCESS)
+        self.assertEqual(result.text, "Mr. Clemens")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
