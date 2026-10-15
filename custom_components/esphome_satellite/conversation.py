@@ -112,8 +112,10 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         self._entry = entry
         self._client = client
         self._attr_unique_id = f"{entry.entry_id}_gatekeeper"
-        self._active_followup_convs: dict[str, float] = {}
-        self._active_followup_satellites: dict[str, float] = {}
+        domain_data = hass.data.setdefault(DOMAIN, {}) if isinstance(getattr(hass, "data", None), dict) else {}
+        self._active_followup_convs: dict[str, float] = domain_data.setdefault("followup_convs", {})
+        self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
+        self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
 
     @property
     def supported_languages(self) -> list[str]:
@@ -137,15 +139,13 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 is_followup = True
             self._active_followup_convs.pop(conv_id, None)
 
-        if not is_followup and satellite_id in self._active_followup_satellites:
-            if (now - self._active_followup_satellites[satellite_id]) < 30.0:
+        if satellite_id in self._active_followup_satellites:
+            if not is_followup and (now - self._active_followup_satellites[satellite_id]) < 30.0:
                 is_followup = True
             self._active_followup_satellites.pop(satellite_id, None)
 
-        if not is_followup and satellite_id:
-            sat_entity = self.hass.states.get(satellite_id)
-            if sat_entity and sat_entity.state in ("follow_up", "followup", "continuing"):
-                is_followup = True
+        if not is_followup and satellite_id and self._is_satellite_in_followup_state(satellite_id):
+            is_followup = True
 
         # Resolve satellite slot, wake word, and active threshold
         slot_index, wake_word = self._resolve_satellite_context(satellite_id)
@@ -225,6 +225,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 )
                 if conv_id:
                     self._active_followup_convs[conv_id] = now
+                    self._followup_sat_to_conv[satellite_id] = conv_id
                 self._active_followup_satellites[satellite_id] = now
                 resp = intent.IntentResponse(language=user_input.language)
                 resp.async_set_speech("Yes?")
@@ -418,6 +419,53 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
 
         return (active_slot, wake_word)
 
+    def _is_satellite_in_followup_state(self, satellite_id: str | None) -> bool:
+        """Check if satellite or its companion FSM status sensor is in Follow Up state."""
+        if not satellite_id or not isinstance(satellite_id, str) or not hasattr(self.hass.states, "get"):
+            return False
+
+        followup_states = {"follow up", "follow_up", "followup", "continuing"}
+        sat_entity = self.hass.states.get(satellite_id)
+        if sat_entity and isinstance(sat_entity.state, str) and sat_entity.state.strip().lower() in followup_states:
+            return True
+
+        try:
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry = ent_reg.async_get(satellite_id) if ent_reg else None
+            if entry and entry.device_id:
+                dev_entries = []
+                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
+                    res = ent_reg.async_entries_for_device(entry.device_id)
+                    if isinstance(res, list):
+                        dev_entries = res
+                if not dev_entries and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
+                    try:
+                        res = er.async_entries_for_device(ent_reg, entry.device_id)
+                        if isinstance(res, list):
+                            dev_entries = res
+                    except Exception:
+                        pass
+                for dev_entry in dev_entries:
+                    if dev_entry.domain == "sensor" and "status_satellite_state" in dev_entry.entity_id:
+                        st = self.hass.states.get(dev_entry.entity_id)
+                        if st and isinstance(st.state, str) and st.state.strip().lower() in followup_states:
+                            return True
+        except Exception:
+            pass
+
+        sat_part = satellite_id.split(".")[-1]
+        base_part = re.sub(r"_voice_satellite$", "", sat_part)
+        for cand_id in (
+            f"sensor.{sat_part}_status_satellite_state",
+            f"sensor.{base_part}_status_satellite_state",
+        ):
+            st = self.hass.states.get(cand_id)
+            if st and isinstance(st.state, str) and st.state.strip().lower() in followup_states:
+                return True
+
+        return False
+
     def _get_slot_user_aliases(self, slot_index: int) -> list[str]:
         """Retrieve user-configured phonetic aliases for specific slot."""
         options = self._entry.options
@@ -491,6 +539,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             self._active_followup_convs[conv_id] = now
         if satellite_id:
             self._active_followup_satellites[satellite_id] = now
+            if conv_id:
+                self._followup_sat_to_conv[satellite_id] = conv_id
         _LOGGER.info(
             "[Gatekeeper] Registered follow-up window for conv=%s, sat=%s",
             conv_id,
