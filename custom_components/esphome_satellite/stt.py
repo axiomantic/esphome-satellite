@@ -63,11 +63,13 @@ from .systemone_client import GatekeeperClientError, SystemOneClientError
 _LOGGER = logging.getLogger(__name__)
 
 # Two-Phase Voice Activity & Silence Invariants
-PRE_ROLL_DURATION_SECONDS: Final = 2.0        # 2.0s pre-roll wake word buffer prepended by satellite
-INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 5.0   # Allow up to 5.0s post-wake pause before speech begins
-END_OF_SPEECH_SILENCE_SECONDS: Final = 1.2    # Complete stream after 1.2s of post-speech silence
-MAX_RECORDING_TIMEOUT_SECONDS: Final = 10.5   # Complete stream cleanly before 10s hardware watchdog
-SPEECH_RMS_THRESHOLD: Final = 450.0           # Voice activity threshold for 16-bit PCM
+PRE_ROLL_DURATION_SECONDS: Final = 2.0                 # 2.0s pre-roll wake word buffer prepended by satellite
+INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 5.0            # Allow up to 5.0s post-wake pause once wake word is verified
+UNVERIFIED_INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 1.5 # Fast-abort unverified noise triggers after 1.5s of silence
+END_OF_SPEECH_SILENCE_SECONDS: Final = 1.2             # Complete stream after 1.2s of post-speech silence
+MAX_RECORDING_TIMEOUT_SECONDS: Final = 10.5            # Complete stream cleanly before 15s hardware watchdog
+SPEECH_RMS_THRESHOLD: Final = 450.0                    # Voice activity threshold for 16-bit PCM
+
 
 
 def pcm_to_wav(
@@ -289,6 +291,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
         chunk_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=128)
         verified_event = asyncio.Event()
+        unverified_abort_event = asyncio.Event()
+        eval_state: dict[str, int | bool] = {"in_flight": False, "completed_count": 0}
         captured_chunks: list[bytes] = []
 
         # Step 1: Fork live generator into dual pipe with two-phase VAD silence gating
@@ -344,10 +348,24 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             else:
                                 speech_consec_chunks = 0
                                 initial_silence_elapsed += chunk_sec
-                                if initial_silence_elapsed >= INITIAL_SPEECH_TIMEOUT_SECONDS:
+                                can_fast_abort_unverified = (
+                                    self.early_wake_verification
+                                    and not verified_event.is_set()
+                                    and int(eval_state.get("completed_count", 0)) >= 1
+                                    and not bool(eval_state.get("in_flight", False))
+                                )
+                                effective_initial_timeout = (
+                                    UNVERIFIED_INITIAL_SPEECH_TIMEOUT_SECONDS
+                                    if can_fast_abort_unverified
+                                    else INITIAL_SPEECH_TIMEOUT_SECONDS
+                                )
+                                if initial_silence_elapsed >= effective_initial_timeout:
+                                    if can_fast_abort_unverified:
+                                        unverified_abort_event.set()
                                     _LOGGER.info(
-                                        "[Speculative STT] Initial speech pause timeout (%.1fs) reached without speech; terminating stream",
-                                        INITIAL_SPEECH_TIMEOUT_SECONDS,
+                                        "[Speculative STT] Initial speech pause timeout (%.1fs, verified=%s) reached without speech; terminating stream",
+                                        initial_silence_elapsed,
+                                        verified_event.is_set(),
                                     )
                                     break
                         else:
@@ -381,19 +399,56 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 queue=chunk_queue,
                 verified_event=verified_event,
                 downstream_entity=downstream_entity,
+                eval_state=eval_state,
             )
         )
 
         # Step 3: Run downstream STT on primary stream and return verbatim result intact
         sat_id, target_ww = self._resolve_active_satellite_context()
         speech_result: SpeechResult | None = None
-        try:
-            speech_result = await downstream_entity.async_process_audio_stream(
+        downstream_task = asyncio.create_task(
+            downstream_entity.async_process_audio_stream(
                 metadata, _tee_audio_stream()
             )
+        )
+        abort_wait_task = asyncio.create_task(unverified_abort_event.wait())
+        try:
+            done, _ = await asyncio.wait(
+                {downstream_task, abort_wait_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if abort_wait_task in done and unverified_abort_event.is_set():
+                if not downstream_task.done():
+                    downstream_task.cancel()
+                    try:
+                        await downstream_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                _LOGGER.info(
+                    "[Speculative STT] Unverified silence timeout reached; fast-returning empty transcript to release satellite"
+                )
+                speech_result = SpeechResult(
+                    text="",
+                    result=SpeechResultState.SUCCESS,
+                )
+                return speech_result
+
+            speech_result = await downstream_task
             return speech_result
 
         finally:
+            if not abort_wait_task.done():
+                abort_wait_task.cancel()
+                try:
+                    await abort_wait_task
+                except asyncio.CancelledError:
+                    pass
+            if not downstream_task.done():
+                downstream_task.cancel()
+                try:
+                    await downstream_task
+                except (asyncio.CancelledError, Exception):
+                    pass
             if not speculative_task.done():
                 speculative_task.cancel()
                 try:
@@ -692,6 +747,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         queue: asyncio.Queue[bytes],
         verified_event: asyncio.Event,
         downstream_entity: SpeechToTextEntity,
+        eval_state: dict[str, bool] | None = None,
     ) -> None:
         """Accumulate PCM audio chunks, transcribe sliding window, and query System 1."""
         pcm_accumulator = bytearray()
@@ -745,73 +801,80 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 and len(pcm_accumulator) <= max_speculative_bytes
             ):
                 last_eval_len = len(pcm_accumulator)
+                if eval_state is not None:
+                    eval_state["in_flight"] = True
 
-                # Dynamically re-resolve active satellite context on each evaluation stride
-                # to pick up slot transitions arriving over the network after audio stream initiation
-                fresh_sat_id, fresh_wake_word = self._resolve_active_satellite_context()
-                if fresh_wake_word:
-                    target_wake_word = fresh_wake_word
-                if fresh_sat_id:
-                    sat_id = fresh_sat_id
+                try:
+                    # Dynamically re-resolve active satellite context on each evaluation stride
+                    # to pick up slot transitions arriving over the network after audio stream initiation
+                    fresh_sat_id, fresh_wake_word = self._resolve_active_satellite_context()
+                    if fresh_wake_word:
+                        target_wake_word = fresh_wake_word
+                    if fresh_sat_id:
+                        sat_id = fresh_sat_id
 
-                partial_text = await self._transcribe_partial_slice(
-                    metadata=metadata,
-                    pcm_data=bytes(pcm_accumulator),
-                    downstream_entity=downstream_entity,
-                    rate_hz=rate_hz,
-                    channels=num_channels,
-                    sample_width=bytes_per_sample,
-                )
+                    partial_text = await self._transcribe_partial_slice(
+                        metadata=metadata,
+                        pcm_data=bytes(pcm_accumulator),
+                        downstream_entity=downstream_entity,
+                        rate_hz=rate_hz,
+                        channels=num_channels,
+                        sample_width=bytes_per_sample,
+                    )
 
-                if partial_text:
-                    words = partial_text.strip().split()
-                    target_words = target_wake_word.strip().split() if target_wake_word else []
-                    min_words = min(2, len(target_words)) if target_words else 2
-                    if len(words) < min_words:
-                        if eof_seen:
-                            break
-                        continue
+                    if partial_text:
+                        words = partial_text.strip().split()
+                        target_words = target_wake_word.strip().split() if target_wake_word else []
+                        min_words = min(2, len(target_words)) if target_words else 2
+                        if len(words) < min_words:
+                            if eof_seen:
+                                break
+                            continue
 
-                    try:
-                        active_slot = self._resolve_active_slot_index(sat_id)
-                        threshold = self._get_slot_threshold(active_slot)
-                        user_aliases = self._get_slot_user_aliases(active_slot)
-                        all_aliases = expand_wake_phrase(target_wake_word, user_aliases) if target_wake_word else []
+                        try:
+                            active_slot = self._resolve_active_slot_index(sat_id)
+                            threshold = self._get_slot_threshold(active_slot)
+                            user_aliases = self._get_slot_user_aliases(active_slot)
+                            all_aliases = expand_wake_phrase(target_wake_word, user_aliases) if target_wake_word else []
 
-                        if target_wake_word:
-                            question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(
-                                wake_word=target_wake_word
+                            if target_wake_word:
+                                question_text = QUESTION_TEMPLATE_WAKE_VERIFICATION.format(
+                                    wake_word=target_wake_word
+                                )
+                                criteria = make_wake_verification_criteria(target_wake_word)
+                            else:
+                                question_text = QUESTION_TEMPLATE_GENERAL
+                                criteria = None
+
+                            choice, conf, rtt_ms = await self._client.classify_addressing(
+                                text=partial_text,
+                                question_text=question_text,
+                                min_confidence=threshold,
+                                criteria=criteria,
+                                target_wake_word=target_wake_word,
+                                phonetic_variants=all_aliases,
+                                is_followup=False,
                             )
-                            criteria = make_wake_verification_criteria(target_wake_word)
-                        else:
-                            question_text = QUESTION_TEMPLATE_GENERAL
-                            criteria = None
-
-                        choice, conf, rtt_ms = await self._client.classify_addressing(
-                            text=partial_text,
-                            question_text=question_text,
-                            min_confidence=threshold,
-                            criteria=criteria,
-                            target_wake_word=target_wake_word,
-                            phonetic_variants=all_aliases,
-                            is_followup=False,
-                        )
-                        if choice in (CHOICE_ADDRESSED, "addressed") and conf >= threshold:
-                            _LOGGER.info(
-                                "[Speculative STT] Phonetic wake verification confirmed for '%s' (conf=%.2f in %.1fms): '%s'",
-                                target_wake_word or "assistant",
-                                conf,
-                                rtt_ms,
-                                partial_text,
+                            if choice in (CHOICE_ADDRESSED, "addressed") and conf >= threshold:
+                                _LOGGER.info(
+                                    "[Speculative STT] Phonetic wake verification confirmed for '%s' (conf=%.2f in %.1fms): '%s'",
+                                    target_wake_word or "assistant",
+                                    conf,
+                                    rtt_ms,
+                                    partial_text,
+                                )
+                                verified_event.set()
+                                await self._notify_satellite_verified(sat_id)
+                                break  # Terminate speculative loop once verified
+                        except (GatekeeperClientError, Exception) as err:
+                            _LOGGER.debug(
+                                "[Speculative STT] Speculative classification check failed: %s",
+                                err,
                             )
-                            verified_event.set()
-                            await self._notify_satellite_verified(sat_id)
-                            break  # Terminate speculative loop once verified
-                    except (GatekeeperClientError, Exception) as err:
-                        _LOGGER.debug(
-                            "[Speculative STT] Speculative classification check failed: %s",
-                            err,
-                        )
+                finally:
+                    if eval_state is not None:
+                        eval_state["in_flight"] = False
+                        eval_state["completed_count"] = int(eval_state.get("completed_count", 0)) + 1
 
             if eof_seen:
                 break
