@@ -344,6 +344,9 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("Target assistant: Clemens", initial_prompt)
         self.assertIn("Phonetic variations: 'clemons', 'clement'", initial_prompt)
+        self.assertIn("phonetic mis-dictations and homophones are the rule rather than the exception", initial_prompt)
+        self.assertIn("not close to exhaustive", initial_prompt)
+        self.assertIn("Use your judgment of phonetic pronunciations.", initial_prompt)
         self.assertIn("Output ONLY 'YES' or 'NO'.", initial_prompt)
 
         followup_prompt = make_llm_followup_prompt("Clemens")

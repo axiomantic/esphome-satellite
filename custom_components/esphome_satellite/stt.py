@@ -606,8 +606,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
     ) -> None:
         """Save captured microphone audio stream to disk as WAV and JSON metadata."""
         def _write_files() -> None:
-            if hasattr(self.hass, "config") and hasattr(self.hass.config, "path"):
-                rec_dir = Path(self.hass.config.path("www", "recordings"))
+            raw_path = (
+                self.hass.config.path("www", "recordings")
+                if hasattr(self.hass, "config") and hasattr(self.hass.config, "path")
+                else None
+            )
+            if isinstance(raw_path, (str, Path)):
+                rec_dir = Path(raw_path)
             else:
                 rec_dir = Path("/tmp/recordings")
 

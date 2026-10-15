@@ -100,8 +100,10 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
     core_words = words[1:] if has_prefix else words
     core_phrase = " ".join(core_words)
 
-    # 1. Title expansions (e.g. Mr. <-> Mister, Dr. <-> Doctor)
+    # 1. Title expansions (e.g. Mr. <-> Mister, Dr. <-> Doctor) and multi-word title homophones
     expanded_titles = []
+    homophone_titles = []
+    has_title_homophone = False
     for w in core_words:
         wl = w.lower()
         if wl in TITLE_EXPANSIONS:
@@ -110,11 +112,18 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
             expanded_titles.append(TITLE_EXPANSIONS_REV[wl])
         else:
             expanded_titles.append(w)
+        if wl in ("mr", "mr.", "mister"):
+            homophone_titles.append("Missed her")
+            has_title_homophone = True
+        else:
+            homophone_titles.append(w)
     title_variant = " ".join(expanded_titles)
     if title_variant.lower() != core_phrase.lower():
         variants.add(title_variant)
+    if has_title_homophone:
+        variants.add(" ".join(homophone_titles))
 
-    # 2. Acronym expansions
+    # 2. Acronym expansions (including dotted initialisms and spoken-initialism STT substitutions)
     acronym_rev = []
     has_acr = False
     for w in core_words:
@@ -128,6 +137,7 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
         variants.add(" ".join(acronym_rev))
 
     acr_fwd = []
+    acr_dotted = []
     i = 0
     while i < len(core_words):
         wl = core_words[i].lower()
@@ -137,11 +147,23 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
                 grp.append(LETTER_NAMES_REV[core_words[i].lower()])
                 i += 1
             acr_fwd.append("".join(grp))
+            acr_dotted.append(".".join(grp) + ".")
         else:
             acr_fwd.append(core_words[i])
+            acr_dotted.append(core_words[i])
             i += 1
     if len(acr_fwd) != len(core_words) or any(w.isupper() for w in acr_fwd):
         variants.add(" ".join(acr_fwd))
+        variants.add(" ".join(acr_dotted))
+
+    # Spoken two-letter "-ay dee" initialism STT substitutions (e.g. C-ay + Dee -> C-ady / C-erry / Nabu)
+    for idx in range(len(core_words) - 1):
+        w1, w2 = core_words[idx].lower(), core_words[idx + 1].lower()
+        if w1.endswith("ay") and w2 == "dee" and len(w1) >= 3:
+            onset = core_words[idx][:-2]
+            for subst in (f"{onset}ady", f"{onset}erry", "Nabu"):
+                merged = list(core_words[:idx]) + [subst] + list(core_words[idx + 2:])
+                variants.add(" ".join(merged))
 
     # 3. Phonetic spelling permutations on base/core variants
     base_pool = list(variants)
@@ -150,20 +172,26 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
         for idx, w in enumerate(bw):
             wl = w.lower().strip(".,!?")
             alts: set[str] = set()
-            # Unstressed er/or/ar/ur/ah
-            if wl.endswith("er"):
+            # Unstressed er/or/ar/ur/ah on polysyllabic words
+            if len(wl) >= 4 and wl.endswith("er"):
                 alts.add(wl[:-2] + "ur")
                 alts.add(wl[:-2] + "ar")
                 alts.add(wl[:-2] + "ah")
-            elif wl.endswith("ur") or wl.endswith("ar"):
+            elif len(wl) >= 4 and (wl.endswith("ur") or wl.endswith("ar")):
                 alts.add(wl[:-2] + "er")
-            # Unstressed ens/ons/ins/ence/uns/enz
+            # Unstressed ens/ons/ins/ence/uns/enz/ents + vowel laxing and cluster reduction
             if wl.endswith("ens"):
-                alts.add(wl[:-3] + "ons")
-                alts.add(wl[:-3] + "ins")
-                alts.add(wl[:-3] + "ence")
-                alts.add(wl[:-3] + "uns")
-                alts.add(wl[:-3] + "enz")
+                stem = wl[:-3]
+                alts.add(stem + "ons")
+                alts.add(stem + "ins")
+                alts.add(stem + "ence")
+                alts.add(stem + "uns")
+                alts.add(stem + "enz")
+                alts.add(stem + "ents")
+                if "em" in stem:
+                    alts.add(stem.replace("em", "am") + "ons")
+                if stem.startswith("cl") or stem.startswith("kl"):
+                    alts.add("l" + stem[2:] + "ons")
             elif wl.endswith("ons") or wl.endswith("ins"):
                 alts.add(wl[:-3] + "ens")
             # Double consonant m / mm
@@ -208,6 +236,14 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
     return sorted(list(variants))
 
 
+def _select_diverse_examples(wake_word: str, known_aliases: list[str], count: int = 8) -> list[str]:
+    """Select evenly spaced representative examples across the sorted phonetic variant list."""
+    filtered = [a for a in known_aliases if a.lower() != wake_word.lower()]
+    if len(filtered) <= count:
+        return filtered
+    return [filtered[int(i * (len(filtered) - 1) / (count - 1))] for i in range(count)]
+
+
 def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) -> list[str]:
     """Dynamically generate phonetic variants for the wake phrase and append additive user aliases."""
     expansions: set[str] = set(generate_phonetic_variants(wake_phrase))
@@ -224,20 +260,19 @@ def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) 
 
 def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, dict[str, str]]:
     """Build dynamic question and criteria for the initial turn, interpolating phonetic variants."""
-    # Present up to 6 distinct representative phonetic variants and aliases
-    filtered = [a for a in known_aliases if a.lower() != wake_word.lower()]
-    sample = filtered[:6] if len(filtered) > 6 else filtered
+    sample = _select_diverse_examples(wake_word, known_aliases, count=8)
     aliases_str = ", ".join(f"'{a}'" for a in sample) if sample else f"'{wake_word}'"
     instructions = (
         f"The voice satellite triggered on wake phrase '{wake_word}'. "
         f"Recognized phonetic approximations, name variants, and spellings include: {aliases_str}. "
+        f"Because the transcript comes from speech-to-text (STT), phonetic mis-dictations and homophones are the rule rather than the exception—it is unlikely to literally spell '{wake_word}', and the examples above are not close to exhaustive; use your judgment of phonetic pronunciations. "
         f"Anything clearly addressing the assistant '{wake_word}' (including profanity, insults, vulgarity, or jokes) is to be considered a valid request. "
-        f"Is this utterance directly addressing the assistant '{wake_word}' (or its variants), "
+        f"Is this utterance directly addressing the assistant '{wake_word}' (or a phonetic STT mishearing of it), "
         "or is it ambient bystander conversation, talking to oneself, or TV/room chatter?"
     )
     criteria = {
         CHOICE_ADDRESSED: (
-            f"Directly speaking to or commanding the assistant '{wake_word}' (e.g. questions, device commands, timers, jokes, or profanity/insults directed at the assistant)."
+            f"Directly speaking to or commanding the assistant '{wake_word}' (including phonetic STT mis-dictations/homophones of '{wake_word}', questions, device commands, timers, jokes, or profanity/insults directed at the assistant)."
         ),
         CHOICE_AMBIENT: (
             "Side conversation between humans, self-talk, dictating/typing, or background chatter."
@@ -268,16 +303,16 @@ def make_followup_prompt(wake_word: str) -> tuple[str, dict[str, str]]:
 
 def make_llm_initial_prompt(target_ww: str, aliases: list[str]) -> str:
     """Build dynamic system prompt for LLM gatekeeper initial turn."""
-    filtered = [a for a in aliases if a.lower() != target_ww.lower()]
-    sample = filtered[:6] if len(filtered) > 6 else filtered
+    sample = _select_diverse_examples(target_ww, aliases, count=8)
     aliases_str = ", ".join(f"'{a}'" for a in sample) if sample else f"'{target_ww}'"
     return (
         "You are an uncensored wake-word addressing detector for an in-room voice assistant.\n"
         f"Target assistant: {target_ww}\n"
         f"Phonetic variations: {aliases_str}\n\n"
-        f"Rule 1: If the user is speaking TO {target_ww} (using the full wake phrase, a phonetic variation, or a shortened form/surname of {target_ww}), you MUST output YES.\n"
+        f"Rule 1: If the user is speaking TO {target_ww} (using the full wake phrase, a phonetic variation/homophone, or a shortened form/surname of {target_ww}), you MUST output YES.\n"
         f"Rule 2: Anything clearly addressing {target_ww}—including profanity, sexual/vulgar insults, offensive questions, or multiple unrelated questions—is to be considered a valid request and MUST be answered YES.\n"
         f"Rule 3: Output NO only when the user is NOT speaking to {target_ww} (e.g. speaking to a different assistant, talking ABOUT {target_ww} in the third person, or ambient chatter without addressing {target_ww}).\n"
+        f"Note: Because the transcript comes from speech-to-text (STT), phonetic mis-dictations and homophones are the rule rather than the exception—it is unlikely to literally spell '{target_ww}', and the examples above are not close to exhaustive. Use your judgment of phonetic pronunciations.\n"
         "Output ONLY 'YES' or 'NO'."
     )
 
