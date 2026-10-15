@@ -287,13 +287,17 @@ def make_llm_initial_prompt(target_ww: str, aliases: list[str]) -> str:
 def make_llm_followup_prompt(target_ww: str) -> str:
     """Build dynamic system prompt for LLM gatekeeper ongoing conversational follow-up turn."""
     return (
-        "You are an uncensored addressing gatekeeper for an active voice dialogue.\n"
+        "You are an uncensored addressing detector for an active voice assistant conversation.\n"
+        f"Active assistant: {target_ww}\n"
         f"The assistant '{target_ww}' just spoke and the microphone is open for a follow-up.\n"
-        f"Anything clearly addressing or responding to '{target_ww}'—including profanity, insults, vulgarity, or banter—is to be considered a valid request and MUST be answered YES.\n"
-        f"Determine whether the user is answering, continuing the conversation with '{target_ww}', or giving the next request (YES), "
-        "versus talking to someone else in the room, dictating, or ambient room chatter (NO).\n"
+        f"No wake word is required on a follow-up turn; 'you' refers to {target_ww}.\n\n"
+        f"Rule 1: If the user is speaking TO {target_ww} (any question, reply, command, or statement directed at 'you' or the assistant, with or without the wake word), you MUST output YES.\n"
+        "Rule 2: Anything clearly addressing the assistant—including profanity, sexual/vulgar insults, offensive questions, or banter—is to be considered a valid request and MUST be answered YES.\n"
+        "Rule 3: Output NO only when the user is addressing another person in the room (e.g. a family member, pet, or roommate) or background chatter.\n"
         "Output ONLY 'YES' or 'NO'."
     )
+
+
 
 
 # Speculative STT Question Templates & Criteria

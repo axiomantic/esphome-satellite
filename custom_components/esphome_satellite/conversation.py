@@ -485,16 +485,16 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             agent_id=downstream_agent_id,
             device_id=user_input.device_id,
         )
-        if getattr(res, "continue_conversation", False):
-            now = time.monotonic()
-            conv_id = user_input.conversation_id or getattr(res, "conversation_id", None)
-            if conv_id:
-                self._active_followup_convs[conv_id] = now
-            if satellite_id:
-                self._active_followup_satellites[satellite_id] = now
-            _LOGGER.info(
-                "[Gatekeeper] Downstream agent requested continuous conversation. Registered follow-up for conv=%s, sat=%s",
-                conv_id,
-                satellite_id,
-            )
+        now = time.monotonic()
+        conv_id = user_input.conversation_id or getattr(res, "conversation_id", None)
+        if conv_id:
+            self._active_followup_convs[conv_id] = now
+        if satellite_id:
+            self._active_followup_satellites[satellite_id] = now
+        _LOGGER.info(
+            "[Gatekeeper] Registered follow-up window for conv=%s, sat=%s",
+            conv_id,
+            satellite_id,
+        )
         return res
+
