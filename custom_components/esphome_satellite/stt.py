@@ -889,9 +889,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
         bytes_per_second = rate_hz * bytes_per_sample * num_channels
         window_bytes = int(bytes_per_second * (self.speculative_chunk_ms / 1000.0))
+        pre_roll_bytes = int(bytes_per_second * PRE_ROLL_DURATION_SECONDS)
         stride_bytes = int(bytes_per_second * 0.20)  # Re-evaluate every 200ms
         max_speculative_bytes = int(bytes_per_second * 4.5)  # Stop speculative partial STT after 4.5s
         last_eval_len = 0
+        full_preroll_evaluated = False
 
         sat_id, target_wake_word = self._resolve_active_satellite_context()
         _LOGGER.debug(
@@ -921,14 +923,57 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     break
                 pcm_accumulator.extend(extra)
 
+            # Coalesce the initial 2.0s pre-roll burst arriving over TCP so we don't fire
+            # premature 500ms/1500ms slices that truncate the wake word before 2000ms arrives
+            while not eof_seen and len(pcm_accumulator) < pre_roll_bytes:
+                try:
+                    nxt = await asyncio.wait_for(queue.get(), timeout=0.01)
+                except asyncio.TimeoutError:
+                    break
+                except asyncio.CancelledError:
+                    return
+                if not nxt:
+                    eof_seen = True
+                    break
+                pcm_accumulator.extend(nxt)
+                while not queue.empty():
+                    try:
+                        extra = queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    if not extra:
+                        eof_seen = True
+                        break
+                    pcm_accumulator.extend(extra)
+
+            # Once the full 2.0s pre-roll has been evaluated, only re-evaluate if post-wake
+            # audio contains actual speech (RMS >= SPEECH_RMS_THRESHOLD), preventing continuous
+            # re-evaluation of post-wake silence from starving can_fast_abort_unverified.
+            has_new_speech = True
+            if full_preroll_evaluated and len(pcm_accumulator) > last_eval_len:
+                new_slice = bytes(pcm_accumulator[last_eval_len:])
+                has_new_speech = self._calculate_pcm_rms(new_slice) >= SPEECH_RMS_THRESHOLD
+
+            should_eval_full_preroll = (
+                not full_preroll_evaluated and len(pcm_accumulator) >= pre_roll_bytes
+            )
+
             # Evaluate when window threshold is met and satellite is not yet verified
             if (
                 not verified_event.is_set()
                 and len(pcm_accumulator) >= window_bytes
-                and (len(pcm_accumulator) - last_eval_len) >= stride_bytes
+                and (
+                    should_eval_full_preroll
+                    or (
+                        (len(pcm_accumulator) - last_eval_len) >= stride_bytes
+                        and has_new_speech
+                    )
+                )
                 and len(pcm_accumulator) <= max_speculative_bytes
             ):
                 last_eval_len = len(pcm_accumulator)
+                if last_eval_len >= pre_roll_bytes:
+                    full_preroll_evaluated = True
                 if eval_state is not None:
                     eval_state["in_flight"] = True
 
@@ -953,7 +998,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     if partial_text:
                         words = partial_text.strip().split()
                         target_words = target_wake_word.strip().split() if target_wake_word else []
-                        min_words = min(2, len(target_words)) if target_words else 2
+                        min_words = min(2, len(target_words)) if target_wake_word else 2
                         if len(words) < min_words:
                             if eof_seen:
                                 break
@@ -994,6 +1039,15 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                 verified_event.set()
                                 await self._notify_satellite_verified(sat_id)
                                 break  # Terminate speculative loop once verified
+                            _LOGGER.info(
+                                "[Speculative STT] Partial slice (%dms) not verified for '%s' (choice=%s, conf=%.2f in %.1fms): '%s'",
+                                int(last_eval_len * 1000 / max(1, bytes_per_second)),
+                                target_wake_word or "assistant",
+                                choice,
+                                conf,
+                                rtt_ms,
+                                partial_text,
+                            )
                         except (GatekeeperClientError, Exception) as err:
                             _LOGGER.debug(
                                 "[Speculative STT] Speculative classification check failed: %s",
@@ -1003,6 +1057,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     if eval_state is not None:
                         eval_state["in_flight"] = False
                         eval_state["completed_count"] = int(eval_state.get("completed_count", 0)) + 1
+                    await asyncio.sleep(0)
 
             if eof_seen:
                 break
@@ -1024,10 +1079,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 yield pcm_data
 
         try:
-            # Enforce 1.5s timeout on partial speculative transcription
+            # Enforce 2.5s timeout on partial speculative transcription
             result = await asyncio.wait_for(
                 downstream_entity.async_process_audio_stream(metadata, _slice_generator()),
-                timeout=1.5,
+                timeout=2.5,
             )
             if (
                 result
