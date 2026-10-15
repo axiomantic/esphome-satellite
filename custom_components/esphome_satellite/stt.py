@@ -307,6 +307,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             end_silence_elapsed = 0.0
             total_elapsed = 0.0
             speech_consec_chunks = 0
+            preroll_rms_samples: list[float] = []
+            adaptive_speech_threshold = SPEECH_RMS_THRESHOLD
 
             try:
                 stream_iter = aiter(stream)
@@ -335,10 +337,21 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                         )
                         break
 
-                    # Only evaluate post-wake command VAD after the 2.0s pre-roll wake word buffer
-                    if total_elapsed > PRE_ROLL_DURATION_SECONDS:
-                        chunk_rms = self._calculate_pcm_rms(chunk)
-                        is_speech = chunk_rms >= SPEECH_RMS_THRESHOLD
+                    chunk_rms = self._calculate_pcm_rms(chunk)
+                    if total_elapsed <= PRE_ROLL_DURATION_SECONDS:
+                        if chunk_rms > 0.0:
+                            preroll_rms_samples.append(chunk_rms)
+                            if len(preroll_rms_samples) >= 4:
+                                sorted_rms = sorted(preroll_rms_samples)
+                                ambient_floor = sorted_rms[max(0, len(sorted_rms) // 5)]
+                                adaptive_speech_threshold = min(
+                                    1400.0,
+                                    max(SPEECH_RMS_THRESHOLD, ambient_floor * 1.65),
+                                )
+                                eval_state["speech_rms_threshold"] = adaptive_speech_threshold
+                    else:
+                        # Only evaluate post-wake command VAD after the 2.0s pre-roll wake word buffer
+                        is_speech = chunk_rms >= adaptive_speech_threshold
 
                         if not in_speech:
                             if is_speech:
@@ -346,9 +359,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                 if speech_consec_chunks >= 3:
                                     in_speech = True
                                     _LOGGER.debug(
-                                        "[Speculative STT] Voice command started after %.2fs post-wake pause (RMS=%.1f)",
+                                        "[Speculative STT] Voice command started after %.2fs post-wake pause (RMS=%.1f, thresh=%.1f)",
                                         initial_silence_elapsed,
                                         chunk_rms,
+                                        adaptive_speech_threshold,
                                     )
                             else:
                                 speech_consec_chunks = 0
@@ -662,11 +676,30 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 wav_path.name,
             )
 
-            # Prune old recordings (keep last 50)
+            # Prune old recordings (keep last 200, pruning unverified empty-transcript files first)
             try:
                 wav_files = sorted(rec_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime)
-                if len(wav_files) > 50:
-                    for old_wav in wav_files[:-50]:
+                if len(wav_files) > 200:
+                    excess = len(wav_files) - 200
+                    empty_wavs: list[Path] = []
+                    non_empty_wavs: list[Path] = []
+                    for wf_path in wav_files:
+                        jf_path = wf_path.with_suffix(".json")
+                        is_empty = False
+                        if jf_path.exists():
+                            try:
+                                with open(jf_path, encoding="utf-8") as rjf:
+                                    jmeta = json.load(rjf)
+                                    if not (jmeta.get("text") or "").strip():
+                                        is_empty = True
+                            except Exception:
+                                pass
+                        if is_empty:
+                            empty_wavs.append(wf_path)
+                        else:
+                            non_empty_wavs.append(wf_path)
+                    prune_targets = (empty_wavs + non_empty_wavs)[:excess]
+                    for old_wav in prune_targets:
                         old_wav.unlink(missing_ok=True)
                         old_json = old_wav.with_suffix(".json")
                         old_json.unlink(missing_ok=True)
@@ -712,8 +745,48 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             if not active_states:
                 return (None, None)
 
-            # Pick the most recently updated active satellite
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(self.hass)
+            entry_title = getattr(self._entry, "title", None)
+            title_lower = entry_title.strip().lower() if isinstance(entry_title, str) and entry_title.strip() else ""
+
+            def _get_dev_entries(sat_entity_id: str) -> list:
+                if not ent_reg:
+                    return []
+                reg_entry = ent_reg.async_get(sat_entity_id)
+                dev_id = reg_entry.device_id if reg_entry else None
+                if not dev_id:
+                    return []
+                entries_list = []
+                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
+                    res = ent_reg.async_entries_for_device(dev_id)
+                    if isinstance(res, list):
+                        entries_list = res
+                if not entries_list and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
+                    try:
+                        res = er.async_entries_for_device(ent_reg, dev_id)
+                        if isinstance(res, list):
+                            entries_list = res
+                    except Exception:
+                        pass
+                return entries_list
+
+            # If multiple satellites are active, prefer the one whose selected pipeline matches this entry's title
             sat_state = max(active_states, key=lambda s: getattr(s, "last_updated", 0))
+            if len(active_states) > 1 and title_lower:
+                matching_sats = []
+                for cand_state in active_states:
+                    for dev_entry in _get_dev_entries(cand_state.entity_id):
+                        if dev_entry.domain == "select" and "assistant" in dev_entry.entity_id and "wake_word" not in dev_entry.entity_id:
+                            sel_state = self.hass.states.get(dev_entry.entity_id)
+                            if sel_state and isinstance(sel_state.state, str):
+                                pipe_name = sel_state.state.strip().lower()
+                                if pipe_name and pipe_name not in ("unknown", "unavailable", "preferred") and pipe_name in title_lower:
+                                    matching_sats.append(cand_state)
+                                    break
+                if matching_sats:
+                    sat_state = max(matching_sats, key=lambda s: getattr(s, "last_updated", 0))
+
             sat_id = sat_state.entity_id
 
             # 2. Extract reported wake word from entity attributes
@@ -727,25 +800,9 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
             # 3. Check active slot sensor and select entities via device registry linkage
             active_slot = sat_state.attributes.get("active_pipeline_index", 0)
-            from homeassistant.helpers import entity_registry as er
-            ent_reg = er.async_get(self.hass)
-            entry = ent_reg.async_get(sat_id) if ent_reg else None
-            device_id = entry.device_id if entry else None
+            dev_entries = _get_dev_entries(sat_id)
 
-            if device_id and ent_reg:
-                dev_entries = []
-                if hasattr(ent_reg, "async_entries_for_device") and callable(ent_reg.async_entries_for_device):
-                    res = ent_reg.async_entries_for_device(device_id)
-                    if isinstance(res, list):
-                        dev_entries = res
-                if not dev_entries and hasattr(er, "async_entries_for_device") and callable(er.async_entries_for_device):
-                    try:
-                        res = er.async_entries_for_device(ent_reg, device_id)
-                        if isinstance(res, list):
-                            dev_entries = res
-                    except Exception:
-                        pass
-
+            if dev_entries:
                 for dev_entry in dev_entries:
                     if dev_entry.domain == "sensor" and "active_assistant_slot" in dev_entry.entity_id:
                         slot_state = self.hass.states.get(dev_entry.entity_id)
@@ -757,9 +814,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
                 # If this config entry corresponds to a specific assistant pipeline selected on a slot,
                 # prefer that slot deterministically to avoid Wi-Fi sensor update race conditions at t=0ms.
-                entry_title = getattr(self._entry, "title", None)
-                if isinstance(entry_title, str) and entry_title.strip():
-                    title_lower = entry_title.strip().lower()
+                if title_lower:
                     for dev_entry in dev_entries:
                         if dev_entry.domain == "select" and "assistant" in dev_entry.entity_id and "wake_word" not in dev_entry.entity_id:
                             sel_state = self.hass.states.get(dev_entry.entity_id)
@@ -875,7 +930,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         queue: asyncio.Queue[bytes],
         verified_event: asyncio.Event,
         downstream_entity: SpeechToTextEntity,
-        eval_state: dict[str, bool] | None = None,
+        eval_state: dict[str, int | float | bool] | None = None,
     ) -> None:
         """Accumulate PCM audio chunks, transcribe sliding window, and query System 1."""
         pcm_accumulator = bytearray()
@@ -890,8 +945,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         bytes_per_second = rate_hz * bytes_per_sample * num_channels
         window_bytes = int(bytes_per_second * (self.speculative_chunk_ms / 1000.0))
         pre_roll_bytes = int(bytes_per_second * PRE_ROLL_DURATION_SECONDS)
-        stride_bytes = int(bytes_per_second * 0.20)  # Re-evaluate every 200ms
-        max_speculative_bytes = int(bytes_per_second * 4.5)  # Stop speculative partial STT after 4.5s
+        stride_bytes = int(bytes_per_second * 0.80)  # Re-evaluate at most every 800ms after pre-roll to avoid Whisper queue congestion
+        max_speculative_bytes = int(bytes_per_second * 3.6)  # Stop speculative partial STT after 3.6s (at most 2 post-preroll slices)
         last_eval_len = 0
         full_preroll_evaluated = False
 
@@ -947,32 +1002,40 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     pcm_accumulator.extend(extra)
 
             # Once the full 2.0s pre-roll has been evaluated, only re-evaluate if post-wake
-            # audio contains actual speech (RMS >= SPEECH_RMS_THRESHOLD), preventing continuous
-            # re-evaluation of post-wake silence from starving can_fast_abort_unverified.
+            # audio contains actual speech above the adaptive speech threshold, preventing continuous
+            # re-evaluation of post-wake silence or HVAC noise from starving can_fast_abort_unverified.
             has_new_speech = True
             if full_preroll_evaluated and len(pcm_accumulator) > last_eval_len:
                 new_slice = bytes(pcm_accumulator[last_eval_len:])
-                has_new_speech = self._calculate_pcm_rms(new_slice) >= SPEECH_RMS_THRESHOLD
+                effective_rms_thresh = float(
+                    eval_state.get("speech_rms_threshold", SPEECH_RMS_THRESHOLD)
+                    if eval_state is not None
+                    else SPEECH_RMS_THRESHOLD
+                )
+                has_new_speech = self._calculate_pcm_rms(new_slice) >= effective_rms_thresh
 
             should_eval_full_preroll = (
-                not full_preroll_evaluated and len(pcm_accumulator) >= pre_roll_bytes
+                not full_preroll_evaluated
+                and (len(pcm_accumulator) >= pre_roll_bytes or eof_seen)
             )
 
-            # Evaluate when window threshold is met and satellite is not yet verified
+            # Evaluate when full 2.0s pre-roll (or EOF on short test stream) is ready,
+            # and at most every 800ms thereafter if new post-wake speech is present
             if (
                 not verified_event.is_set()
                 and len(pcm_accumulator) >= window_bytes
                 and (
                     should_eval_full_preroll
                     or (
-                        (len(pcm_accumulator) - last_eval_len) >= stride_bytes
+                        full_preroll_evaluated
+                        and (len(pcm_accumulator) - last_eval_len) >= stride_bytes
                         and has_new_speech
                     )
                 )
                 and len(pcm_accumulator) <= max_speculative_bytes
             ):
                 last_eval_len = len(pcm_accumulator)
-                if last_eval_len >= pre_roll_bytes:
+                if last_eval_len >= pre_roll_bytes or eof_seen:
                     full_preroll_evaluated = True
                 if eval_state is not None:
                     eval_state["in_flight"] = True
@@ -995,15 +1058,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                         sample_width=bytes_per_sample,
                     )
 
-                    if partial_text:
-                        words = partial_text.strip().split()
-                        target_words = target_wake_word.strip().split() if target_wake_word else []
-                        min_words = min(2, len(target_words)) if target_wake_word else 2
-                        if len(words) < min_words:
-                            if eof_seen:
-                                break
-                            continue
-
+                    if partial_text and partial_text.strip():
                         try:
                             active_slot = self._resolve_active_slot_index(sat_id)
                             threshold = self._get_slot_threshold(active_slot)
@@ -1117,8 +1172,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             if await self._notify_single_satellite(sat_id):
                 notified = True
 
-        if not notified:
-            # Fallback: broadcast to any esphome.*_wake_word_verified services
+        if not notified and not satellite_id:
+            # Fallback when satellite_id was unknown: broadcast to any esphome.*_wake_word_verified services
             try:
                 services = self.hass.services.async_services().get("esphome", {})
                 for svc_name in services:
@@ -1136,43 +1191,46 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             from homeassistant.helpers import entity_registry as er
 
             ent_reg = er.async_get(self.hass)
-            entry = ent_reg.async_get(satellite_id)
-            if not entry or not entry.config_entry_id:
-                return False
-
-            config_entry = self.hass.config_entries.async_get_entry(entry.config_entry_id)
-            if not config_entry or config_entry.domain != "esphome":
-                return False
-
-            device_name = str(config_entry.data.get("device_name") or getattr(config_entry, "title", "")).lower()
-            if not device_name:
-                return False
-
-            mac_match = re.search(r"([0-9a-fA-F]{6})", device_name) if isinstance(device_name, str) else None
-            uid = getattr(entry, "unique_id", None)
-            if not mac_match and isinstance(uid, str):
-                clean_uid = uid.replace(":", "").lower()
-                mac_match = re.search(r"([0-9a-fA-F]{6})", clean_uid)
-            mac_suffix = mac_match.group(1).lower() if mac_match else ""
-
+            entry = ent_reg.async_get(satellite_id) if ent_reg else None
             services = self.hass.services.async_services().get("esphome", {})
             target_svc: str | None = None
 
-            service_prefix = device_name.replace("-", "_")
-            candidate = f"{service_prefix}_wake_word_verified"
-            if (hasattr(self.hass.services, "has_service") and self.hass.services.has_service("esphome", candidate)) or candidate in services:
-                target_svc = candidate
-            elif mac_suffix:
-                for svc in services:
-                    if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
-                        target_svc = svc
-                        break
+            if entry and entry.config_entry_id:
+                config_entry = self.hass.config_entries.async_get_entry(entry.config_entry_id)
+                if config_entry and config_entry.domain == "esphome":
+                    device_name = str(config_entry.data.get("device_name") or getattr(config_entry, "title", "")).lower()
+                    mac_match = re.search(r"([0-9a-fA-F]{6})", device_name) if isinstance(device_name, str) else None
+                    uid = getattr(entry, "unique_id", None)
+                    if not mac_match and isinstance(uid, str):
+                        clean_uid = uid.replace(":", "").lower()
+                        mac_match = re.search(r"([0-9a-fA-F]{6})", clean_uid)
+                    mac_suffix = mac_match.group(1).lower() if mac_match else ""
+
+                    if device_name:
+                        service_prefix = device_name.replace("-", "_").replace(" ", "_")
+                        candidate = f"{service_prefix}_wake_word_verified"
+                        if (hasattr(self.hass.services, "has_service") and self.hass.services.has_service("esphome", candidate)) or candidate in services:
+                            target_svc = candidate
+                    if not target_svc and mac_suffix:
+                        for svc in services:
+                            if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
+                                target_svc = svc
+                                break
+
+            if not target_svc and satellite_id:
+                mac_match = re.search(r"([0-9a-fA-F]{6})", satellite_id)
+                if mac_match:
+                    mac_suffix = mac_match.group(1).lower()
+                    for svc in services:
+                        if svc.endswith(f"_{mac_suffix}_wake_word_verified"):
+                            target_svc = svc
+                            break
 
             if not target_svc:
-                for svc in services:
-                    if svc.endswith("_wake_word_verified"):
-                        target_svc = svc
-                        break
+                # Only fall back to a generic service if there is exactly 1 wake_word_verified service registered
+                ww_services = [svc for svc in services if svc.endswith("_wake_word_verified")]
+                if len(ww_services) == 1:
+                    target_svc = ww_services[0]
 
             if target_svc:
                 await self.hass.services.async_call("esphome", target_svc, blocking=False)

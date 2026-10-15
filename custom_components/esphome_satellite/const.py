@@ -239,25 +239,44 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
 
 
 def _select_diverse_examples(wake_word: str, known_aliases: list[str], count: int = 8) -> list[str]:
-    """Select evenly spaced representative examples across the sorted phonetic variant list."""
-    filtered = [a for a in known_aliases if a.lower() != wake_word.lower()]
+    """Select representative examples across the phonetic variant list, preserving leading user aliases."""
+    seen: set[str] = {wake_word.lower()}
+    filtered: list[str] = []
+    for a in known_aliases:
+        al = a.lower()
+        if al not in seen:
+            seen.add(al)
+            filtered.append(a)
     if len(filtered) <= count:
         return filtered
-    return [filtered[int(i * (len(filtered) - 1) / (count - 1))] for i in range(count)]
+
+    # Detect leading user aliases (any non-alphabetically-ordered prefix before the sorted generated list)
+    generated_set = {g.lower() for g in generate_phonetic_variants(wake_word)}
+    leading_user = [a for a in filtered if a.lower() not in generated_set][: min(4, count // 2)]
+    used = {a.lower() for a in leading_user}
+    pool = [a for a in filtered if a.lower() not in used]
+    rem = count - len(leading_user)
+    if rem <= 0 or not pool:
+        return leading_user[:count]
+    if len(pool) <= rem:
+        return leading_user + pool
+    sampled = [pool[int(i * (len(pool) - 1) / max(1, rem - 1))] for i in range(rem)]
+    return leading_user + sampled
 
 
 def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) -> list[str]:
-    """Dynamically generate phonetic variants for the wake phrase and append additive user aliases."""
-    expansions: set[str] = set(generate_phonetic_variants(wake_phrase))
+    """Dynamically generate phonetic variants for the wake phrase and prepend additive user aliases."""
+    generated = generate_phonetic_variants(wake_phrase)
+    if not user_aliases:
+        return generated
 
-    # User-provided aliases (strictly additive)
-    if user_aliases:
-        for alias in user_aliases:
-            a = alias.strip()
-            if a:
-                expansions.add(a)
+    clean_user = [a.strip() for a in user_aliases if a.strip() and a.strip().lower() != wake_phrase.lower()]
+    if not clean_user:
+        return generated
 
-    return sorted(list(expansions))
+    user_set = {a.lower() for a in clean_user}
+    remaining = [g for g in generated if g.lower() not in user_set]
+    return clean_user + remaining
 
 
 def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, dict[str, str]]:
