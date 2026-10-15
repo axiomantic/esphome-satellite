@@ -348,7 +348,9 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
 
         followup_prompt = make_llm_followup_prompt("Clemens")
         self.assertIn("The assistant 'Clemens' just spoke", followup_prompt)
-        self.assertIn("active voice dialogue", followup_prompt)
+        self.assertIn("No wake word is required on a follow-up turn", followup_prompt)
+        self.assertIn("profanity", followup_prompt)
+
 
 
 class TestClientFactory(unittest.TestCase):
