@@ -14,23 +14,24 @@ type
 
   AudioCompressor* = object
     sampleRate*: float32
+    sampleRate32*: float32
     thresholdDb*: float32
     thresholdLinear*: float32
     ratio*: float32
     attackCoeff*: float32
     releaseCoeff*: float32
+    attackCoeff32*: float32
+    releaseCoeff32*: float32
     makeupGainDb*: float32
     makeupGain*: float32
     envelope*: float32
-    hpf*: BiquadFilter
-    hpf32Left*: BiquadFilter
-    hpf32Right*: BiquadFilter
+    lastGainReduction32*: float32
     fadeInRemaining*: int
     fadeInTotal*: int
     consecutiveSilenceSamples*: int
 
 proc newHighPassFilter*(sampleRate: float32 = 16000.0'f32, cutoffHz: float32 = 180.0'f32, q: float32 = 0.70710678'f32): BiquadFilter =
-  ## 2nd-order Butterworth high-pass rumble filter (12 dB/octave rolloff below cutoffHz)
+  ## 2nd-order Butterworth high-pass filter utility
   let omega = 2.0'f32 * PI * cutoffHz / sampleRate
   let alpha = sin(omega) / (2.0'f32 * q)
   let cosw = cos(omega)
@@ -61,25 +62,26 @@ proc reset*(f: var BiquadFilter) =
 
 proc newAudioCompressor*(
     sampleRate: float32 = 16000.0'f32,
-    thresholdDb: float32 = -14.0'f32,
-    ratio: float32 = 3.0'f32,
-    attackMs: float32 = 4.0'f32,
-    releaseMs: float32 = 75.0'f32,
-    makeupGainDb: float32 = 3.2'f32,
-    cutoffHz: float32 = 180.0'f32
+    thresholdDb: float32 = -12.0'f32,
+    ratio: float32 = 2.0'f32,
+    attackMs: float32 = 12.0'f32,
+    releaseMs: float32 = 120.0'f32,
+    makeupGainDb: float32 = 2.0'f32,
+    sampleRate32: float32 = 48000.0'f32
 ): AudioCompressor =
   result.sampleRate = sampleRate
+  result.sampleRate32 = sampleRate32
   result.thresholdDb = thresholdDb
   result.thresholdLinear = pow(10.0'f32, thresholdDb / 20.0'f32)
   result.ratio = ratio
   result.attackCoeff = exp(-1.0'f32 / (sampleRate * (attackMs / 1000.0'f32)))
   result.releaseCoeff = exp(-1.0'f32 / (sampleRate * (releaseMs / 1000.0'f32)))
+  result.attackCoeff32 = exp(-1.0'f32 / (sampleRate32 * (attackMs / 1000.0'f32)))
+  result.releaseCoeff32 = exp(-1.0'f32 / (sampleRate32 * (releaseMs / 1000.0'f32)))
   result.makeupGainDb = makeupGainDb
   result.makeupGain = pow(10.0'f32, makeupGainDb / 20.0'f32)
   result.envelope = 0.0'f32
-  result.hpf = newHighPassFilter(sampleRate, cutoffHz)
-  result.hpf32Left = newHighPassFilter(48000.0'f32, cutoffHz)
-  result.hpf32Right = newHighPassFilter(48000.0'f32, cutoffHz)
+  result.lastGainReduction32 = 1.0'f32
   result.fadeInRemaining = 0
   result.fadeInTotal = 0
   result.consecutiveSilenceSamples = 0
@@ -126,19 +128,14 @@ proc process*(comp: var AudioCompressor, samples: ptr int16, count: int, applyVo
     if abs(raw) <= SilenceThreshold:
       inc comp.consecutiveSilenceSamples
       if comp.consecutiveSilenceSamples == silenceReArmSamples:
-        comp.hpf.reset()
         comp.envelope = 0.0'f32
     else:
       if comp.consecutiveSilenceSamples >= silenceReArmSamples and comp.fadeInRemaining == 0:
         comp.triggerFadeIn(3.5'f32)
-        comp.hpf.reset()
         comp.envelope = 0.0'f32
       comp.consecutiveSilenceSamples = 0
 
     var s = float32(raw)
-
-    if applyProtection:
-      s = comp.hpf.processSample(s)
 
     if applyVocal:
       let absX = abs(s) / 32768.0'f32
@@ -177,42 +174,47 @@ proc process32*(comp: var AudioCompressor, samples: ptr int32, count: int, apply
   let arr = cast[ptr UncheckedArray[int32]](samples)
   const SilenceThreshold32 = 2097152'i32
   # 350ms of silence in 48kHz stereo (2 channels = 96k samples/s) before re-arming soft fade-in
-  let silenceReArmSamples = int(48000.0'f32 * 0.35'f32 * 2.0'f32)
+  let silenceReArmSamples = int(comp.sampleRate32 * 0.35'f32 * 2.0'f32)
 
   for i in 0 ..< count:
     let raw = arr[i]
     if abs(raw) <= SilenceThreshold32:
       inc comp.consecutiveSilenceSamples
+      if comp.consecutiveSilenceSamples == silenceReArmSamples:
+        comp.envelope = 0.0'f32
+        comp.lastGainReduction32 = 1.0'f32
     else:
       if comp.consecutiveSilenceSamples >= silenceReArmSamples and comp.fadeInRemaining == 0:
-        comp.triggerFadeIn(1.5'f32, 48000.0'f32 * 2.0'f32)
+        comp.triggerFadeIn(1.5'f32, comp.sampleRate32 * 2.0'f32)
+        comp.envelope = 0.0'f32
+        comp.lastGainReduction32 = 1.0'f32
       comp.consecutiveSilenceSamples = 0
 
     var s = float32(raw)
 
-    if applyProtection:
-      if (i and 1) == 0:
-        s = comp.hpf32Left.processSample(s)
-      else:
-        s = comp.hpf32Right.processSample(s)
-
     if applyVocal:
-      let absX = abs(s) / 2147483648.0'f32
+      # Step envelope once per 48kHz stereo frame (L/R stereo-linked) using 48kHz time constants
+      if (i and 1) == 0:
+        var peakAbs = abs(s)
+        if i + 1 < count:
+          let rightAbs = abs(float32(arr[i + 1]))
+          if rightAbs > peakAbs:
+            peakAbs = rightAbs
+        let absX = peakAbs / 2147483648.0'f32
 
-      # Envelope peak follower
-      if absX > comp.envelope:
-        comp.envelope = comp.attackCoeff * comp.envelope + (1.0'f32 - comp.attackCoeff) * absX
-      else:
-        comp.envelope = comp.releaseCoeff * comp.envelope + (1.0'f32 - comp.releaseCoeff) * absX
+        if absX > comp.envelope:
+          comp.envelope = comp.attackCoeff32 * comp.envelope + (1.0'f32 - comp.attackCoeff32) * absX
+        else:
+          comp.envelope = comp.releaseCoeff32 * comp.envelope + (1.0'f32 - comp.releaseCoeff32) * absX
 
-      # Compute gain reduction
-      var gainReduction: float32 = 1.0'f32
-      if comp.envelope > comp.thresholdLinear and comp.envelope > 1e-6'f32:
-        let envDb = 20.0'f32 * log10(comp.envelope)
-        let compressedDb = comp.thresholdDb + (envDb - comp.thresholdDb) / comp.ratio
-        gainReduction = pow(10.0'f32, (compressedDb - envDb) / 20.0'f32)
+        var gainReduction: float32 = 1.0'f32
+        if comp.envelope > comp.thresholdLinear and comp.envelope > 1e-6'f32:
+          let envDb = 20.0'f32 * log10(comp.envelope)
+          let compressedDb = comp.thresholdDb + (envDb - comp.thresholdDb) / comp.ratio
+          gainReduction = pow(10.0'f32, (compressedDb - envDb) / 20.0'f32)
+        comp.lastGainReduction32 = gainReduction
 
-      s = s * gainReduction * comp.makeupGain
+      s = s * comp.lastGainReduction32 * comp.makeupGain
 
     if comp.fadeInRemaining > 0:
       let step = comp.fadeInTotal - comp.fadeInRemaining

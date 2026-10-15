@@ -437,6 +437,8 @@ speaker:
     id: board_speaker
     output_speaker: i2s_raw_speaker
     bits_per_sample: 32
+    taps: 64
+    filters: 32
 
 media_player:
   - platform: speaker
@@ -1512,7 +1514,7 @@ switch:
 
   - platform: template
     id: speaker_protection_switch
-    name: "Audio: Speaker Protection (HPF & Limiter)"
+    name: "Audio: Speaker Protection (Limiter)"
     icon: "mdi:shield-check"
     entity_category: config
     optimistic: true

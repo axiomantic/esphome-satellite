@@ -38,7 +38,7 @@ suite "Real-Time Audio DSP Suite (TDD)":
     check float(boostedPeak) < float(originalPeak) * 2.0
 
   test "Signals above threshold experience dynamic gain reduction":
-    var comp = newAudioCompressor(sampleRate = 16000'f32, thresholdDb = -14.0'f32, ratio = 3.0'f32, makeupGainDb = 0.0'f32)
+    var comp = newAudioCompressor(sampleRate = 16000'f32, thresholdDb = -14.0'f32, ratio = 3.0'f32, attackMs = 4.0'f32, makeupGainDb = 0.0'f32)
     # Steady 1000 Hz tone at -10 dBFS (amplitude ~10360, well above -14 dBFS threshold ~6520)
     var samples: array[800, int16]
     for i in 0 ..< samples.len:
@@ -59,7 +59,7 @@ suite "Real-Time Audio DSP Suite (TDD)":
 
 
   test "Loud transient spikes are clamped by compression and limiting":
-    var comp = newAudioCompressor(sampleRate = 16000'f32, thresholdDb = -14.0'f32, makeupGainDb = 5.0'f32)
+    var comp = newAudioCompressor(sampleRate = 16000'f32, thresholdDb = -14.0'f32, attackMs = 4.0'f32, makeupGainDb = 5.0'f32)
     # Extremely loud burst near full scale (amplitude 30,000)
     var samples: array[320, int16]
     for i in 0 ..< samples.len:
@@ -99,11 +99,11 @@ suite "Real-Time Audio DSP Suite (TDD)":
     for i in 0 ..< samples.len:
       samples[i] = int16(1000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0))
     nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](samples[0].addr), samples.len)
-    # Makeup gain should have increased peak value from 1000
+    # Subtle +2.0 dB makeup gain (~1.259x) should increase peak value from 1000 to ~1258
     var peak: int16 = 0
     for i in 80 ..< samples.len:
       if abs(samples[i]) > peak: peak = abs(samples[i])
-    check peak > 1400
+    check peak > 1200 and peak < 1350
 
   test "Microphone pre-gain boost and 32-bit audio scaling":
     setMicPreGainDb(6.0'f32) # +6 dB is ~1.995x (approx 2.0x)
@@ -143,7 +143,7 @@ suite "Real-Time Audio DSP Suite (TDD)":
     check rawSamples == origCopy
 
     # 2. Vocal boost only (speaker protection OFF):
-    # 1000 Hz tone receives makeup gain, but 50 Hz sub-bass is not filtered
+    # 1000 Hz tone receives subtle +2.0 dB makeup gain (~1258)
     nim_audio_dsp_set_vocal_boost(true)
     nim_audio_dsp_set_speaker_protection(false)
     check nim_audio_dsp_is_vocal_boost_enabled() == true
@@ -156,29 +156,47 @@ suite "Real-Time Audio DSP Suite (TDD)":
     var peakVocalOnly: int16 = 0
     for i in 80 ..< vocalOnly.len:
       if abs(vocalOnly[i]) > peakVocalOnly: peakVocalOnly = abs(vocalOnly[i])
-    check peakVocalOnly > 1400 # Boosted by +5 dB
+    check peakVocalOnly > 1200 and peakVocalOnly < 1350
 
     # 3. Speaker protection only (vocal boost OFF):
-    # 1000 Hz tone is NOT boosted (+0 dB), but 50 Hz tone is attenuated by HPF
+    # 1000 Hz and 80 Hz bass tones below limiter knee pass through unattenuated (no HPF)
     nim_audio_dsp_set_vocal_boost(false)
     nim_audio_dsp_set_speaker_protection(true)
     check nim_audio_dsp_is_vocal_boost_enabled() == false
     check nim_audio_dsp_is_speaker_protection_enabled() == true
 
-    var protTone: array[160, int16]
-    for i in 0 ..< protTone.len:
-      protTone[i] = int16(1000.0 * sin(2.0 * PI * 1000.0 * float(i) / 16000.0))
-    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](protTone[0].addr), protTone.len)
-    var peakProtTone: int16 = 0
-    for i in 80 ..< protTone.len:
-      if abs(protTone[i]) > peakProtTone: peakProtTone = abs(protTone[i])
-    check peakProtTone <= 1050 # No vocal makeup boost!
+    var bassTone: array[320, int16]
+    for i in 0 ..< bassTone.len:
+      bassTone[i] = int16(5000.0 * sin(2.0 * PI * 80.0 * float(i) / 16000.0))
+    var bassCopy = bassTone
+    nim_audio_dsp_process(cast[ptr UncheckedArray[int16]](bassTone[0].addr), bassTone.len)
+    check bassTone == bassCopy
 
     # 4. Re-enable both for standard operation
     nim_audio_dsp_set_vocal_boost(true)
     nim_audio_dsp_set_speaker_protection(true)
     check nim_audio_dsp_is_vocal_boost_enabled() == true
     check nim_audio_dsp_is_speaker_protection_enabled() == true
+
+  test "process32 uses 48kHz stereo-linked envelope time constants instead of 6x faster 16kHz constants":
+    var comp16 = newAudioCompressor(sampleRate = 16000'f32, sampleRate32 = 48000'f32)
+    var comp32 = newAudioCompressor(sampleRate = 16000'f32, sampleRate32 = 48000'f32)
+
+    # Feed 10ms of full-scale step into 16kHz mono (160 samples) vs 48kHz stereo (480 frames = 960 int32 samples)
+    var mono16: array[160, int16]
+    for i in 0 ..< mono16.len:
+      mono16[i] = 16384'i16
+    comp16.process(mono16[0].addr, mono16.len, applyVocal = true, applyProtection = false)
+
+    var stereo32: array[960, int32]
+    for i in 0 ..< stereo32.len:
+      stereo32[i] = 1073741824'i32 # 0.5 of 2^31, matching 16384 / 32768
+    comp32.process32(stereo32[0].addr, stereo32.len, applyVocal = true, applyProtection = false)
+
+    # After 10ms of identical -6 dBFS input, both envelopes must reach nearly identical values!
+    check abs(comp16.envelope - comp32.envelope) < 0.005'f32
+    # And Left/Right stereo samples in the final frame must be stereo-linked (identical output)
+    check stereo32[958] == stereo32[959]
 
   test "Biquad high-pass rumble filter attenuates sub-bass and preserves voice frequencies":
     var hpf = newHighPassFilter(sampleRate = 16000'f32, cutoffHz = 180'f32)
