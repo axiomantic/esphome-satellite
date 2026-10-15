@@ -2183,10 +2183,75 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(sat_id, conv_entity._active_followup_satellites)
         self.assertNotIn(conv_id, conv_entity._active_followup_convs)
 
+    async def test_stt_preroll_burst_coalescing_and_post_wake_silence_gating(self):
+        """Verify 2.0s pre-roll burst coalesces before speculative STT and post-wake silence is not re-evaluated."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.twain"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Okay Nabu"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        speculative_slice_lengths = []
+
+        async def downstream_handler(metadata, stream):
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            total_len = sum(len(c) for c in chunks)
+            if len(chunks) == 1:
+                speculative_slice_lengths.append(total_len)
+                # Only the full 2.0s (64,000B) pre-roll contains "Okay Nabu."
+                if total_len >= 64000:
+                    return SpeechResult(text="Okay Nabu.", result=SpeechResultState.SUCCESS)
+                return SpeechResult(text="Okay.", result=SpeechResultState.SUCCESS)
+            return SpeechResult(text="Okay Nabu.", result=SpeechResultState.SUCCESS)
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_handler)
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        # Only confirm addressed when full "Okay Nabu." is transcribed
+        async def classify_side_effect(text, **kwargs):
+            if "Nabu" in text:
+                return (CHOICE_ADDRESSED, 0.99, 12.0)
+            return (CHOICE_AMBIENT, 0.99, 12.0)
+
+        self.mock_client.classify_addressing = AsyncMock(side_effect=classify_side_effect)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        # Simulate rapid 2.0s pre-roll burst (20 x 3200B chunks arriving 1ms apart) followed by 1.0s silence
+        async def burst_preroll_stream():
+            for _ in range(20):
+                yield b"\x10\x00" * 1600
+                await asyncio.sleep(0.001)
+            for _ in range(10):
+                yield b"\x00\x00" * 1600
+                await asyncio.sleep(0.02)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            result = await stt_proxy.async_process_audio_stream(metadata, burst_preroll_stream())
+
+        # Coalescer must evaluate the complete 64,000-byte pre-roll on the very first speculative slice
+        self.assertGreaterEqual(len(speculative_slice_lengths), 1)
+        self.assertGreaterEqual(speculative_slice_lengths[0], 64000)
+        mock_notify.assert_awaited_once_with("assist_satellite.twain")
+        self.assertEqual(result.text, "Okay Nabu.")
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
