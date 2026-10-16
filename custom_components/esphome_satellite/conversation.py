@@ -135,6 +135,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         self._active_followup_convs: dict[str, float] = domain_data.setdefault("followup_convs", {})
         self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
         self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
+        self._verified_wake_transcripts: dict[str, tuple[str, float]] = domain_data.setdefault("verified_wake_transcripts", {})
 
     @property
     def supported_languages(self) -> list[str]:
@@ -152,6 +153,14 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
 
         now = time.monotonic()
         conv_id = user_input.conversation_id
+        verified_wake_prefix = ""
+        if satellite_id in self._verified_wake_transcripts:
+            vw_entry = self._verified_wake_transcripts.pop(satellite_id, None)
+            if isinstance(vw_entry, tuple) and len(vw_entry) == 2:
+                vw_text, vw_ts = vw_entry
+                if (now - float(vw_ts)) < 20.0 and isinstance(vw_text, str) and vw_text.strip():
+                    verified_wake_prefix = vw_text.strip()
+
         is_followup = False
         if conv_id and conv_id in self._active_followup_convs:
             if (now - self._active_followup_convs[conv_id]) < 30.0:
@@ -223,6 +232,34 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             )
             await self._notify_wake_word_verified(satellite_id)
             return await self._delegate_downstream(user_input)
+
+        if (
+            not is_followup
+            and verified_wake_prefix
+            and (choice not in (CHOICE_ADDRESSED, "addressed") or confidence < threshold)
+        ):
+            combined_text = f"{verified_wake_prefix} {eval_text}".strip()
+            try:
+                fb_choice, fb_conf, fb_rtt = await self._client.classify_addressing(
+                    text=combined_text,
+                    question_text=question_text,
+                    min_confidence=threshold,
+                    criteria=criteria,
+                    target_wake_word=target_ww,
+                    phonetic_variants=all_aliases,
+                    is_followup=False,
+                )
+                rtt_ms += fb_rtt
+                if fb_choice in (CHOICE_ADDRESSED, "addressed") and fb_conf >= threshold:
+                    _LOGGER.info(
+                        "[Gatekeeper] Verified pre-roll prefix ('%s') recovered full-stream STT drift on %s: '%s'",
+                        verified_wake_prefix,
+                        satellite_id,
+                        eval_text,
+                    )
+                    choice, confidence = fb_choice, fb_conf
+            except GatekeeperClientError:
+                pass
 
         # Addressed utterance confirmed (Default-Drop / Fail-Closed)
         if choice in (CHOICE_ADDRESSED, "addressed") and confidence >= threshold:
@@ -560,16 +597,37 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         )
         now = time.monotonic()
         conv_id = user_input.conversation_id or getattr(res, "conversation_id", None)
-        if conv_id:
-            self._active_followup_convs[conv_id] = now
-        if satellite_id:
-            self._active_followup_satellites[satellite_id] = now
+        has_tts_speech = True
+        resp_obj = getattr(res, "response", None)
+        if resp_obj is not None:
+            speech_dict = getattr(resp_obj, "speech", None)
+            if isinstance(speech_dict, dict):
+                plain_speech = speech_dict.get("plain")
+                speech_text = plain_speech.get("speech", "") if isinstance(plain_speech, dict) else ""
+                has_tts_speech = bool(str(speech_text).strip())
+
+        if has_tts_speech:
             if conv_id:
-                self._followup_sat_to_conv[satellite_id] = conv_id
-        _LOGGER.info(
-            "[Gatekeeper] Registered follow-up window for conv=%s, sat=%s",
-            conv_id,
-            satellite_id,
-        )
+                self._active_followup_convs[conv_id] = now
+            if satellite_id:
+                self._active_followup_satellites[satellite_id] = now
+                if conv_id:
+                    self._followup_sat_to_conv[satellite_id] = conv_id
+            _LOGGER.info(
+                "[Gatekeeper] Registered follow-up window for conv=%s, sat=%s",
+                conv_id,
+                satellite_id,
+            )
+        else:
+            if conv_id:
+                self._active_followup_convs.pop(conv_id, None)
+            if satellite_id:
+                self._active_followup_satellites.pop(satellite_id, None)
+                self._followup_sat_to_conv.pop(satellite_id, None)
+            _LOGGER.info(
+                "[Gatekeeper] Downstream returned no TTS speech for conv=%s, sat=%s; skipping follow-up window",
+                conv_id,
+                satellite_id,
+            )
         return res
 

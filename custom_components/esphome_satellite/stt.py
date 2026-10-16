@@ -128,6 +128,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         self._active_followup_convs: dict[str, float] = domain_data.setdefault("followup_convs", {})
         self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
         self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
+        self._verified_wake_transcripts: dict[str, tuple[str, float]] = domain_data.setdefault("verified_wake_transcripts", {})
 
     @property
     def downstream_stt_id(self) -> str:
@@ -388,6 +389,27 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                     )
                                     break
                         else:
+                            can_abort_unverified_speech = (
+                                self.early_wake_verification
+                                and not verified_event.is_set()
+                                and not bool(eval_state.get("in_flight", False))
+                                and (
+                                    int(eval_state.get("completed_count", 0)) >= 2
+                                    or (
+                                        total_elapsed >= 4.0
+                                        and int(eval_state.get("completed_count", 0)) >= 1
+                                    )
+                                )
+                            )
+                            if can_abort_unverified_speech:
+                                unverified_abort_event.set()
+                                _LOGGER.info(
+                                    "[Speculative STT] Unverified speech window exhausted (%.2fs, checks=%d); terminating ambient stream",
+                                    total_elapsed,
+                                    int(eval_state.get("completed_count", 0)),
+                                )
+                                break
+
                             if is_speech:
                                 speech_consec_chunks += 1
                                 if speech_consec_chunks >= 3:
@@ -412,6 +434,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     pass
 
         sat_id, target_ww = self._resolve_active_satellite_context()
+        if sat_id:
+            self._verified_wake_transcripts.pop(sat_id, None)
         is_followup_stream = self._check_and_refresh_followup_start(sat_id)
         if is_followup_stream:
             verified_event.set()
@@ -559,7 +583,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         in_followup_dict = satellite_id in self._active_followup_satellites
 
         # If hardware explicitly woke from Idle on a wake word, it's a fresh initial turn
-        if fsm_state in ("listening", "streaming speech verified", "woken"):
+        if fsm_state in ("idle", "listening", "streaming speech", "streaming speech verified", "woken"):
             if in_followup_dict:
                 conv_id = self._followup_sat_to_conv.pop(satellite_id, None)
                 self._active_followup_satellites.pop(satellite_id, None)
@@ -1092,6 +1116,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                     partial_text,
                                 )
                                 verified_event.set()
+                                if sat_id and partial_text:
+                                    self._verified_wake_transcripts[sat_id] = (
+                                        partial_text.strip(),
+                                        time.monotonic(),
+                                    )
                                 await self._notify_satellite_verified(sat_id)
                                 break  # Terminate speculative loop once verified
                             _LOGGER.info(

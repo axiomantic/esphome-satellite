@@ -2271,6 +2271,211 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(speculative_slice_lengths, [64000])
         mock_notify.assert_not_called()
 
+    async def test_stt_unverified_continuous_chatter_aborts_after_second_slice(self):
+        """Unverified false wake during continuous room chatter aborts after 2nd speculative slice (~3.0s) instead of recording 10.5s."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.kitchen"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Okay Nabu"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        primary_consumed_bytes = 0
+        speculative_calls = 0
+
+        async def downstream_chatter_handler(metadata, stream):
+            nonlocal primary_consumed_bytes, speculative_calls
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            total_len = sum(len(c) for c in chunks)
+            if len(chunks) == 1:
+                speculative_calls += 1
+                return SpeechResult(
+                    text="Oh he just ignored you",
+                    result=SpeechResultState.SUCCESS,
+                )
+            primary_consumed_bytes = total_len
+            await asyncio.sleep(1.0)
+            return SpeechResult(
+                text="Oh he just ignored you for ten seconds",
+                result=SpeechResultState.SUCCESS,
+            )
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=downstream_chatter_handler
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_AMBIENT, 0.99, 10.0)
+        )
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        # Stream 10.0s (100 chunks of 100ms) of continuous loud speech (RMS = 2500 > 1400 cap)
+        async def continuous_chatter_stream():
+            for _ in range(100):
+                yield b"\xc4\x09" * 1600  # sample value 2500 -> RMS = 2500.0
+                await asyncio.sleep(0.002)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            result = await stt_proxy.async_process_audio_stream(
+                metadata, continuous_chatter_stream()
+            )
+
+        self.assertEqual(result.result, SpeechResultState.SUCCESS)
+        self.assertEqual(result.text, "")
+        self.assertEqual(speculative_calls, 2)
+        # Must abort right after the 2nd speculative slice (~2.8s-3.3s = 89,600-112,000B), well under 5.0s (160,000B)
+        self.assertLessEqual(primary_consumed_bytes, 140000)
+
+    async def test_verified_preroll_prefix_recovers_full_stream_whisper_drift(self):
+        """Verified Layer-1 pre-roll prefix ('Hello Nabu.') recovers full-stream Whisper drift ('Who Nabu?...') while rejecting false Layer-1 hallucinations."""
+        import time
+        from custom_components.esphome_satellite.conversation import (
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+
+        self.mock_hass.data = {}
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen"
+        sat_state = MagicMock()
+        sat_state.state = "listening"
+        sat_state.attributes = {"wake_word": "Okay Nabu", "active_pipeline_index": 1}
+        self.mock_hass.states.get = MagicMock(return_value=sat_state)
+
+        # 1. True wake turn where Layer 1 verified "Hello Nabu." on 2.0s pre-roll,
+        #    then full-stream Whisper drifted to "Who Nabu? What do you think about weather?"
+        stt_proxy._verified_wake_transcripts[sat_id] = ("Hello Nabu.", time.monotonic())
+
+        async def classify_drift_side_effect(text, **kwargs):
+            if text.startswith("Hello Nabu."):
+                return (CHOICE_ADDRESSED, 1.0, 12.0)
+            return (CHOICE_AMBIENT, 0.0, 12.0)
+
+        self.mock_client.classify_addressing = AsyncMock(side_effect=classify_drift_side_effect)
+
+        user_input = MagicMock()
+        user_input.text = "Who Nabu? What do you think about weather?"
+        user_input.conversation_id = "conv_drift"
+        user_input.device_id = "dev_kitchen"
+        user_input.satellite_id = sat_id
+        user_input.language = "en"
+
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch.object(conv_entity, "_delegate_downstream", new_callable=AsyncMock) as mock_del:
+            mock_del.return_value = "answered_weather"
+            res = await conv_entity.async_process(user_input)
+
+        self.assertEqual(res, "answered_weather")
+        self.assertEqual(self.mock_client.classify_addressing.await_count, 2)
+        second_call_text = self.mock_client.classify_addressing.await_args_list[1].kwargs["text"]
+        self.assertEqual(
+            second_call_text,
+            "Hello Nabu. Who Nabu? What do you think about weather?",
+        )
+
+        # 2. Negative control (18:12:20): Layer 1 hallucinated "Mr. Clemens." on 2.0s slice,
+        #    but full utterance is bystander chatter ("Ian Stridham. Campfire. I think I did.")
+        stt_proxy._verified_wake_transcripts[sat_id] = ("Mr. Clemens.", time.monotonic())
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_AMBIENT, 0.0, 12.0)
+        )
+        user_input.text = "Ian Stridham. Campfire. I think I did."
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock) as mock_notify, \
+             patch.object(conv_entity, "_delegate_downstream", new_callable=AsyncMock) as mock_del2:
+            res2 = await conv_entity.async_process(user_input)
+
+        mock_notify.assert_not_called()
+        mock_del2.assert_not_called()
+        self.assertEqual(res2.response.speech["plain"]["speech"], "")
+
+    async def test_no_tts_downstream_response_and_idle_wake_do_not_leak_followup(self):
+        """Downstream response with empty TTS speech does not register follow-up, and waking from Idle/Streaming Speech clears stale follow-up."""
+        import time
+        from custom_components.esphome_satellite.conversation import (
+            ConversationResult,
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+        from homeassistant.helpers import intent
+
+        self.mock_hass.data = {}
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen_voice_satellite"
+        conv_id = "conv_no_tts"
+
+        user_input = MagicMock()
+        user_input.text = "I can see you're on the air."
+        user_input.satellite_id = sat_id
+        user_input.conversation_id = conv_id
+        user_input.language = "en"
+        user_input.context = MagicMock()
+        user_input.device_id = "dev_kitchen"
+
+        empty_resp = intent.IntentResponse(language="en")
+        empty_resp.async_set_speech("")
+        no_tts_result = ConversationResult(response=empty_resp, conversation_id=conv_id)
+
+        with patch(
+            "custom_components.esphome_satellite.conversation.conversation.async_converse",
+            AsyncMock(return_value=no_tts_result),
+        ):
+            await conv_entity._delegate_downstream(user_input)
+
+        # Must NOT register follow-up window when downstream returned no TTS speech
+        self.assertNotIn(sat_id, conv_entity._active_followup_satellites)
+        self.assertNotIn(conv_id, conv_entity._active_followup_convs)
+
+        # Even if a stale entry existed, waking with sensor in "Idle" or "Streaming Speech" clears it
+        for fresh_wake_state in ("Idle", "Streaming Speech"):
+            conv_entity._active_followup_satellites[sat_id] = time.monotonic()
+            conv_entity._followup_sat_to_conv[sat_id] = conv_id
+            conv_entity._active_followup_convs[conv_id] = time.monotonic()
+
+            fsm_sensor = MagicMock(state=fresh_wake_state)
+            self.mock_hass.states.get = MagicMock(
+                side_effect=lambda eid: fsm_sensor
+                if eid == "sensor.kitchen_status_satellite_state"
+                else None
+            )
+            self.assertFalse(stt_proxy._check_and_refresh_followup_start(sat_id))
+            self.assertNotIn(sat_id, conv_entity._active_followup_satellites)
+            self.assertNotIn(conv_id, conv_entity._active_followup_convs)
+
 
 if __name__ == "__main__":
     unittest.main()
