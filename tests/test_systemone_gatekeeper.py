@@ -2476,6 +2476,142 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(sat_id, conv_entity._active_followup_satellites)
             self.assertNotIn(conv_id, conv_entity._active_followup_convs)
 
+    async def test_followup_downstream_delegation_prefixes_wake_phrase_when_omitted(self):
+        """Approved follow-up turns without wake phrase get target_ww prefixed when calling downstream async_converse."""
+        import time
+        from custom_components.esphome_satellite.conversation import (
+            ConversationResult,
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+        from homeassistant.helpers import intent
+
+        self.mock_hass.data = {}
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen_jd_vance_voice_satellite_46cbe8_assist_satellite"
+        conv_id = "conv_followup_bark"
+        sat_state = MagicMock()
+        sat_state.state = "follow up"
+        sat_state.attributes = {"wake_word": "Hey Jay Dee Vance", "active_pipeline_index": 1}
+        self.mock_hass.states.get = MagicMock(return_value=sat_state)
+
+        conv_entity._active_followup_convs[conv_id] = time.monotonic()
+        conv_entity._active_followup_satellites[sat_id] = time.monotonic()
+        conv_entity._followup_sat_to_conv[sat_id] = conv_id
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 1.0, 12.0)
+        )
+
+        resp = intent.IntentResponse(language="en")
+        resp.async_set_speech("Woof! Whatever makes sense.")
+        downstream_mock = AsyncMock(
+            return_value=ConversationResult(response=resp, conversation_id=conv_id)
+        )
+
+        class DummyInput:
+            text = "Can you bark like a dog?"
+            satellite_id = sat_id
+            conversation_id = conv_id
+            language = "en"
+            context = MagicMock()
+            device_id = "dev_kitchen"
+
+        user_input = DummyInput()
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch(
+                 "custom_components.esphome_satellite.conversation.conversation.async_converse",
+                 downstream_mock,
+             ):
+            await conv_entity.async_process(user_input)
+
+        # Gatekeeper must evaluate the raw follow-up text ("Can you bark like a dog?")
+        self.assertEqual(
+            self.mock_client.classify_addressing.await_args.kwargs["text"],
+            "Can you bark like a dog?",
+        )
+        # Downstream async_converse must receive the wake-prefixed text so Layer-3 prompts don't drop it
+        self.assertEqual(
+            downstream_mock.await_args.kwargs["text"],
+            "Hey Jay Dee Vance, Can you bark like a dog?",
+        )
+
+    async def test_followup_stt_skips_tts_preroll_and_prevents_false_early_timeout(self):
+        """Follow-up STT skips 2.0s TTS-era pre-roll (100 RMS) and calibrates on post-TTS room floor (470 RMS) without premature 1.2s cutoff."""
+        import time
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        self.mock_hass.data = {}
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen_jd_vance_voice_satellite_46cbe8_assist_satellite"
+        conv_id = "conv_fu_vad"
+        conv_entity._active_followup_convs[conv_id] = time.monotonic()
+        conv_entity._active_followup_satellites[sat_id] = time.monotonic()
+        conv_entity._followup_sat_to_conv[sat_id] = conv_id
+
+        sat_state = MagicMock()
+        sat_state.entity_id = sat_id
+        sat_state.state = "follow up"
+        sat_state.attributes = {"wake_word": "Hey Jay Dee Vance"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[sat_state])
+        self.mock_hass.states.get = MagicMock(return_value=sat_state)
+
+        consumed_bytes = 0
+
+        async def downstream_fu_handler(metadata, stream):
+            nonlocal consumed_bytes
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            consumed_bytes = sum(len(c) for c in chunks)
+            return SpeechResult(text="Can you bark like a dog?", result=SpeechResultState.SUCCESS)
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_fu_handler)
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        # Stream:
+        # - 2.0s TTS-era pre-roll at 100 RMS (20 chunks of 100ms) -> skipped in follow-up
+        # - 3.0s post-TTS Kitchen room floor at 470 RMS (30 chunks of 100ms) -> must NOT latch in_speech or cut off at 1.2s
+        # - 1.5s user follow-up speech at 3000 RMS (15 chunks of 100ms)
+        # - 1.3s post-speech silence at 200 RMS (13 chunks of 100ms) -> cleanly completes stream
+        async def followup_kitchen_stream():
+            for _ in range(20):
+                yield b"\x64\x00" * 1600  # 100 RMS (TTS-era AEC ducked pre-roll)
+            for _ in range(30):
+                yield b"\xd6\x01" * 1600  # 470 RMS (Kitchen post-TTS ambient floor)
+            for _ in range(15):
+                yield b"\xb8\x0b" * 1600  # 3000 RMS (User follow-up speech)
+            for _ in range(13):
+                yield b"\xc8\x00" * 1600  # 200 RMS (End-of-speech silence)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            res = await stt_proxy.async_process_audio_stream(metadata, followup_kitchen_stream())
+
+        self.assertEqual(res.text, "Can you bark like a dog?")
+        # 2.0s pre-roll (64,000B) skipped; 3.0s pause + 1.5s speech + 1.2s silence = 5.7s (182,400B) consumed!
+        self.assertGreaterEqual(consumed_bytes, 176000)
+
 
 if __name__ == "__main__":
     unittest.main()
