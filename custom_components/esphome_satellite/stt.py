@@ -65,11 +65,13 @@ _LOGGER = logging.getLogger(__name__)
 
 # Two-Phase Voice Activity & Silence Invariants
 PRE_ROLL_DURATION_SECONDS: Final = 2.0                 # 2.0s pre-roll wake word buffer prepended by satellite
+FOLLOWUP_AMBIENT_CALIBRATION_SECONDS: Final = 0.4      # 0.4s post-TTS room floor calibration window in Follow Up
 INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 5.0            # Allow up to 5.0s post-wake pause once wake word is verified
 UNVERIFIED_INITIAL_SPEECH_TIMEOUT_SECONDS: Final = 1.5 # Fast-abort unverified noise triggers after 1.5s of silence
 END_OF_SPEECH_SILENCE_SECONDS: Final = 1.2             # Complete stream after 1.2s of post-speech silence
-MAX_RECORDING_TIMEOUT_SECONDS: Final = 10.5            # Complete stream cleanly before 15s hardware watchdog
-SPEECH_RMS_THRESHOLD: Final = 450.0                    # Voice activity threshold for 16-bit PCM
+MAX_RECORDING_TIMEOUT_SECONDS: Final = 16.0            # 2.0s pre-roll + 14.0s live speech before 15s hardware watchdog
+SPEECH_RMS_THRESHOLD: Final = 550.0                    # Voice activity threshold for 16-bit PCM (above 450-476 RMS room floor)
+SPEECH_ONSET_CONSEC_CHUNKS: Final = 5                  # Consecutive chunks above threshold required to latch in_speech
 
 
 
@@ -301,6 +303,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         eval_state: dict[str, int | bool] = {"in_flight": False, "completed_count": 0}
         captured_chunks: list[bytes] = []
 
+        sat_id, target_ww = self._resolve_active_satellite_context()
+        if sat_id:
+            self._verified_wake_transcripts.pop(sat_id, None)
+        is_followup_stream = self._check_and_refresh_followup_start(sat_id)
+        if is_followup_stream:
+            verified_event.set()
+
         # Step 1: Fork live generator into dual pipe with two-phase VAD silence gating
         async def _tee_audio_stream() -> AsyncGenerator[bytes, None]:
             in_speech = False
@@ -310,6 +319,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             speech_consec_chunks = 0
             preroll_rms_samples: list[float] = []
             adaptive_speech_threshold = SPEECH_RMS_THRESHOLD
+            followup_preroll_fallback: list[bytes] = []
+            yielded_any = False
+            calibration_end_sec = (
+                PRE_ROLL_DURATION_SECONDS + FOLLOWUP_AMBIENT_CALIBRATION_SECONDS
+                if is_followup_stream
+                else PRE_ROLL_DURATION_SECONDS
+            )
 
             try:
                 stream_iter = aiter(stream)
@@ -327,10 +343,18 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     if not chunk:
                         continue
 
-                    captured_chunks.append(chunk)
-
                     chunk_sec = len(chunk) / bytes_per_sec
                     total_elapsed += chunk_sec
+
+                    if is_followup_stream and total_elapsed <= PRE_ROLL_DURATION_SECONDS:
+                        # On follow-up turns, the 2.0s pre-roll was recorded during TTS playback
+                        # while AEC ducked the mic (60-150 RMS). Skip it so it neither corrupts
+                        # ambient floor calibration nor causes Whisper hallucinations on TTS bleed.
+                        followup_preroll_fallback.append(chunk)
+                        continue
+
+                    captured_chunks.append(chunk)
+
                     if total_elapsed >= MAX_RECORDING_TIMEOUT_SECONDS:
                         _LOGGER.info(
                             "[Speculative STT] Maximum recording duration (%.1fs) reached; terminating stream",
@@ -339,7 +363,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                         break
 
                     chunk_rms = self._calculate_pcm_rms(chunk)
-                    if total_elapsed <= PRE_ROLL_DURATION_SECONDS:
+                    if total_elapsed <= calibration_end_sec:
                         if chunk_rms > 0.0:
                             preroll_rms_samples.append(chunk_rms)
                             if len(preroll_rms_samples) >= 4:
@@ -351,13 +375,13 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                 )
                                 eval_state["speech_rms_threshold"] = adaptive_speech_threshold
                     else:
-                        # Only evaluate post-wake command VAD after the 2.0s pre-roll wake word buffer
+                        # Evaluate post-calibration command VAD
                         is_speech = chunk_rms >= adaptive_speech_threshold
 
                         if not in_speech:
                             if is_speech:
                                 speech_consec_chunks += 1
-                                if speech_consec_chunks >= 3:
+                                if speech_consec_chunks >= SPEECH_ONSET_CONSEC_CHUNKS:
                                     in_speech = True
                                     _LOGGER.debug(
                                         "[Speculative STT] Voice command started after %.2fs post-wake pause (RMS=%.1f, thresh=%.1f)",
@@ -426,19 +450,18 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
                     if not verified_event.is_set() and not chunk_queue.full():
                         chunk_queue.put_nowait(chunk)
+                    yielded_any = True
                     yield chunk
+
+                if not yielded_any and followup_preroll_fallback:
+                    for fb_chunk in followup_preroll_fallback:
+                        captured_chunks.append(fb_chunk)
+                        yield fb_chunk
             finally:
                 try:
                     chunk_queue.put_nowait(b"")  # EOF sentinel
                 except asyncio.QueueFull:
                     pass
-
-        sat_id, target_ww = self._resolve_active_satellite_context()
-        if sat_id:
-            self._verified_wake_transcripts.pop(sat_id, None)
-        is_followup_stream = self._check_and_refresh_followup_start(sat_id)
-        if is_followup_stream:
-            verified_event.set()
 
         # Step 2: Spawn background speculative evaluation loop
         speculative_task = asyncio.create_task(

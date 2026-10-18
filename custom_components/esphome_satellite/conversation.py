@@ -294,6 +294,12 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                     continue_conversation=True,
                 )
 
+            if is_followup and target_ww:
+                try:
+                    setattr(user_input, "_followup_wake_context", (target_ww, all_aliases))
+                except Exception:
+                    pass
+
             return await self._delegate_downstream(user_input)
 
         # Any utterance that is ambient, low-confidence, or abstained is silently dropped
@@ -586,9 +592,32 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             CONF_DOWNSTREAM_AGENT,
             self._entry.data.get(CONF_DOWNSTREAM_AGENT),
         )
+        downstream_text = user_input.text
+        fu_ctx = getattr(user_input, "_followup_wake_context", None)
+        if (
+            isinstance(fu_ctx, tuple)
+            and len(fu_ctx) == 2
+            and isinstance(fu_ctx[0], str)
+            and fu_ctx[0].strip()
+            and not fu_ctx[0].startswith("Assistant Slot ")
+            and isinstance(downstream_text, str)
+            and downstream_text.strip()
+        ):
+            target_ww, all_aliases = fu_ctx
+            norm_text = re.sub(r"[^a-z0-9\s]", "", downstream_text.lower())
+            candidates = [target_ww, *(all_aliases if isinstance(all_aliases, list) else [])]
+            has_wake = any(
+                c_norm and c_norm in norm_text
+                for c in candidates
+                if isinstance(c, str)
+                for c_norm in [re.sub(r"[^a-z0-9\s]", "", c.lower()).strip()]
+            )
+            if not has_wake:
+                downstream_text = f"{target_ww}, {downstream_text}"
+
         res = await conversation.async_converse(
             hass=self.hass,
-            text=user_input.text,
+            text=downstream_text,
             conversation_id=user_input.conversation_id,
             context=user_input.context,
             language=user_input.language,
