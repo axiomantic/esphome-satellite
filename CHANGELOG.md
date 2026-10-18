@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-18
+
+### Added
+- **Speculative Streaming STT Proxy & Sliding-Window Intent Gatekeeper**: Added `custom_components/esphome_satellite/stt.py` wrapping downstream STT engines (`faster-whisper` / Wyoming) with a 2.0-second pre-roll ring buffer, sliding-window speculative wake-word verification every 1.0s, and early abort of unverified ambient chatter.
+- **Pluggable OpenAI-Compatible LLM Gatekeeper Engine**: Added `llm_client.py` and `client_factory.py` supporting local OpenAI-compatible chat completion endpoints (e.g., `llama.cpp` / `stheno-8b`) alongside ModernBERT System 1 classifiers, with structured JSON verification and multi-turn conversation history awareness.
+- **`StreamingSpeechVerified` Reified Typestate & Hardware LED Binding**: Added `StreamingSpeechVerified` state to `satellite_fsm.nim` and `nim_esphome_satellite.nim` so the wake chime and active listening LED ring trigger immediately mid-utterance as soon as speculative STT verifies addressing.
+- **Dynamic Runtime Phonetic & Homophone Expansion**: Added runtime phonetic and multi-word homophone variant generation (`const.py`) for user-configured wake phrases without hardcoded wake word lists or regex pre-filters.
+- **Microphone Stream WAV Archival & Pipeline Replay Tool**: Added automatic WAV + JSON metadata recording of captured audio streams and `scripts/replay_pipeline.py` for deterministic offline regression testing.
+- **Numeric Wake Cutoff Configuration Entities**: Replaced coarse sensitivity dropdowns with fine-grained numeric probability cutoff sliders (`0.05–0.99`) per assistant slot.
+
+### Changed
+- **64-Tap Polyphase Decimation & Soft-Knee Audio DSP (`audio_dsp.nim`)**: Removed high-pass filter thinning, fixed 48 kHz stereo envelope tracking rate, softened compressor knee/ratio, and upgraded the 48 kHz-to-16 kHz resampler to a 64-tap windowed-sinc filter.
+- **Extended Speech Watchdog & Recording Window**: Increased satellite active-speech hardware timeout to 15.0s (`30.0s` hard ceiling) and `MAX_RECORDING_TIMEOUT_SECONDS` to `16.0s` (`2.0s` pre-roll + `14.0s` live speech).
+
+### Fixed
+- **Multi-Turn Follow-Up Dialogue Preservation**: Skipped the 2.0s TTS-era pre-roll on follow-up streams (`is_followup_stream`), calibrated adaptive VAD on the 0.4s post-TTS room floor (`SPEECH_RMS_THRESHOLD = 550.0`, `SPEECH_ONSET_CONSEC_CHUNKS = 5`), gated follow-up window activation on actual TTS audio playback, and preserved verified wake context across downstream LLM delegation.
+- **Full-Stream STT Drift Recovery**: Recovered verified wake-word prefix when full-stream Whisper re-transcription drifts on the wake phrase after speculative verification already succeeded.
+- **Idle Cancellation & Slot Precedence**: Ignored local cancellation wake words while in `Idle` state (`cutoff = 0.55`), prevented slot resolution self-overwrite, and added idle chunk timeouts to prevent queue deadlocks.
+
 ## [0.7.0] - 2026-10-09
 
 ### Added
