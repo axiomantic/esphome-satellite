@@ -10,6 +10,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/static_task.h"
 
+#include <atomic>
 #include <freertos/event_groups.h>
 
 namespace esphome::resampler {
@@ -94,6 +95,7 @@ class ResamplerSpeaker final : public Component, public speaker::Speaker {
   EventGroupHandle_t event_group_{nullptr};
 
   std::weak_ptr<ring_buffer::RingBuffer> ring_buffer_;
+  std::atomic<bool> resampler_has_inflight_data_{false};
 
   speaker::Speaker *output_speaker_{nullptr};
 

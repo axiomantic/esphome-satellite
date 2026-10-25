@@ -135,6 +135,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         self._active_followup_convs: dict[str, float] = domain_data.setdefault("followup_convs", {})
         self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
         self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
+        self._followup_turn_context: dict[str, tuple[str, str]] = domain_data.setdefault("followup_turn_context", {})
         self._verified_wake_transcripts: dict[str, tuple[str, float]] = domain_data.setdefault("verified_wake_transcripts", {})
 
     @property
@@ -178,6 +179,23 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         if not is_followup and satellite_id and self._is_satellite_in_followup_state(satellite_id):
             is_followup = True
 
+        prior_user_text = ""
+        prior_assistant_reply = ""
+        if conv_id and conv_id in self._followup_turn_context:
+            ctx_pair = self._followup_turn_context.pop(conv_id, None)
+            if is_followup and isinstance(ctx_pair, tuple) and len(ctx_pair) == 2:
+                prior_user_text, prior_assistant_reply = str(ctx_pair[0]), str(ctx_pair[1])
+        if satellite_id and satellite_id in self._followup_turn_context:
+            ctx_pair = self._followup_turn_context.pop(satellite_id, None)
+            if (
+                is_followup
+                and not prior_user_text
+                and not prior_assistant_reply
+                and isinstance(ctx_pair, tuple)
+                and len(ctx_pair) == 2
+            ):
+                prior_user_text, prior_assistant_reply = str(ctx_pair[0]), str(ctx_pair[1])
+
         # Resolve satellite slot, wake word, and active threshold
         slot_index, wake_word = self._resolve_satellite_context(satellite_id)
         
@@ -198,20 +216,30 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         all_aliases = expand_wake_phrase(target_ww, user_aliases)
 
         if is_followup:
-            question_text, criteria = make_followup_prompt(target_ww)
+            question_text, criteria = make_followup_prompt(
+                target_ww,
+                prior_user_text=prior_user_text,
+                prior_assistant_reply=prior_assistant_reply,
+            )
         else:
             question_text, criteria = make_initial_prompt(target_ww, all_aliases)
 
         # Evaluate through Gatekeeper engine (System 1 or LLM)
         try:
+            classify_kwargs: dict[str, Any] = {
+                "text": eval_text,
+                "question_text": question_text,
+                "min_confidence": threshold,
+                "criteria": criteria,
+                "target_wake_word": target_ww,
+                "phonetic_variants": all_aliases,
+                "is_followup": is_followup,
+            }
+            if is_followup and (prior_user_text or prior_assistant_reply):
+                classify_kwargs["prior_user_text"] = prior_user_text
+                classify_kwargs["prior_assistant_reply"] = prior_assistant_reply
             choice, confidence, rtt_ms = await self._client.classify_addressing(
-                text=eval_text,
-                question_text=question_text,
-                min_confidence=threshold,
-                criteria=criteria,
-                target_wake_word=target_ww,
-                phonetic_variants=all_aliases,
-                is_followup=is_followup,
+                **classify_kwargs
             )
         except GatekeeperClientError as err:
             fallback = self._entry.options.get(
@@ -238,7 +266,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             and verified_wake_prefix
             and (choice not in (CHOICE_ADDRESSED, "addressed") or confidence < threshold)
         ):
-            combined_text = f"{verified_wake_prefix} {eval_text}".strip()
+            canonical_prefix = target_ww.strip() if target_ww and target_ww.strip() else verified_wake_prefix
+            combined_text = f"{canonical_prefix}, {eval_text}".strip()
             try:
                 fb_choice, fb_conf, fb_rtt = await self._client.classify_addressing(
                     text=combined_text,
@@ -252,8 +281,9 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 rtt_ms += fb_rtt
                 if fb_choice in (CHOICE_ADDRESSED, "addressed") and fb_conf >= threshold:
                     _LOGGER.info(
-                        "[Gatekeeper] Verified pre-roll prefix ('%s') recovered full-stream STT drift on %s: '%s'",
+                        "[Gatekeeper] Verified pre-roll prefix ('%s' -> '%s') recovered full-stream STT drift on %s: '%s'",
                         verified_wake_prefix,
+                        canonical_prefix,
                         satellite_id,
                         eval_text,
                     )
@@ -285,7 +315,9 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 if conv_id:
                     self._active_followup_convs[conv_id] = now
                     self._followup_sat_to_conv[satellite_id] = conv_id
+                    self._followup_turn_context[conv_id] = (text, "Yes?")
                 self._active_followup_satellites[satellite_id] = now
+                self._followup_turn_context[satellite_id] = (text, "Yes?")
                 resp = intent.IntentResponse(language=user_input.language)
                 resp.async_set_speech("Yes?")
                 return ConversationResult(
@@ -627,19 +659,24 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         now = time.monotonic()
         conv_id = user_input.conversation_id or getattr(res, "conversation_id", None)
         has_tts_speech = True
+        reply_speech_str = ""
         resp_obj = getattr(res, "response", None)
         if resp_obj is not None:
             speech_dict = getattr(resp_obj, "speech", None)
             if isinstance(speech_dict, dict):
                 plain_speech = speech_dict.get("plain")
                 speech_text = plain_speech.get("speech", "") if isinstance(plain_speech, dict) else ""
-                has_tts_speech = bool(str(speech_text).strip())
+                reply_speech_str = str(speech_text).strip()
+                has_tts_speech = bool(reply_speech_str)
 
         if has_tts_speech:
+            turn_ctx = (str(user_input.text or "").strip(), reply_speech_str)
             if conv_id:
                 self._active_followup_convs[conv_id] = now
+                self._followup_turn_context[conv_id] = turn_ctx
             if satellite_id:
                 self._active_followup_satellites[satellite_id] = now
+                self._followup_turn_context[satellite_id] = turn_ctx
                 if conv_id:
                     self._followup_sat_to_conv[satellite_id] = conv_id
             _LOGGER.info(
@@ -650,9 +687,11 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         else:
             if conv_id:
                 self._active_followup_convs.pop(conv_id, None)
+                self._followup_turn_context.pop(conv_id, None)
             if satellite_id:
                 self._active_followup_satellites.pop(satellite_id, None)
                 self._followup_sat_to_conv.pop(satellite_id, None)
+                self._followup_turn_context.pop(satellite_id, None)
             _LOGGER.info(
                 "[Gatekeeper] Downstream returned no TTS speech for conv=%s, sat=%s; skipping follow-up window",
                 conv_id,

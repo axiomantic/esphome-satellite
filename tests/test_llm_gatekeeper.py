@@ -349,9 +349,16 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Use your judgment of phonetic pronunciations.", initial_prompt)
         self.assertIn("Output ONLY 'YES' or 'NO'.", initial_prompt)
 
-        followup_prompt = make_llm_followup_prompt("Clemens")
+        followup_prompt = make_llm_followup_prompt(
+            "Clemens",
+            prior_user_text="Hey JD Dance. You think of yourself as masculine?",
+            prior_assistant_reply="A master? Hell no, I'm just a guy from Middletown.",
+        )
         self.assertIn("The assistant 'Clemens' just spoke", followup_prompt)
         self.assertIn("No wake word is required on a follow-up turn", followup_prompt)
+        self.assertIn("Recent conversation context:", followup_prompt)
+        self.assertIn("You think of yourself as masculine?", followup_prompt)
+        self.assertIn("A master? Hell no", followup_prompt)
         self.assertIn("profanity", followup_prompt)
 
 

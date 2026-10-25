@@ -5,7 +5,7 @@
 substitutions:
   name: "esphome-satellite"
   friendly_name: "Voice Satellite"
-  version: "0.8.0"
+  version: "0.8.1"
   processing_sound_default: "Typewriter"
   wake_chime_sound_default: "Silent"
   processing_sound_volume_default: "75"
@@ -439,6 +439,7 @@ speaker:
     bits_per_sample: 32
     taps: 64
     filters: 32
+    buffer_duration: 500ms
 
 media_player:
   - platform: speaker
@@ -655,6 +656,24 @@ voice_assistant:
           std::string st = get_satellite_state_name();
           if (st != "Thinking" && st != "Verifying") {
             call_nim_speech_ended();
+            if (std::string(get_satellite_state_name()) == "Thinking") {
+              bool chime_enabled = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime).state : id(slot1_wake_chime).state;
+              std::string chime_opt = (id(active_assistant_slot) == 2) ? id(slot2_wake_chime_sound).current_option() : id(slot1_wake_chime_sound).current_option();
+              float chime_vol = calculate_effective_sound_volume(id(master_volume).state, id(wake_chime_volume).state);
+
+              std::string proc_opt = (id(active_assistant_slot) == 2) ? id(slot2_processing_sound).current_option() : id(slot1_processing_sound).current_option();
+              float proc_vol = calculate_effective_sound_volume(id(master_volume).state, id(processing_sound_volume).state);
+
+              if (chime_enabled && chime_opt != "Silent") {
+                if (proc_opt != "Silent") {
+                  esphome::get_pcm_sound_player().play_chime_then_processing(chime_opt, proc_opt, chime_vol, proc_vol);
+                } else {
+                  esphome::get_pcm_sound_player().play_chime(chime_opt, false, chime_vol);
+                }
+              } else if (proc_opt != "Silent") {
+                esphome::get_pcm_sound_player().play_processing_sound(proc_opt, true, proc_vol);
+              }
+            }
           }
         }
   on_intent_progress:

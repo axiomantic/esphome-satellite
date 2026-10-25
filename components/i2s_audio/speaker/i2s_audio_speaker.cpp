@@ -209,9 +209,12 @@ size_t I2SAudioSpeakerBase::play(const uint8_t *data, size_t length, TickType_t 
 }
 
 bool I2SAudioSpeakerBase::has_buffered_data() const {
+  if (this->has_inflight_audio_.load(std::memory_order_relaxed)) {
+    return true;
+  }
   if (this->audio_ring_buffer_.use_count() > 0) {
     std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->audio_ring_buffer_.lock();
-    return temp_ring_buffer->available() > 0;
+    return temp_ring_buffer != nullptr && temp_ring_buffer->available() > 0;
   }
   return false;
 }
@@ -246,10 +249,13 @@ void I2SAudioSpeakerBase::stop_(bool wait_on_empty) {
     // When timeout is 'never', keep I2S clocks and DMA streaming digital silence continuously.
     // If graceful stop requested (wait_on_empty == true), allow the speaker task to drain naturally.
     // Only reset the ring buffer if an immediate abort is requested (!wait_on_empty).
-    if (!wait_on_empty && this->audio_ring_buffer_.use_count() > 0) {
-      std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->audio_ring_buffer_.lock();
-      if (temp_ring_buffer != nullptr) {
-        temp_ring_buffer->reset();
+    if (!wait_on_empty) {
+      this->has_inflight_audio_.store(false, std::memory_order_relaxed);
+      if (this->audio_ring_buffer_.use_count() > 0) {
+        std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->audio_ring_buffer_.lock();
+        if (temp_ring_buffer != nullptr) {
+          temp_ring_buffer->reset();
+        }
       }
     }
     return;

@@ -203,8 +203,12 @@ def generate_phonetic_variants(phrase: str) -> list[str]:
             if wl.endswith("ance"):
                 alts.add(wl[:-4] + "ans")
                 alts.add(wl[:-4] + "ence")
+                if wl.startswith("v"):
+                    alts.add("d" + wl[1:])
             elif wl.endswith("ans"):
                 alts.add(wl[:-3] + "ance")
+                if wl.startswith("v"):
+                    alts.add("d" + wl[1:])
             # Hard c / k
             if wl.startswith("cl"):
                 alts.add("kl" + wl[2:])
@@ -302,21 +306,31 @@ def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, 
     return instructions, criteria
 
 
-def make_followup_prompt(wake_word: str) -> tuple[str, dict[str, str]]:
+def make_followup_prompt(
+    wake_word: str,
+    prior_user_text: str = "",
+    prior_assistant_reply: str = "",
+) -> tuple[str, dict[str, str]]:
     """Build dynamic question and criteria for an ongoing conversational follow-up turn."""
+    context_str = ""
+    if prior_user_text or prior_assistant_reply:
+        context_str = (
+            f" In the immediately preceding turn, the user said '{prior_user_text}' "
+            f"and the assistant replied '{prior_assistant_reply}'."
+        )
     instructions = (
-        f"In an ongoing voice assistant conversation, the assistant listening for '{wake_word}' just spoke and the microphone is open for a follow-up. "
+        f"In an ongoing voice assistant conversation, the assistant listening for '{wake_word}' just spoke and the microphone is open for a follow-up.{context_str} "
         f"Because this is an active dialogue, the user does NOT need to repeat the wake word '{wake_word}'. "
-        "Anything clearly addressing or responding to the assistant (including profanity, insults, or banter) is to be considered a valid request. "
-        "Determine whether the speaker is responding to the assistant (answering, asking for clarification, reacting to what the assistant said, or giving the next request) "
-        "versus talking to someone else in the room, talking to oneself, or room chatter."
+        "Anything clearly addressing or responding to the assistant (including clarifications/corrections like 'No, I asked...' or 'I meant...', profanity, insults, or banter) is to be considered a valid request. "
+        "Determine whether the speaker is responding to the assistant (answering, correcting a misunderstanding, asking for clarification, reacting to what the assistant said, or giving the next request) "
+        "versus talking to someone else in the room, talking about someone in the third person, talking to oneself, or room chatter."
     )
     criteria = {
         CHOICE_ADDRESSED: (
-            "Responding to or conversing with the assistant in the active dialogue (no wake word required; answers, questions, reactions, profanity/insults, and commands)."
+            "Responding to or conversing with the assistant in the active dialogue (no wake word required; answers, clarifications/corrections, questions, reactions, profanity/insults directed at the assistant, and commands)."
         ),
         CHOICE_AMBIENT: (
-            "Addressing someone else in the room (e.g. spouse, child, roommate), talking to oneself, background noise, or unrelated side chatter."
+            "Addressing someone else in the room (e.g. spouse, child, roommate, 'Come, let's go'), third-person statements ('He is...', 'She is...'), talking to oneself, background noise, or unrelated side chatter."
         ),
     }
     return instructions, criteria
@@ -338,16 +352,28 @@ def make_llm_initial_prompt(target_ww: str, aliases: list[str]) -> str:
     )
 
 
-def make_llm_followup_prompt(target_ww: str) -> str:
+def make_llm_followup_prompt(
+    target_ww: str,
+    prior_user_text: str = "",
+    prior_assistant_reply: str = "",
+) -> str:
     """Build dynamic system prompt for LLM gatekeeper ongoing conversational follow-up turn."""
+    context_block = ""
+    if prior_user_text or prior_assistant_reply:
+        context_block = (
+            "Recent conversation context:\n"
+            f'- Previous user turn: "{prior_user_text}"\n'
+            f'- Assistant ({target_ww}) just replied: "{prior_assistant_reply[:240]}"\n\n'
+        )
     return (
         "You are an uncensored addressing detector for an active voice assistant conversation.\n"
         f"Active assistant: {target_ww}\n"
         f"The assistant '{target_ww}' just spoke and the microphone is open for a follow-up.\n"
-        f"No wake word is required on a follow-up turn; 'you' refers to {target_ww}.\n\n"
-        f"Rule 1: If the user is speaking TO {target_ww} (any question, reply, command, or statement directed at 'you' or the assistant, with or without the wake word), you MUST output YES.\n"
-        "Rule 2: Anything clearly addressing the assistant—including profanity, sexual/vulgar insults, offensive questions, or banter—is to be considered a valid request and MUST be answered YES.\n"
-        "Rule 3: Output NO only when the user is addressing another person in the room (e.g. a family member, pet, or roommate) or background chatter.\n"
+        f"No wake word is required on a follow-up turn; 'you' and 'I' in a reply refer to this conversation with {target_ww}.\n\n"
+        f"{context_block}"
+        f"Rule 1: If the user is speaking TO {target_ww} (any question, reply, command, clarification, or correction of a misheard word such as 'No, I asked...', 'I meant...', or 'I said...', with or without the wake word), you MUST output YES.\n"
+        "Rule 2: Anything clearly addressing or reacting to the assistant in the second person ('you', 'your')—including profanity, sexual/vulgar insults, offensive questions, or banter—is a valid request and MUST be answered YES.\n"
+        "Rule 3: Output NO when the user is speaking to another person/pet in the room (e.g. 'Come, let's go', 'Hello to those guys'), speaking in the third person ('He is...', 'She is...', 'They are...', even with profanity), or unrelated room chatter.\n"
         "Output ONLY 'YES' or 'NO'."
     )
 

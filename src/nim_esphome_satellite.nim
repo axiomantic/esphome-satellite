@@ -100,7 +100,7 @@ typestate SatelliteFSM:
     Processing -> (Replying | IntentCompleteNoTts | Cancelling | SilentDismissing | PipelineErrorEvaluating | ActionableError | ConnectionError | Idle) as ProcessingResult
     Replying -> (Idle | Cancelling | FollowUp | ReplyingBargeInAttempted | PipelineErrorEvaluating | ConnectionError) as ReplyingResult
     Cancelling -> (Idle | PlayingMedia | ConnectionError) as CancelResult
-    FollowUp -> (StreamingSpeech | Processing | Cancelling | Idle | PipelineErrorEvaluating | ConnectionError) as FollowUpResult
+    FollowUp -> (StreamingSpeech | Verifying | Processing | Cancelling | Idle | PipelineErrorEvaluating | ConnectionError) as FollowUpResult
     SilentDismissing -> (Idle | PlayingMedia) as DismissResult
     ActionableError -> (Idle | PlayingMedia) as ActionErrResult
     ConnectionError -> (Idle | Muted | Updating) as ConnErrResult
@@ -356,7 +356,11 @@ proc onFollowUpReadyToListen*(s: FollowUp): StreamingSpeech {.transition.} =
   info("SatelliteFSM", "State: FOLLOW_UP -> STREAMING_SPEECH (mic open for follow-up)")
   result = StreamingSpeech(SatelliteContext(s))
 
-proc onFollowUpSpeechEnded*(s: FollowUp): Processing {.transition.} =
+proc onFollowUpSpeechEnded*(s: FollowUp): Verifying {.transition.} =
+  info("SatelliteFSM", "State: FOLLOW_UP -> VERIFYING (speech ended in follow-up, awaiting verification)")
+  result = Verifying(SatelliteContext(s))
+
+proc onFollowUpSpeechEndedDirectToProcessing*(s: FollowUp): Processing {.transition.} =
   info("SatelliteFSM", "State: FOLLOW_UP -> PROCESSING (speech ended in follow-up)")
   result = Processing(SatelliteContext(s))
 
@@ -994,8 +998,8 @@ proc nim_satellite_speech_ended*() {.exportc, cdecl.} =
     satellitePipeline.startProcessingLoop(configuredProcessingStyle)
   elif fsm.state == rsFollowUp:
     let next = onFollowUpSpeechEnded(fsm.followUpState)
-    fsm = SatelliteFSMInstance(state: rsProcessing, processingState: next)
-    satellitePipeline.startProcessingLoop(configuredProcessingStyle)
+    fsm = SatelliteFSMInstance(state: rsVerifying, verifyingState: next)
+    # Note: In Verifying state, do NOT start processing audio loop until Gatekeeper verifies!
 
 proc nim_satellite_wake_word_verified*() {.exportc, cdecl.} =
   if fsm.state == rsStreamingSpeech:
