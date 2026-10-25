@@ -14,7 +14,7 @@
 
 namespace esphome::resampler {
 
-static const UBaseType_t RESAMPLER_TASK_PRIORITY = 1;
+static const UBaseType_t RESAMPLER_TASK_PRIORITY = 5;
 
 static const uint32_t TRANSFER_BUFFER_DURATION_MS = 50;
 
@@ -245,6 +245,9 @@ size_t ResamplerSpeaker::play(const uint8_t *data, size_t length, TickType_t tic
     if (temp_ring_buffer != nullptr) {
       // Only write to the ring buffer if the reference is valid
       bytes_written = temp_ring_buffer->write_without_replacement(data, length, ticks_to_wait);
+      if (bytes_written > 0) {
+        this->resampler_has_inflight_data_.store(true, std::memory_order_relaxed);
+      }
     } else {
       // Delay to avoid repeatedly hammering while waiting for the speaker to start
       vTaskDelay(ticks_to_wait);
@@ -294,6 +297,7 @@ void ResamplerSpeaker::stop() { this->send_command_(ResamplingEventGroupBits::CO
 void ResamplerSpeaker::enter_stopping_state_() {
   this->state_ = speaker::STATE_STOPPING;
   this->state_start_ms_ = App.get_loop_component_start_time();
+  this->resampler_has_inflight_data_.store(false, std::memory_order_relaxed);
   if (this->task_.is_created()) {
     xEventGroupSetBits(this->event_group_, ResamplingEventGroupBits::TASK_COMMAND_STOP);
   }
@@ -305,9 +309,13 @@ void ResamplerSpeaker::finish() { this->send_command_(ResamplingEventGroupBits::
 bool ResamplerSpeaker::has_buffered_data() const {
   bool has_ring_buffer_data = false;
   if (this->requires_resampling_()) {
-    std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->ring_buffer_.lock();
-    if (temp_ring_buffer != nullptr) {
-      has_ring_buffer_data = (temp_ring_buffer->available() > 0);
+    if (this->resampler_has_inflight_data_.load(std::memory_order_relaxed)) {
+      has_ring_buffer_data = true;
+    } else {
+      std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = this->ring_buffer_.lock();
+      if (temp_ring_buffer != nullptr) {
+        has_ring_buffer_data = (temp_ring_buffer->available() > 0);
+      }
     }
   }
   return (has_ring_buffer_data || this->output_speaker_->has_buffered_data());
@@ -345,8 +353,9 @@ void ResamplerSpeaker::resample_task(void *params) {
     esp_err_t err = resampler->start(this_resampler->audio_stream_info_, this_resampler->target_stream_info_,
                                      this_resampler->taps_, this_resampler->filters_);
 
+    std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer;
     if (err == ESP_OK) {
-      std::shared_ptr<ring_buffer::RingBuffer> temp_ring_buffer = ring_buffer::RingBuffer::create(
+      temp_ring_buffer = ring_buffer::RingBuffer::create(
           this_resampler->audio_stream_info_.ms_to_bytes(this_resampler->buffer_duration_ms_));
 
       if (temp_ring_buffer == nullptr) {
@@ -375,18 +384,25 @@ void ResamplerSpeaker::resample_task(void *params) {
         break;
       }
 
-      // Stop gracefully if the decoder is done
+      // When in-flight data is active, pass stop_gracefully=true so AudioResampler returns FINISHED
+      // only when both its zero-copy RingBufferAudioSource and its output_transfer_buffer_ are empty.
+      // When idle, pass false so fill() blocks on the FreeRTOS ringbuffer semaphore and wakes immediately on play().
+      const bool check_drained = this_resampler->resampler_has_inflight_data_.load(std::memory_order_relaxed);
       int32_t ms_differential = 0;
-      audio::AudioResamplerState resampler_state = resampler->resample(false, &ms_differential);
+      audio::AudioResamplerState resampler_state = resampler->resample(check_drained, &ms_differential);
 
       if (resampler_state == audio::AudioResamplerState::FINISHED) {
-        break;
+        if (temp_ring_buffer == nullptr || temp_ring_buffer->available() == 0) {
+          this_resampler->resampler_has_inflight_data_.store(false, std::memory_order_relaxed);
+        }
       } else if (resampler_state == audio::AudioResamplerState::FAILED) {
+        this_resampler->resampler_has_inflight_data_.store(false, std::memory_order_relaxed);
         xEventGroupSetBits(this_resampler->event_group_, ResamplingEventGroupBits::ERR_ESP_FAIL);
         break;
       }
     }
 
+    this_resampler->resampler_has_inflight_data_.store(false, std::memory_order_relaxed);
     xEventGroupSetBits(this_resampler->event_group_, ResamplingEventGroupBits::STATE_STOPPING);
   }
 

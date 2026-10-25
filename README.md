@@ -62,7 +62,7 @@ Once the board has rebooted into ESPHome, connect using either method:
 #### Step 3: Adopt in Home Assistant
 
 1. In Home Assistant, open **Settings > Devices & Services**.
-2. Your satellite will automatically appear highlighted at the top under **Discovered** as **Voice Satellite** (e.g., `Voice Satellite d4e5f6` or `Voice Satellite a1b2c3`).
+2. Your satellite will automatically appear highlighted at the top under **Discovered** as **Voice Satellite** (e.g., `Voice Satellite a1b2c3` or `Voice Satellite d4e5f6`).
 3. Click **Configure**, then click **Submit**.
 4. Assign the device to an area.
 
@@ -997,11 +997,7 @@ When submitting PRs or contributing code:
 
 ## Continuous Integration & Testing
 
-This project uses a dual-CI architecture with shared execution scripts:
-
-- **Primary CI (Forgejo Actions)**: Hosted on private infrastructure (`https://git.axiomantic.dev/eek/esphome-satellite`) using a Podman-backed Linux runner (`.forgejo/workflows/ci.yml`). Matrix builds validate Nim 2.2.10 and Nim 2.2.8 across all test suites and verify ESP32 cross-compilation syntax.
-- **Shared CI Scripts**: Test logic is extracted into parameterized shell scripts under `scripts/ci/` (e.g. `scripts/ci/test.sh`). Both Forgejo Actions, GitHub Actions, and local development environments execute the exact same scripts.
-- **GitHub Mirror**: The GitHub repository (`axiomantic/esphome-satellite`) acts as a manual mirror target. Push-triggered CI is disabled on GitHub to avoid duplicate runs, though `.github/workflows/ci.yml` remains runnable on-demand via `workflow_dispatch` or on pull requests. GitHub Actions also hosts repository-specific web deployment workflows (such as GitHub Pages builds for the WebSerial installer).
+Continuous integration runs automatically on every push and pull request via GitHub Actions (`.github/workflows/ci.yml`). Matrix builds validate Nim 2.2.10 and Nim 2.2.8 across all test suites and verify ESP32 cross-compilation syntax.
 
 ## Local Host Testing
 
@@ -1009,7 +1005,7 @@ You do not need an ESP32 connected to run the test suite. All state machine logi
 
 ```bash
 # Run complete test suite and ESP32 syntax check
-./scripts/ci/test.sh
+./scripts/test.sh
 
 # Or run individual test suites directly
 nim c -r tests/test_fsm.nim

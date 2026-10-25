@@ -81,6 +81,8 @@ class GatekeeperLlmClient:
         target_wake_word: str | None = None,
         phonetic_variants: list[str] | None = None,
         is_followup: bool = False,
+        prior_user_text: str = "",
+        prior_assistant_reply: str = "",
     ) -> tuple[str, float, float]:
         """Classify whether the utterance is addressed or ambient conversation.
 
@@ -96,7 +98,11 @@ class GatekeeperLlmClient:
         variants = phonetic_variants or []
 
         if is_followup:
-            prompt = make_llm_followup_prompt(target)
+            prompt = make_llm_followup_prompt(
+                target,
+                prior_user_text=prior_user_text,
+                prior_assistant_reply=prior_assistant_reply,
+            )
         else:
             prompt = make_llm_initial_prompt(target, variants)
 

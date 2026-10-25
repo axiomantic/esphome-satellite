@@ -63,6 +63,8 @@ class SystemOneClient:
         target_wake_word: str | None = None,
         phonetic_variants: list[str] | None = None,
         is_followup: bool = False,
+        prior_user_text: str = "",
+        prior_assistant_reply: str = "",
     ) -> tuple[str, float, float]:
         """Classify whether the utterance is addressed or ambient conversation.
         

@@ -248,6 +248,9 @@ void I2SAudioSpeaker::run_speaker_task() {
         break;
       }
 
+      this->has_inflight_audio_.store((audio_source->available() > 0) || (pending_real_buffers > 0),
+                                      std::memory_order_relaxed);
+
       // Graceful stop: exit only after the source's exposed chunk is drained, the underlying ring
       // buffer has nothing left to hand over, and every real-audio buffer we submitted has been
       // confirmed played. ``has_buffered_data()`` returns bytes still sitting in the ring buffer
@@ -271,6 +274,7 @@ void I2SAudioSpeaker::run_speaker_task() {
         while (bytes_written_total < dma_buffer_bytes) {
           size_t bytes_read = audio_source->fill(pdMS_TO_TICKS(DMA_BUFFER_DURATION_MS) / 2, false);
           if (bytes_read > 0) {
+            this->has_inflight_audio_.store(true, std::memory_order_relaxed);
             // Apply volume at the input bit depth, before any narrowing, so the full precision is scaled.
             uint8_t *new_data = audio_source->mutable_data() + audio_source->available() - bytes_read;
             this->apply_software_volume_(new_data, bytes_read);
@@ -354,9 +358,12 @@ void I2SAudioSpeaker::run_speaker_task() {
       if (real_frames_total > 0) {
         pending_real_buffers++;
       }
+      this->has_inflight_audio_.store((audio_source->available() > 0) || (pending_real_buffers > 0),
+                                      std::memory_order_relaxed);
     }
   }
 
+  this->has_inflight_audio_.store(false, std::memory_order_relaxed);
   xEventGroupSetBits(this->event_group_, SpeakerEventGroupBits::TASK_STOPPING);
 
   audio_source.reset();

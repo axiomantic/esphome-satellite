@@ -4,6 +4,7 @@
 
 #include "../i2s_audio.h"
 
+#include <atomic>
 #include <freertos/event_groups.h>
 #include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
@@ -148,6 +149,7 @@ class I2SAudioSpeakerBase : public I2SAudioOut, public speaker::Speaker, public 
   QueueHandle_t write_records_queue_{nullptr};
 
   std::weak_ptr<ring_buffer::RingBuffer> audio_ring_buffer_;
+  std::atomic<bool> has_inflight_audio_{false};
 
   uint32_t buffer_duration_ms_;
 

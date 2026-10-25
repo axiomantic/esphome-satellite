@@ -31,7 +31,7 @@ static const size_t RING_BUFFER_SIZE = RING_BUFFER_SAMPLES * sizeof(int16_t);
 static const size_t SEND_BUFFER_SAMPLES = 32 * SAMPLE_RATE_HZ / 1000;  // 32ms * 16kHz / 1000ms
 static const size_t SEND_BUFFER_SIZE = SEND_BUFFER_SAMPLES * sizeof(int16_t);
 static const size_t RECEIVE_SIZE = 1024;
-static const size_t SPEAKER_BUFFER_SIZE = 16 * RECEIVE_SIZE;
+static const size_t SPEAKER_BUFFER_SIZE = 64 * RECEIVE_SIZE;
 
 // If one microphone channel keeps producing audio while another configured channel produces none for this
 // long, treat the silent channel as failed and stop the stream. A working microphone exposes a chunk every
@@ -542,7 +542,7 @@ void VoiceAssistant::loop() {
           break;
         }
         ESP_LOGD(TAG, "Speaker has finished outputting all audio");
-        this->speaker_->stop();
+        this->speaker_->finish();
         this->cancel_timeout("speaker-timeout");
         this->cancel_timeout("playing");
 

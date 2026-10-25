@@ -349,9 +349,16 @@ class TestGatekeeperLlmClient(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Use your judgment of phonetic pronunciations.", initial_prompt)
         self.assertIn("Output ONLY 'YES' or 'NO'.", initial_prompt)
 
-        followup_prompt = make_llm_followup_prompt("Clemens")
+        followup_prompt = make_llm_followup_prompt(
+            "Clemens",
+            prior_user_text="Mr. Clemens, did you write about the Mississippi?",
+            prior_assistant_reply="Why certainly, I spent years piloting steamboats on that river.",
+        )
         self.assertIn("The assistant 'Clemens' just spoke", followup_prompt)
         self.assertIn("No wake word is required on a follow-up turn", followup_prompt)
+        self.assertIn("Recent conversation context:", followup_prompt)
+        self.assertIn("did you write about the Mississippi?", followup_prompt)
+        self.assertIn("piloting steamboats on that river", followup_prompt)
         self.assertIn("profanity", followup_prompt)
 
 
@@ -433,7 +440,7 @@ class TestGatekeeperConversationEntityWithLlm(unittest.IsolatedAsyncioTestCase):
         }
         self.mock_entry.options = {
             CONF_SLOT1_ALIASES: "clemens, clemons, clement",
-            CONF_SLOT2_ALIASES: "jarvis, kay tee",
+            CONF_SLOT2_ALIASES: "nabu, okay nabu",
         }
 
         self.sat_state = MagicMock()

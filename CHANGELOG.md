@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-25
+
+### Fixed
+- **End-of-Stream TTS Playback Drain & Cutoff Elimination (`resampler_speaker`, `i2s_audio_speaker`, `voice_assistant`)**: Fixed premature truncation of the final ~350–450ms of TTS replies caused by `VoiceAssistant::RESPONSE_FINISHED` calling `speaker_->stop()` before the resampler transfer buffer and I2S DMA descriptors finished draining. `ResamplerSpeaker::has_buffered_data()` now tracks `resampler_has_inflight_data_` until `AudioResampler::resample()` reaches `AudioResamplerState::FINISHED`, `I2SAudioSpeaker::has_buffered_data()` tracks `has_inflight_audio_` across `audio_source` and `pending_real_buffers`, and `VoiceAssistant` calls `speaker_->finish()` for graceful drain.
+- **Speaker Buffer Capacity & Resampler Task Priority**: Increased `VoiceAssistant` `SPEAKER_BUFFER_SIZE` from `16 KB` (`512ms`) to `64 KB` (`2,048ms` in PSRAM), raised `RESAMPLER_TASK_PRIORITY` from `1` to `5`, and configured `buffer_duration: 500ms` on `board_speaker` to absorb Wi-Fi jitter.
+- **Post-Utterance Chime & Processing Loop on Speculative Verification (`respeaker_xvf3800.yaml`)**: Triggered the post-utterance chime and processing sound loop in `on_stt_end` when transitioning directly from `STREAMING_SPEECH_VERIFIED` to `PROCESSING`.
+- **Follow-Up Turn Context & Verification Gate (`conversation.py`, `stt.py`, `nim_esphome_satellite.nim`)**: Passed prior user turn and assistant reply context into follow-up gatekeeper prompts, routed `FollowUp` speech-end through `Verifying` before playing processing sounds, and only incremented speculative `completed_count` on successful classification so network timeouts do not prematurely trigger ambient fast-abort.
+
 ## [0.8.0] - 2026-10-18
 
 ### Added

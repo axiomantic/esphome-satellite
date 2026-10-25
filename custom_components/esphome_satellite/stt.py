@@ -130,6 +130,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         self._active_followup_convs: dict[str, float] = domain_data.setdefault("followup_convs", {})
         self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
         self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
+        self._followup_turn_context: dict[str, tuple[str, str]] = domain_data.setdefault("followup_turn_context", {})
         self._verified_wake_transcripts: dict[str, tuple[str, float]] = domain_data.setdefault("verified_wake_transcripts", {})
 
     @property
@@ -442,6 +443,30 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                 speech_consec_chunks = 0
                                 end_silence_elapsed += chunk_sec
                                 if end_silence_elapsed >= END_OF_SPEECH_SILENCE_SECONDS:
+                                    if (
+                                        self.early_wake_verification
+                                        and not is_followup_stream
+                                        and not verified_event.is_set()
+                                    ):
+                                        if bool(eval_state.get("in_flight", False)):
+                                            wait_deadline = time.monotonic() + 0.45
+                                            while (
+                                                bool(eval_state.get("in_flight", False))
+                                                and not verified_event.is_set()
+                                                and time.monotonic() < wait_deadline
+                                            ):
+                                                await asyncio.sleep(0.01)
+                                        if (
+                                            not verified_event.is_set()
+                                            and int(eval_state.get("completed_count", 0)) >= 1
+                                        ):
+                                            unverified_abort_event.set()
+                                            _LOGGER.info(
+                                                "[Speculative STT] End-of-speech silence (%.1fs) reached on unverified stream (checks=%d); aborting ambient stream",
+                                                END_OF_SPEECH_SILENCE_SECONDS,
+                                                int(eval_state.get("completed_count", 0)),
+                                            )
+                                            break
                                     _LOGGER.info(
                                         "[Speculative STT] End-of-speech silence (%.1fs) detected; completing stream",
                                         END_OF_SPEECH_SILENCE_SECONDS,
@@ -610,8 +635,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             if in_followup_dict:
                 conv_id = self._followup_sat_to_conv.pop(satellite_id, None)
                 self._active_followup_satellites.pop(satellite_id, None)
+                self._followup_turn_context.pop(satellite_id, None)
                 if conv_id:
                     self._active_followup_convs.pop(conv_id, None)
+                    self._followup_turn_context.pop(conv_id, None)
             return False
 
         if fsm_state in followup_states or in_followup_dict:
@@ -654,8 +681,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         else:
             self._active_followup_satellites.pop(satellite_id, None)
             self._followup_sat_to_conv.pop(satellite_id, None)
+            self._followup_turn_context.pop(satellite_id, None)
             if conv_id:
                 self._active_followup_convs.pop(conv_id, None)
+                self._followup_turn_context.pop(conv_id, None)
 
     async def _async_save_recorded_audio(
         self,
@@ -1155,15 +1184,18 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                 rtt_ms,
                                 partial_text,
                             )
+                            if eval_state is not None:
+                                eval_state["completed_count"] = (
+                                    int(eval_state.get("completed_count", 0)) + 1
+                                )
                         except (GatekeeperClientError, Exception) as err:
-                            _LOGGER.debug(
+                            _LOGGER.warning(
                                 "[Speculative STT] Speculative classification check failed: %s",
                                 err,
                             )
                 finally:
                     if eval_state is not None:
                         eval_state["in_flight"] = False
-                        eval_state["completed_count"] = int(eval_state.get("completed_count", 0)) + 1
                     await asyncio.sleep(0)
 
             if eof_seen:

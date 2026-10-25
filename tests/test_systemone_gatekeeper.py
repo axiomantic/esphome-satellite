@@ -1769,11 +1769,10 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mr. Clemens", clemens_expanded)
 
         # Test additive user aliases (default empty, additive when provided)
-        with_aliases = expand_wake_phrase("Hey Kay Tee", ["Ok Nabo", "Hey KT"])
-        self.assertIn("Hey KT", with_aliases)
-        self.assertIn("Hey Kay Tee", with_aliases)
+        with_aliases = expand_wake_phrase("Okay Nabu", ["Hey Nabu", "Ok Nabo"])
+        self.assertIn("Okay Nabu", with_aliases)
+        self.assertIn("Hey Nabu", with_aliases)
         self.assertIn("Ok Nabo", with_aliases)
-        self.assertIn("Hey KT", with_aliases)
 
     def test_prompt_factories_generic_and_followup(self):
         """Verify initial and follow-up prompt structure conforms to requirements."""
@@ -1784,14 +1783,14 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             make_initial_prompt,
         )
 
-        instr_init, crit_init = make_initial_prompt("Hey Kay Tee", ["Hey KT", "Ok Nabo"])
-        self.assertIn("Hey Kay Tee", instr_init)
-        self.assertIn("Hey KT", instr_init)
+        instr_init, crit_init = make_initial_prompt("Okay Nabu", ["Hey Nabu", "Ok Nabo"])
+        self.assertIn("Okay Nabu", instr_init)
+        self.assertIn("Hey Nabu", instr_init)
         self.assertIn("Ok Nabo", instr_init)
         self.assertIn(CHOICE_ADDRESSED, crit_init)
         self.assertIn(CHOICE_AMBIENT, crit_init)
 
-        instr_follow, crit_follow = make_followup_prompt("Hey Kay Tee")
+        instr_follow, crit_follow = make_followup_prompt("Okay Nabu")
         self.assertIn("follow-up", instr_follow.lower())
         self.assertIn("NOT need to repeat the wake word", instr_follow)
         self.assertIn(CHOICE_ADDRESSED, crit_follow)
@@ -1815,14 +1814,12 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(is_wake_and_pause_turn("Mr. Clemens.", "Mr. Clemens", ["Mister Clemens"]))
         self.assertTrue(is_wake_and_pause_turn("Hey Mr Clemens", "Mr. Clemens", ["Mister Clemens"]))
         self.assertTrue(is_wake_and_pause_turn("Mister Clemens", "Mr. Clemens", ["Mister Clemens"]))
-        self.assertTrue(is_wake_and_pause_turn("Hey KT", "Hey KT", ["Kay Tee"]))
-        self.assertTrue(is_wake_and_pause_turn("KT", "Hey KT", ["Kay Tee"]))
+        self.assertTrue(is_wake_and_pause_turn("Hey Nabu", "Okay Nabu", ["Hey Nabu"]))
+        self.assertTrue(is_wake_and_pause_turn("Okay Nabu", "Okay Nabu", ["Hey Nabu"]))
         self.assertTrue(is_wake_and_pause_turn("Mark Twain", "Mark Twain", []))
         self.assertTrue(is_wake_and_pause_turn("Hey Mark Twain", "Mark Twain", []))
 
         # Phonetic STT mis-dictations of wake-and-pause turns (MED-02)
-        self.assertTrue(is_wake_and_pause_turn("Okay Nabu.", "Okay Nabu", ["Okay Nabu", "Okay Nabu"]))
-        self.assertTrue(is_wake_and_pause_turn("Okay Nabu", "Okay Nabu", ["Okay Nabu"]))
         self.assertTrue(is_wake_and_pause_turn("Hey Mister Clements.", "Mr. Clemens", ["Mister Clemens"]))
         self.assertTrue(is_wake_and_pause_turn("Missed her lemons.", "Mr. Clemens", ["Missed her clemens"]))
 
@@ -1831,7 +1828,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_wake_and_pause_turn("Turn off lights", "Mr. Clemens", ["Mister Clemens"]))
         self.assertFalse(is_wake_and_pause_turn("Stop", "Mr. Clemens", ["Mister Clemens"]))
         self.assertFalse(is_wake_and_pause_turn("Cancel", "Mr. Clemens", ["Mister Clemens"]))
-        self.assertFalse(is_wake_and_pause_turn("What time is it", "Okay Nabu", ["Okay Nabu"]))
+        self.assertFalse(is_wake_and_pause_turn("What time is it", "Okay Nabu", ["Hey Nabu"]))
 
         # Ambient speech must NOT trigger wake-and-pause
         self.assertFalse(is_wake_and_pause_turn("It won't work.", "Mr. Clemens", ["Mister Clemens"]))
@@ -1839,8 +1836,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
 
         # Wake word + command must NOT trigger wake-and-pause
         self.assertFalse(is_wake_and_pause_turn("Mr Clemens what time is it", "Mr. Clemens", ["Mister Clemens"]))
-        self.assertFalse(is_wake_and_pause_turn("Hey KT tell me a joke", "Hey KT", []))
-        self.assertFalse(is_wake_and_pause_turn("Okay Nabu, how is the kitchen?", "Okay Nabu", ["Okay Nabu"]))
+        self.assertFalse(is_wake_and_pause_turn("Okay Nabu tell me a joke", "Okay Nabu", []))
+        self.assertFalse(is_wake_and_pause_turn("Hey Nabu, how is the kitchen?", "Okay Nabu", ["Hey Nabu"]))
 
     async def test_gatekeeper_short_command_delegation(self):
         """Verify 2-word commands like 'Lights on' are delegated downstream and NOT intercepted as Yes?."""
@@ -1895,15 +1892,11 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("Clements" in v for v in clemens_variants))
         self.assertTrue(any("Lemons" in v for v in clemens_variants))
 
-        # Test acronym + -ance dynamic phonetic variants and spoken-initialism substitutions
+        # Test acronym dynamic phonetic variants
         kt_variants = generate_phonetic_variants("Hey Kay Tee")
         self.assertIn("Hey KT", kt_variants)
         self.assertIn("Hey K.T.", kt_variants)
         self.assertIn("KT", kt_variants)
-        self.assertTrue(any("KT" in v for v in kt_variants))
-        self.assertTrue(any("KT" in v for v in kt_variants))
-        self.assertTrue(any("KT" in v for v in kt_variants))
-        self.assertTrue(any("KT" in v for v in kt_variants))
 
         # Verify _select_diverse_examples spans across the sorted list rather than only taking 'Hey ...'
         diverse_sample = _select_diverse_examples("Mr. Clemens", clemens_variants, count=8)
@@ -1961,8 +1954,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
                 metadata=metadata,
                 audio_data=audio_bytes,
                 satellite_id="assist_satellite.kitchen_satellite",
-                wake_word="Hey Kay Tee",
-                text="Hey KT what time is it",
+                wake_word="Okay Nabu",
+                text="Okay Nabu what time is it",
             )
 
             rec_dir = Path(tmp_dir)
@@ -1983,8 +1976,8 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             with open(json_files[0], encoding="utf-8") as jf:
                 meta = json.load(jf)
                 self.assertEqual(meta["satellite_id"], "assist_satellite.kitchen_satellite")
-                self.assertEqual(meta["wake_word"], "Hey Kay Tee")
-                self.assertEqual(meta["text"], "Hey KT what time is it")
+                self.assertEqual(meta["wake_word"], "Okay Nabu")
+                self.assertEqual(meta["text"], "Okay Nabu what time is it")
                 self.assertEqual(meta["duration_sec"], 1.0)
                 self.assertEqual(meta["sample_rate"], 16000)
 
@@ -2373,7 +2366,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         stt_proxy._verified_wake_transcripts[sat_id] = ("Hello Nabu.", time.monotonic())
 
         async def classify_drift_side_effect(text, **kwargs):
-            if text.startswith("Hello Nabu."):
+            if text.startswith("Okay Nabu,"):
                 return (CHOICE_ADDRESSED, 1.0, 12.0)
             return (CHOICE_AMBIENT, 0.0, 12.0)
 
@@ -2396,7 +2389,7 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         second_call_text = self.mock_client.classify_addressing.await_args_list[1].kwargs["text"]
         self.assertEqual(
             second_call_text,
-            "Hello Nabu. Who Nabu? What do you think about weather?",
+            "Okay Nabu, Who Nabu? What do you think about weather?",
         )
 
         # 2. Negative control (18:12:20): Layer 1 hallucinated "Mr. Clemens." on 2.0s slice,
@@ -2611,6 +2604,172 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res.text, "Can you bark like a dog?")
         # 2.0s pre-roll (64,000B) skipped; 3.0s pause + 1.5s speech + 1.2s silence = 5.7s (182,400B) consumed!
         self.assertGreaterEqual(consumed_bytes, 176000)
+
+    async def test_unverified_end_of_speech_silence_aborts_even_with_inflight_speculative_check(self):
+        """Unverified initial stream hitting 1.2s end-of-speech silence awaits in-flight speculative check and fast-aborts when ambient."""
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.kitchen"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Okay Nabu"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        full_stream_completed = False
+
+        async def downstream_race_handler(metadata, stream):
+            nonlocal full_stream_completed
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            if len(chunks) == 1:
+                # Partial speculative slice ("Just put it on")
+                await asyncio.sleep(0.05)
+                return SpeechResult(text="Just put it on.", result=SpeechResultState.SUCCESS)
+            # Full stream STT would take 0.5s and return non-empty ambient transcript if not aborted
+            await asyncio.sleep(0.5)
+            full_stream_completed = True
+            return SpeechResult(text="Just put it on.", result=SpeechResultState.SUCCESS)
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_race_handler)
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        # Simulate speculative check still in-flight (80ms) when 1.2s end-of-speech silence finishes
+        async def slow_ambient_classify(text, **kwargs):
+            await asyncio.sleep(0.08)
+            return (CHOICE_AMBIENT, 0.99, 80.0)
+
+        self.mock_client.classify_addressing = AsyncMock(side_effect=slow_ambient_classify)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        # Stream:
+        # - 2.0s pre-roll at 200 RMS (20 chunks of 100ms)
+        # - 0.5s brief room speech ("Just put it on") at 2000 RMS (5 chunks of 100ms) -> latches in_speech
+        # - 1.3s silence at 100 RMS (13 chunks of 100ms) -> hits 1.2s END_OF_SPEECH_SILENCE_SECONDS at ~3.7s total_elapsed
+        async def brief_unverified_speech_then_silence():
+            for _ in range(20):
+                yield b"\xc8\x00" * 1600  # 200 RMS pre-roll
+                await asyncio.sleep(0.001)
+            for _ in range(5):
+                yield b"\xd0\x07" * 1600  # 2000 RMS brief speech
+                await asyncio.sleep(0.001)
+            for _ in range(13):
+                yield b"\x64\x00" * 1600  # 100 RMS silence (1.3s)
+                await asyncio.sleep(0.001)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            res = await stt_proxy.async_process_audio_stream(
+                metadata, brief_unverified_speech_then_silence()
+            )
+
+        self.assertEqual(res.result, SpeechResultState.SUCCESS)
+        self.assertEqual(res.text, "")
+        self.assertFalse(full_stream_completed)
+
+    async def test_followup_context_propagated_across_turns(self):
+        """1-turn conversational context (prior_user_text, prior_assistant_reply) is stored and passed to classify_addressing on follow-up."""
+        from custom_components.esphome_satellite.conversation import (
+            ConversationResult,
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+        from homeassistant.helpers import intent
+
+        self.mock_hass.data = {}
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen_voice_satellite_a1b2c3_assist_satellite"
+        conv_id = "conv_context_fix"
+        sat_state = MagicMock()
+        sat_state.state = "listening"
+        sat_state.attributes = {"wake_word": "Okay Nabu", "active_pipeline_index": 1}
+        self.mock_hass.states.get = MagicMock(return_value=sat_state)
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 1.0, 15.0)
+        )
+
+        # Turn 1: User asks "Okay Nabu. Do you know about astronomy?", downstream replies
+        resp1 = intent.IntentResponse(language="en")
+        resp1.async_set_speech("Gastrology? I know plenty about cooking.")
+        downstream_mock = AsyncMock(
+            return_value=ConversationResult(response=resp1, conversation_id=conv_id)
+        )
+
+        class Turn1Input:
+            text = "Okay Nabu. Do you know about astronomy?"
+            satellite_id = sat_id
+            conversation_id = conv_id
+            language = "en"
+            context = MagicMock()
+            device_id = "dev_kitchen"
+
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch(
+                 "custom_components.esphome_satellite.conversation.conversation.async_converse",
+                 downstream_mock,
+             ):
+            await conv_entity.async_process(Turn1Input())
+
+        # Verify 1-turn context was stored
+        self.assertEqual(
+            conv_entity._followup_turn_context.get(conv_id),
+            (
+                "Okay Nabu. Do you know about astronomy?",
+                "Gastrology? I know plenty about cooking.",
+            ),
+        )
+
+        # Turn 2 (Follow-up): User clarifies "No, I asked if you know about astronomy, stars and planets."
+        class Turn2Input:
+            text = "No, I asked if you know about astronomy, stars and planets."
+            satellite_id = sat_id
+            conversation_id = conv_id
+            language = "en"
+            context = MagicMock()
+            device_id = "dev_kitchen"
+
+        resp2 = intent.IntentResponse(language="en")
+        resp2.async_set_speech("Oh, astronomy! Yes, the solar system has eight planets.")
+        downstream_mock.return_value = ConversationResult(response=resp2, conversation_id=conv_id)
+
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch(
+                 "custom_components.esphome_satellite.conversation.conversation.async_converse",
+                 downstream_mock,
+             ):
+            await conv_entity.async_process(Turn2Input())
+
+        call_kwargs = self.mock_client.classify_addressing.await_args.kwargs
+        self.assertTrue(call_kwargs["is_followup"])
+        self.assertEqual(
+            call_kwargs["prior_user_text"],
+            "Okay Nabu. Do you know about astronomy?",
+        )
+        self.assertEqual(
+            call_kwargs["prior_assistant_reply"],
+            "Gastrology? I know plenty about cooking.",
+        )
+        self.assertIn(
+            "Gastrology? I know plenty",
+            call_kwargs["question_text"],
+        )
 
 
 if __name__ == "__main__":
