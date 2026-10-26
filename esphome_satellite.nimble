@@ -9,7 +9,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.2.8"
-requires "https://github.com/axiomantic/nim-esphome >= 0.4.0"
+requires "https://github.com/axiomantic/nim-esphome >= 0.5.0"
 requires "typestates >= 0.13.0"
 
 task test, "Run satellite invariant test suites":
