@@ -1,20 +1,20 @@
-# Note: Primary CI runs on self-hosted Forgejo Actions (https://git.axiomantic.dev).
-# GitHub is maintained as a manual mirror; push-triggered CI is disabled on GitHub
-# to avoid duplicate execution on mirror pushes. This workflow can be triggered
-# manually via workflow_dispatch or on pull requests against main.
-# No Windows or macOS runners exist in this repository; all legs are Linux-based.
-
 name: CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
-    name: Test on Linux (Nim 2.2 & latest)
+    name: Test on Linux (Nim ${{ matrix.nim_version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nim_version: ["2.2.10", "2.2.8"]
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -40,27 +40,30 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.asdf
-          key: asdf-ci-${{ runner.os }}-nim-2.2.10-2.2.8
+          key: asdf-ci-${{ runner.os }}-nim-${{ matrix.nim_version }}
           restore-keys: |
             asdf-ci-${{ runner.os }}-
 
-      - name: Install Nim (latest)
+      - name: Install Nim (${{ matrix.nim_version }})
         uses: asdf-vm/actions/install@v4
         with:
           tool_versions: |
-            nim 2.2.10
+            nim ${{ matrix.nim_version }}
 
-      - name: Test on Nim latest (2.2.10)
+      - name: Run Nim test suites and ESP32 C++ syntax check
         working-directory: satellite
         run: |
-          asdf set nim 2.2.10
-          ./scripts/ci/test.sh
-
-      - name: Test on Nim 2.2 (minimum supported 2.2.8)
-        working-directory: satellite
-        run: |
-          asdf install nim 2.2.8
-          asdf set nim 2.2.8
-          ./scripts/ci/test.sh
-
-
+          set -euo pipefail
+          asdf set nim ${{ matrix.nim_version }}
+          NIM_OPTS=(--path:../nim-esphome/src --path:../nim-typestates/src)
+          for t in tests/test_fsm.nim tests/test_version_sync.nim tests/test_audio_dsp.nim tests/test_audio_volume.nim tests/test_xvf3800.nim tests/test_wake_loader.nim tests/test_pcm_player.nim tests/test_cancellation.nim tests/test_nvs_migration.nim tests/test_satellite_system.nim tests/test_audio_stream_tracker.nim tests/test_watchdog_loop.nim; do
+            if [ -f "$t" ]; then
+              echo "--- Running $t ---"
+              nim c -r "${NIM_OPTS[@]}" "$t"
+              rm -f "${t%.nim}"
+            fi
+          done
+          echo "--- Verifying ESP32 compilation syntax for src/nim_esphome_satellite.nim ---"
+          nim cpp --compileOnly --noMain:on --mm:arc -d:danger -d:useMalloc -d:esphome \
+            --cpu:esp --os:any --exceptions:goto --panics:on \
+            "${NIM_OPTS[@]}" src/nim_esphome_satellite.nim
