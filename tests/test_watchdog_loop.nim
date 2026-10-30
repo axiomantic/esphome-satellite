@@ -296,6 +296,8 @@ suite "Satellite Watchdog Loop & Typestate Integration (TDD)":
     # At 20000ms, user finishes speaking
     setSimulatedMillis(20000)
     nim_satellite_speech_ended()
+    check nim_satellite_get_state() == ord(rsVerifying)
+    nim_satellite_wake_word_verified()
     check nim_satellite_get_state() == ord(rsThinking)
     satelliteLoop(20000'u32)
     check not gTestAbortTriggered
