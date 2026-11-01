@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-31
+
+### Fixed
+- **Watchdog Follow-Up Speech-End Transition Verification (`test_watchdog_loop.nim`)**: Added regression coverage verifying that `FollowUp` speech-end transitions through `rsVerifying` before `rsThinking`.
+- **Gatekeeper Phonetic Expansion Cleanup (`const.py`)**: Simplified runtime phonetic variant generation to use strictly generic orthographic and homophone rules without persona-specific initialism heuristics.
+- **GitHub Actions CI Consolidation (`ci.yml`)**: Inlined Linux unit test and ESP32 compilation verification steps in GitHub Actions across Nim 2.2.8 and 2.2.10.
+
 ## [0.8.1] - 2026-10-25
 
 ### Fixed
