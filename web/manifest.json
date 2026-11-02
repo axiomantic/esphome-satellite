@@ -1,6 +1,6 @@
 {
   "name": "esphome-satellite",
-  "version": "0.8.2+b150055",
+  "version": "0.8.3+b150055",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "builds": [

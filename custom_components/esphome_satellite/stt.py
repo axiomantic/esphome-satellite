@@ -131,6 +131,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
         self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
         self._followup_turn_context: dict[str, tuple[str, str]] = domain_data.setdefault("followup_turn_context", {})
+        self._followup_sat_slot: dict[str, int] = domain_data.setdefault("followup_sat_slot", {})
         self._verified_wake_transcripts: dict[str, tuple[str, float]] = domain_data.setdefault("verified_wake_transcripts", {})
 
     @property
@@ -621,6 +622,31 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
 
         return ""
 
+    def _reset_satellite_conversation_session(
+        self, satellite_id: str | None, conv_id: str | None = None
+    ) -> None:
+        """Reset AssistSatelliteEntity._conversation_id and purge expired session cache."""
+        if not isinstance(getattr(self.hass, "data", None), dict):
+            return
+        if satellite_id:
+            try:
+                comp = self.hass.data.get("assist_satellite")
+                if comp is None:
+                    ent_comps = self.hass.data.get("entity_components")
+                    if isinstance(ent_comps, dict):
+                        comp = ent_comps.get("assist_satellite")
+                if comp is not None and hasattr(comp, "get_entity") and callable(comp.get_entity):
+                    sat_entity = comp.get_entity(satellite_id)
+                    if sat_entity is not None and hasattr(sat_entity, "_conversation_id"):
+                        sat_entity._conversation_id = None
+            except Exception:
+                pass
+        if conv_id:
+            for key in ("conversation_chat_logs", "chat_session"):
+                store = self.hass.data.get(key)
+                if isinstance(store, dict):
+                    store.pop(conv_id, None)
+
     def _check_and_refresh_followup_start(self, satellite_id: str | None) -> bool:
         """Detect if incoming STT stream is a follow-up turn and reset timer at TTS playback end."""
         if not satellite_id:
@@ -630,12 +656,26 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         fsm_state = self._get_satellite_fsm_state(satellite_id)
         in_followup_dict = satellite_id in self._active_followup_satellites
 
+        prev_slot = self._followup_sat_slot.get(satellite_id)
+        if prev_slot is not None:
+            current_slot = self._resolve_active_slot_index(satellite_id)
+            if current_slot != prev_slot:
+                conv_id = self._followup_sat_to_conv.pop(satellite_id, None)
+                self._active_followup_satellites.pop(satellite_id, None)
+                self._followup_turn_context.pop(satellite_id, None)
+                self._followup_sat_slot.pop(satellite_id, None)
+                if conv_id:
+                    self._active_followup_convs.pop(conv_id, None)
+                    self._followup_turn_context.pop(conv_id, None)
+                return False
+
         # If hardware explicitly woke from Idle on a wake word, it's a fresh initial turn
         if fsm_state in ("idle", "listening", "streaming speech", "streaming speech verified", "woken"):
             if in_followup_dict:
                 conv_id = self._followup_sat_to_conv.pop(satellite_id, None)
                 self._active_followup_satellites.pop(satellite_id, None)
                 self._followup_turn_context.pop(satellite_id, None)
+                self._followup_sat_slot.pop(satellite_id, None)
                 if conv_id:
                     self._active_followup_convs.pop(conv_id, None)
                     self._followup_turn_context.pop(conv_id, None)
@@ -682,9 +722,11 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             self._active_followup_satellites.pop(satellite_id, None)
             self._followup_sat_to_conv.pop(satellite_id, None)
             self._followup_turn_context.pop(satellite_id, None)
+            self._followup_sat_slot.pop(satellite_id, None)
             if conv_id:
                 self._active_followup_convs.pop(conv_id, None)
                 self._followup_turn_context.pop(conv_id, None)
+            self._reset_satellite_conversation_session(satellite_id, conv_id)
 
     async def _async_save_recorded_audio(
         self,
@@ -752,14 +794,18 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 wav_path.name,
             )
 
-            # Prune old recordings (keep last 200, pruning unverified empty-transcript files first)
+            # Prune old recordings (keep last 200, pruning older unverified empty-transcript files first
+            # while protecting the newly written recording and the 20 most recent captures)
             try:
                 wav_files = sorted(rec_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime)
                 if len(wav_files) > 200:
                     excess = len(wav_files) - 200
+                    other_files = [p for p in wav_files if p != wav_path]
+                    protected_recent = other_files[-20:] if len(other_files) > 20 else other_files
+                    older_pool = other_files[:-20] if len(other_files) > 20 else []
                     empty_wavs: list[Path] = []
                     non_empty_wavs: list[Path] = []
-                    for wf_path in wav_files:
+                    for wf_path in older_pool:
                         jf_path = wf_path.with_suffix(".json")
                         is_empty = False
                         if jf_path.exists():
@@ -774,7 +820,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             empty_wavs.append(wf_path)
                         else:
                             non_empty_wavs.append(wf_path)
-                    prune_targets = (empty_wavs + non_empty_wavs)[:excess]
+                    prune_targets = (empty_wavs + non_empty_wavs + protected_recent)[:excess]
                     for old_wav in prune_targets:
                         old_wav.unlink(missing_ok=True)
                         old_json = old_wav.with_suffix(".json")

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-02
+
+### Fixed
+- **Strict Session Isolation Across Wake-Word Turns & Slot Switches (`conversation.py`, `stt.py`)**: Isolated new wake-word sessions (`is_followup=False`) and assistant slot switches (`Slot 1 <-> Slot 2`) by purging stale prior-session turns from Home Assistant's 5-minute `ChatLog` cache and resetting `AssistSatelliteEntity._conversation_id` when follow-up windows expire or turns complete without opening a follow-up window.
+- **Recent Recording Protection in Audio Archiver (`stt.py`)**: Updated `_async_save_recorded_audio` 200-file pruning so the newly written `.wav`/`.json` pair and the 20 most recent captures are protected from immediate empty-transcript pruning when 200 older non-empty recordings exist.
+
 ## [0.8.2] - 2026-10-31
 
 ### Fixed

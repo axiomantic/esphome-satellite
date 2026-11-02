@@ -2771,6 +2771,218 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             call_kwargs["question_text"],
         )
 
+    async def test_non_followup_turn_purges_stale_chat_log_history(self):
+        """Fresh wake-word turns (is_followup=False) purge stale prior-session turns from ChatLog."""
+        from custom_components.esphome_satellite.conversation import (
+            ConversationResult,
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+        from homeassistant.helpers import intent
+
+        fake_chat_log = MagicMock()
+        fake_chat_log.content = [
+            "SYSTEM_PROMPT",
+            "OLD_USER_TURN_1",
+            "OLD_ASSISTANT_REPLY_1",
+            "NEW_USER_TURN_2",
+        ]
+        self.mock_hass.data = {
+            "conversation_chat_logs": {"conv_reused_5min": fake_chat_log},
+        }
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen_voice_satellite_a1b2c3_assist_satellite"
+        sat_state = MagicMock()
+        sat_state.state = "listening"
+        sat_state.attributes = {"wake_word": "Mr. Clemens", "active_pipeline_index": 0}
+        self.mock_hass.states.get = MagicMock(return_value=sat_state)
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 1.0, 12.0)
+        )
+        resp = intent.IntentResponse(language="en")
+        resp.async_set_speech("A fresh answer for a fresh session.")
+        downstream_mock = AsyncMock(
+            return_value=ConversationResult(response=resp, conversation_id="conv_reused_5min")
+        )
+
+        class FreshWakeInput:
+            text = "Mr. Clemens, give me a fresh answer."
+            satellite_id = sat_id
+            conversation_id = "conv_reused_5min"
+            language = "en"
+            context = MagicMock()
+            device_id = "dev_kitchen"
+
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch(
+                 "custom_components.esphome_satellite.conversation.conversation.async_converse",
+                 downstream_mock,
+             ):
+            await conv_entity.async_process(FreshWakeInput())
+
+        self.assertEqual(fake_chat_log.content, ["SYSTEM_PROMPT", "NEW_USER_TURN_2"])
+
+    async def test_slot_switch_forces_new_session_and_purges_chat_log(self):
+        """Switching slots (Slot 1 -> Slot 2) during an active follow-up window forces is_followup=False and isolates ChatLog."""
+        import time
+        from custom_components.esphome_satellite.conversation import (
+            ConversationResult,
+            ESPHomeSatelliteGatekeeperEntity,
+        )
+        from homeassistant.helpers import intent
+
+        fake_chat_log = MagicMock()
+        fake_chat_log.content = [
+            "SYSTEM_PROMPT",
+            "SLOT1_USER_TURN",
+            "SLOT1_ASSISTANT_REPLY",
+            "SLOT2_USER_TURN",
+        ]
+        self.mock_hass.data = {
+            "conversation_chat_logs": {"conv_slot_switch": fake_chat_log},
+        }
+        conv_entity = ESPHomeSatelliteGatekeeperEntity(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+
+        sat_id = "assist_satellite.kitchen_voice_satellite_a1b2c3_assist_satellite"
+        now = time.monotonic()
+        conv_entity._active_followup_convs["conv_slot_switch"] = now
+        conv_entity._active_followup_satellites[sat_id] = now
+        conv_entity._followup_sat_to_conv[sat_id] = "conv_slot_switch"
+        conv_entity._followup_sat_slot[sat_id] = 0  # Previously Slot 1 (index 0)
+
+        # Now satellite reports Slot 2 (index 1)
+        sat_state = MagicMock()
+        sat_state.state = "listening"
+        sat_state.attributes = {"wake_word": "Okay Nabu", "active_pipeline_index": 1}
+        self.mock_hass.states.get = MagicMock(return_value=sat_state)
+
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 1.0, 10.0)
+        )
+        resp = intent.IntentResponse(language="en")
+        resp.async_set_speech("Slot 2 response.")
+        downstream_mock = AsyncMock(
+            return_value=ConversationResult(response=resp, conversation_id="conv_slot_switch")
+        )
+
+        class Slot2Input:
+            text = "Okay Nabu, what time is it?"
+            satellite_id = sat_id
+            conversation_id = "conv_slot_switch"
+            language = "en"
+            context = MagicMock()
+            device_id = "dev_kitchen"
+
+        with patch.object(conv_entity, "_notify_wake_word_verified", new_callable=AsyncMock), \
+             patch(
+                 "custom_components.esphome_satellite.conversation.conversation.async_converse",
+                 downstream_mock,
+             ):
+            await conv_entity.async_process(Slot2Input())
+
+        call_kwargs = self.mock_client.classify_addressing.await_args.kwargs
+        self.assertFalse(call_kwargs["is_followup"])
+        self.assertEqual(fake_chat_log.content, ["SYSTEM_PROMPT", "SLOT2_USER_TURN"])
+        self.assertEqual(conv_entity._followup_sat_slot.get(sat_id), 1)
+
+    async def test_finalize_followup_stream_empty_resets_satellite_conversation_id(self):
+        """Expiring a follow-up stream with empty text resets AssistSatelliteEntity._conversation_id."""
+        import time
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+        from homeassistant.components.stt import SpeechResult, SpeechResultState
+
+        sat_id = "assist_satellite.kitchen_voice_satellite_a1b2c3_assist_satellite"
+        conv_id = "conv_expired_followup"
+        fake_sat_entity = MagicMock()
+        fake_sat_entity._conversation_id = conv_id
+        fake_comp = MagicMock()
+        fake_comp.get_entity = MagicMock(return_value=fake_sat_entity)
+
+        self.mock_hass.data = {
+            "assist_satellite": fake_comp,
+            "conversation_chat_logs": {conv_id: MagicMock()},
+        }
+        stt_entity = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+        )
+        stt_entity._active_followup_satellites[sat_id] = time.monotonic()
+        stt_entity._followup_sat_to_conv[sat_id] = conv_id
+        stt_entity._active_followup_convs[conv_id] = time.monotonic()
+        stt_entity._followup_sat_slot[sat_id] = 0
+
+        stt_entity._finalize_followup_stream(
+            satellite_id=sat_id,
+            is_followup_stream=True,
+            speech_result=SpeechResult(text="", result=SpeechResultState.SUCCESS),
+        )
+
+        self.assertIsNone(fake_sat_entity._conversation_id)
+        self.assertNotIn(conv_id, self.mock_hass.data["conversation_chat_logs"])
+        self.assertNotIn(sat_id, stt_entity._followup_sat_slot)
+
+    async def test_save_recorded_audio_pruning_protects_new_and_recent_empty_recordings(self):
+        """Pruning at >200 files preserves the newly saved empty-transcript WAV and prunes from older_pool."""
+        import tempfile
+        import json
+        import os
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_hass = MagicMock()
+            mock_hass.config.path = MagicMock(return_value=tmp_dir)
+            mock_entry = MagicMock()
+            mock_entry.entry_id = "test_stt_prune"
+            mock_entry.options = {}
+            mock_entry.data = {}
+
+            stt_entity = ESPHomeSatelliteSpeculativeSTT(mock_hass, mock_entry, self.mock_client)
+            rec_dir = Path(tmp_dir)
+
+            # Seed 200 older non-empty recordings with increasing mtimes
+            base_mtime = 1700000000.0
+            for idx in range(200):
+                wf = rec_dir / f"20261001_{idx:06d}_sat_ww.wav"
+                jf = rec_dir / f"20261001_{idx:06d}_sat_ww.json"
+                wf.write_bytes(b"RIFF")
+                jf.write_text(json.dumps({"text": f"spoken command {idx}"}), encoding="utf-8")
+                os.utime(wf, (base_mtime + idx, base_mtime + idx))
+
+            oldest_wav = rec_dir / "20261001_000000_sat_ww.wav"
+            self.assertTrue(oldest_wav.exists())
+
+            metadata = MagicMock()
+            metadata.sample_rate = 16000
+            metadata.bit_rate = 16
+            metadata.channel = 1
+            audio_bytes = b"\x00\x00" * 8000
+
+            await stt_entity._async_save_recorded_audio(
+                metadata=metadata,
+                audio_data=audio_bytes,
+                satellite_id="assist_satellite.twain_satellite",
+                wake_word="Mr. Clemens",
+                text="",
+            )
+
+            remaining_wavs = list(rec_dir.glob("*.wav"))
+            self.assertEqual(len(remaining_wavs), 200)
+            # Newly saved unverified WAV must still exist
+            new_wavs = [p for p in remaining_wavs if "twain_satellite" in p.name]
+            self.assertEqual(len(new_wavs), 1)
+            # Oldest recording from older_pool was pruned instead
+            self.assertFalse(oldest_wav.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

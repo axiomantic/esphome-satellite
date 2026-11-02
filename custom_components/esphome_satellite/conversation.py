@@ -136,6 +136,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
         self._active_followup_satellites: dict[str, float] = domain_data.setdefault("followup_satellites", {})
         self._followup_sat_to_conv: dict[str, str] = domain_data.setdefault("followup_sat_to_conv", {})
         self._followup_turn_context: dict[str, tuple[str, str]] = domain_data.setdefault("followup_turn_context", {})
+        self._followup_sat_slot: dict[str, int] = domain_data.setdefault("followup_sat_slot", {})
         self._verified_wake_transcripts: dict[str, tuple[str, float]] = domain_data.setdefault("verified_wake_transcripts", {})
 
     @property
@@ -162,22 +163,47 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 if (now - float(vw_ts)) < 20.0 and isinstance(vw_text, str) and vw_text.strip():
                     verified_wake_prefix = vw_text.strip()
 
-        is_followup = False
-        if conv_id and conv_id in self._active_followup_convs:
-            if (now - self._active_followup_convs[conv_id]) < 30.0:
-                is_followup = True
-            self._active_followup_convs.pop(conv_id, None)
+        # Resolve satellite slot, wake word, and active threshold before follow-up evaluation
+        slot_index, wake_word = self._resolve_satellite_context(satellite_id)
+        try:
+            setattr(user_input, "_resolved_slot_index", slot_index)
+        except Exception:
+            pass
 
-        if satellite_id in self._active_followup_satellites:
-            if not is_followup and (now - self._active_followup_satellites[satellite_id]) < 30.0:
-                is_followup = True
+        prev_slot = self._followup_sat_slot.get(satellite_id)
+        slot_switched = prev_slot is not None and prev_slot != slot_index
+        if slot_switched:
+            _LOGGER.info(
+                "[Gatekeeper] Assistant slot switched on %s (Slot %d -> Slot %d); isolating new conversation session",
+                satellite_id,
+                prev_slot + 1,
+                slot_index + 1,
+            )
+            old_conv = self._followup_sat_to_conv.pop(satellite_id, None)
             self._active_followup_satellites.pop(satellite_id, None)
-            self._followup_sat_to_conv.pop(satellite_id, None)
-        elif is_followup and satellite_id:
-            self._followup_sat_to_conv.pop(satellite_id, None)
+            self._followup_turn_context.pop(satellite_id, None)
+            self._followup_sat_slot.pop(satellite_id, None)
+            for cid in {c for c in (conv_id, old_conv) if c}:
+                self._active_followup_convs.pop(cid, None)
+                self._followup_turn_context.pop(cid, None)
 
-        if not is_followup and satellite_id and self._is_satellite_in_followup_state(satellite_id):
-            is_followup = True
+        is_followup = False
+        if not slot_switched:
+            if conv_id and conv_id in self._active_followup_convs:
+                if (now - self._active_followup_convs[conv_id]) < 30.0:
+                    is_followup = True
+                self._active_followup_convs.pop(conv_id, None)
+
+            if satellite_id in self._active_followup_satellites:
+                if not is_followup and (now - self._active_followup_satellites[satellite_id]) < 30.0:
+                    is_followup = True
+                self._active_followup_satellites.pop(satellite_id, None)
+                self._followup_sat_to_conv.pop(satellite_id, None)
+            elif is_followup and satellite_id:
+                self._followup_sat_to_conv.pop(satellite_id, None)
+
+            if not is_followup and satellite_id and self._is_satellite_in_followup_state(satellite_id):
+                is_followup = True
 
         prior_user_text = ""
         prior_assistant_reply = ""
@@ -196,8 +222,9 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             ):
                 prior_user_text, prior_assistant_reply = str(ctx_pair[0]), str(ctx_pair[1])
 
-        # Resolve satellite slot, wake word, and active threshold
-        slot_index, wake_word = self._resolve_satellite_context(satellite_id)
+        if not is_followup:
+            self._followup_sat_slot.pop(satellite_id, None)
+            self._isolate_new_session_chat_log(conv_id)
         
         gate_enabled = self._is_slot_gate_enabled(slot_index)
         if not gate_enabled:
@@ -318,6 +345,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                     self._followup_turn_context[conv_id] = (text, "Yes?")
                 self._active_followup_satellites[satellite_id] = now
                 self._followup_turn_context[satellite_id] = (text, "Yes?")
+                self._followup_sat_slot[satellite_id] = slot_index
                 resp = intent.IntentResponse(language=user_input.language)
                 resp.async_set_speech("Yes?")
                 return ConversationResult(
@@ -608,8 +636,61 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             return bool(options.get(CONF_SLOT2_ENABLED, True))
         return True
 
+    def _isolate_new_session_chat_log(self, conv_id: str | None) -> None:
+        """Purge stale prior-session turns from active or cached ChatLog on non-follow-up turns."""
+        active_log = None
+        try:
+            from homeassistant.components.conversation.chat_log import current_chat_log
+            active_log = current_chat_log.get()
+        except Exception:
+            pass
+
+        if active_log is not None and hasattr(active_log, "content") and isinstance(active_log.content, list):
+            if len(active_log.content) > 2:
+                prior_count = len(active_log.content) - 2
+                active_log.content[:] = [active_log.content[0], active_log.content[-1]]
+                _LOGGER.info(
+                    "[Gatekeeper] Purged %d stale prior-session message(s) from active ChatLog (conv=%s)",
+                    prior_count,
+                    conv_id,
+                )
+
+        if not conv_id or not isinstance(getattr(self.hass, "data", None), dict):
+            return
+
+        chat_logs = self.hass.data.get("conversation_chat_logs")
+        if isinstance(chat_logs, dict) and conv_id in chat_logs:
+            cached_log = chat_logs.get(conv_id)
+            if cached_log is not None and cached_log is not active_log:
+                content = getattr(cached_log, "content", None)
+                if isinstance(content, list) and len(content) > 2:
+                    content[:] = [content[0], content[-1]]
+                elif active_log is None:
+                    chat_logs.pop(conv_id, None)
+
+    def _reset_satellite_conversation_id(self, satellite_id: str | None) -> None:
+        """Reset AssistSatelliteEntity._conversation_id so the next wake word starts a fresh ULID session."""
+        if not satellite_id or not isinstance(getattr(self.hass, "data", None), dict):
+            return
+        try:
+            comp = self.hass.data.get("assist_satellite")
+            if comp is None:
+                ent_comps = self.hass.data.get("entity_components")
+                if isinstance(ent_comps, dict):
+                    comp = ent_comps.get("assist_satellite")
+            if comp is not None and hasattr(comp, "get_entity") and callable(comp.get_entity):
+                sat_entity = comp.get_entity(satellite_id)
+                if sat_entity is not None and hasattr(sat_entity, "_conversation_id"):
+                    sat_entity._conversation_id = None
+        except Exception:
+            pass
+
     def _create_silent_drop_result(self, user_input: ConversationInput) -> ConversationResult:
         """Return an empty ConversationResult fulfilling the HA pipeline.py line 1803 silent-drop contract."""
+        satellite_id = getattr(user_input, "satellite_id", None)
+        if satellite_id and satellite_id not in self._active_followup_satellites:
+            self._followup_sat_slot.pop(satellite_id, None)
+            self._reset_satellite_conversation_id(satellite_id)
         resp = intent.IntentResponse(language=user_input.language)
         resp.async_set_speech("")  # Empty speech payload triggers silent finish
         return ConversationResult(
@@ -620,6 +701,7 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
     async def _delegate_downstream(self, user_input: ConversationInput) -> ConversationResult:
         """Delegate conversational turn to configured downstream conversation agent."""
         satellite_id = getattr(user_input, "satellite_id", None)
+        resolved_slot = getattr(user_input, "_resolved_slot_index", None)
         downstream_agent_id = self._entry.options.get(
             CONF_DOWNSTREAM_AGENT,
             self._entry.data.get(CONF_DOWNSTREAM_AGENT),
@@ -677,6 +759,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
             if satellite_id:
                 self._active_followup_satellites[satellite_id] = now
                 self._followup_turn_context[satellite_id] = turn_ctx
+                if isinstance(resolved_slot, int):
+                    self._followup_sat_slot[satellite_id] = resolved_slot
                 if conv_id:
                     self._followup_sat_to_conv[satellite_id] = conv_id
             _LOGGER.info(
@@ -692,6 +776,8 @@ class ESPHomeSatelliteGatekeeperEntity(ConversationEntity):
                 self._active_followup_satellites.pop(satellite_id, None)
                 self._followup_sat_to_conv.pop(satellite_id, None)
                 self._followup_turn_context.pop(satellite_id, None)
+                self._followup_sat_slot.pop(satellite_id, None)
+                self._reset_satellite_conversation_id(satellite_id)
             _LOGGER.info(
                 "[Gatekeeper] Downstream returned no TTS speech for conv=%s, sat=%s; skipping follow-up window",
                 conv_id,
