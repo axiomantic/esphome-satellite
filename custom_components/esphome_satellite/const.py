@@ -262,6 +262,60 @@ def expand_wake_phrase(wake_phrase: str, user_aliases: list[str] | None = None) 
     return clean_user + remaining
 
 
+def _normalize_phrase(phrase: str) -> str:
+    """Normalize a phrase for robust wake phrase matching."""
+    return " ".join(re.sub(r"[^\w\s]", "", phrase).lower().split())
+
+
+def is_wake_and_pause_turn(text: str, target_ww: str, aliases: list[str] | None = None) -> bool:
+    """Check if an utterance consists strictly of the wake phrase (or recognized alias/phonetic mis-dictation) without a trailing command."""
+    clean_text = _normalize_phrase(text)
+    if not clean_text:
+        return False
+
+    phrases_to_match: set[str] = set()
+    raw_candidates = [target_ww]
+    if aliases:
+        raw_candidates.extend(aliases)
+
+    greeting_prefixes = ("hey ", "hi ", "hello ", "ok ", "okay ")
+
+    for raw in raw_candidates:
+        clean = _normalize_phrase(raw)
+        if not clean:
+            continue
+        phrases_to_match.add(clean)
+        has_prefix = any(clean.startswith(p) for p in greeting_prefixes)
+        if not has_prefix:
+            for p in ("hey ", "hi ", "ok ", "hello "):
+                phrases_to_match.add(f"{p}{clean}")
+        else:
+            for p in greeting_prefixes:
+                if clean.startswith(p):
+                    phrases_to_match.add(clean[len(p) :].strip())
+
+    if clean_text in phrases_to_match:
+        return True
+
+    # Phonetic STT mis-dictation check for wake-and-pause turns already approved by Gatekeeper:
+    # Only consider short utterances whose word count cannot hold a trailing command.
+    words = clean_text.split()
+    target_words = _normalize_phrase(target_ww).split() if target_ww else []
+    max_wake_words = max(len(target_words) + 1, 4)
+    if len(words) > max_wake_words:
+        return False
+
+    import difflib
+    for cand in phrases_to_match:
+        if not cand:
+            continue
+        if abs(len(words) - len(cand.split())) <= 1:
+            if difflib.SequenceMatcher(None, clean_text, cand).ratio() >= 0.72:
+                return True
+
+    return False
+
+
 def make_initial_prompt(wake_word: str, known_aliases: list[str]) -> tuple[str, dict[str, str]]:
     """Build dynamic question and criteria for the initial turn, interpolating phonetic variants."""
     sample = _select_diverse_examples(wake_word, known_aliases, count=8)

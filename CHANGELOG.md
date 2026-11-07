@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-11-07
+
+### Fixed
+- **Post-Wake Listening Window After Wake-Word Tail Spill (`stt.py`, `const.py`)**: When a wake word's trailing syllable spills up to `0.6s` past the `2.0s` pre-roll boundary and speculative verification confirms a wake-only prefix (`is_wake_and_pause_turn`), command VAD (`in_speech`) is reset once the wake tail subsides so users waiting for the listening LED ring (`StreamingSpeechVerified`) receive the full `5.0s` post-wake pause window instead of being cut off after `1.2s` of end-of-speech silence.
+- **Fast-Abort Accounting on Empty Speculative Transcripts (`stt.py`)**: Incremented `eval_state["completed_count"]` when `_transcribe_partial_slice` returns an empty transcript (`""`) so unverified non-speech noise triggers abort after `1.5s` (`UNVERIFIED_INITIAL_SPEECH_TIMEOUT_SECONDS`) instead of holding the microphone open for `5.0s`.
+
 ## [0.8.4] - 2026-11-07
 
 ### Fixed

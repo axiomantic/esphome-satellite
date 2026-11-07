@@ -3056,6 +3056,142 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(speculative_slice_lengths[0], 64000)
         mock_notify.assert_called_once()
 
+    async def test_wake_word_tail_spill_resets_command_vad_when_waiting_for_listening_light(self):
+        """Wake word spilling past 2.0s pre-roll must reset command VAD on wake-only verification so user can wait >1.2s for LED ring before speaking."""
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.kitchen"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        async def downstream_wake_and_wait_handler(metadata, stream):
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            full_pcm = b"".join(chunks)
+            if len(chunks) == 1:
+                # Speculative slice contains only the wake word
+                return SpeechResult(text="Mr. Clemens.", result=SpeechResultState.SUCCESS)
+            # Full stream must contain the deferred command marker b"\xcc\x07" spoken after 2.0s of post-wake pause
+            if b"\xcc\x07" in full_pcm:
+                return SpeechResult(
+                    text="Mr. Clemens, tell me a joke.",
+                    result=SpeechResultState.SUCCESS,
+                )
+            return SpeechResult(text="Mr. Clemens.", result=SpeechResultState.SUCCESS)
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=downstream_wake_and_wait_handler
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+        self.mock_client.classify_addressing = AsyncMock(
+            return_value=(CHOICE_ADDRESSED, 1.0, 10.0)
+        )
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        async def wake_tail_then_wait_for_light_stream():
+            # 0.0s - 1.2s: quiet room floor (120 x 10ms)
+            for _ in range(120):
+                yield b"\x90\x01" * 160
+            # 1.2s - 2.3s: wake word spilling 300ms past 2.0s pre-roll boundary (110 x 10ms)
+            for idx in range(110):
+                yield b"\xaa\x05" * 160
+                if idx >= 80:
+                    await asyncio.sleep(0.001)
+            # 2.3s - 4.3s: user pauses 2.0s (>1.2s END_OF_SPEECH_SILENCE_SECONDS) waiting for LED ring to light up
+            for _ in range(200):
+                yield b"\x90\x01" * 160
+                await asyncio.sleep(0.001)
+            # 4.3s - 5.0s: user sees LED ring and speaks command (70 x 10ms)
+            for _ in range(70):
+                yield b"\xcc\x07" * 160
+                await asyncio.sleep(0.001)
+            # 5.0s - 6.3s: 1.3s end-of-speech silence completes stream
+            for _ in range(130):
+                yield b"\x90\x01" * 160
+                await asyncio.sleep(0.001)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock), \
+             patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock) as mock_notify:
+            res = await stt_proxy.async_process_audio_stream(
+                metadata, wake_tail_then_wait_for_light_stream()
+            )
+
+        mock_notify.assert_called_once()
+        self.assertEqual(res.text, "Mr. Clemens, tell me a joke.")
+
+    async def test_empty_speculative_transcript_increments_completed_count_for_fast_abort(self):
+        """Empty ASR transcript ('') on 2.0s pre-roll must increment completed_count so unverified noise fast-aborts at 1.5s."""
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.kitchen"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        stream_elapsed_chunks = 0
+
+        async def downstream_empty_handler(metadata, stream):
+            nonlocal stream_elapsed_chunks
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+                stream_elapsed_chunks += 1
+            return SpeechResult(text="", result=SpeechResultState.SUCCESS)
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(
+            side_effect=downstream_empty_handler
+        )
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        async def noise_only_stream():
+            # 2.0s pre-roll (200 x 10ms)
+            for _ in range(200):
+                yield b"\x90\x01" * 160
+            # Up to 4.0s post-wake silence (400 x 10ms); should fast-abort at ~1.5s (150 chunks)
+            for _ in range(400):
+                yield b"\x90\x01" * 160
+                await asyncio.sleep(0.001)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock):
+            res = await stt_proxy.async_process_audio_stream(metadata, noise_only_stream())
+
+        self.assertEqual(res.text, "")
+        # Should abort around 200 (pre-roll) + 150 (1.5s unverified timeout) = ~350 chunks, well below 600
+        self.assertLess(stream_elapsed_chunks, 420)
+
 
 if __name__ == "__main__":
     unittest.main()

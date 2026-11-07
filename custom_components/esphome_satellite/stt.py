@@ -57,6 +57,7 @@ from .const import (
     CONF_SLOT1_ALIASES,
     CONF_SLOT2_ALIASES,
     expand_wake_phrase,
+    is_wake_and_pause_turn,
 )
 from .client_factory import create_gatekeeper_client, GatekeeperClient
 from .systemone_client import GatekeeperClientError, SystemOneClientError
@@ -318,6 +319,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
             initial_silence_elapsed = 0.0
             end_silence_elapsed = 0.0
             total_elapsed = 0.0
+            post_calibration_speech_sec = 0.0
             speech_consec_chunks = 0
             preroll_rms_samples: list[float] = []
             adaptive_speech_threshold = SPEECH_RMS_THRESHOLD
@@ -379,6 +381,19 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     else:
                         # Evaluate post-calibration command VAD
                         is_speech = chunk_rms >= adaptive_speech_threshold
+                        if is_speech:
+                            post_calibration_speech_sec += chunk_sec
+                        elif eval_state.get("reset_command_vad", False):
+                            eval_state.pop("reset_command_vad", False)
+                            if post_calibration_speech_sec <= 0.6 and total_elapsed <= 3.2:
+                                # Wake-only verification completed after trailing wake-word syllables
+                                # spilled past the 2.0s pre-roll boundary. Reset command VAD once the
+                                # wake tail subsides so the user gets the full 5.0s listening window
+                                # after the LED ring lights up.
+                                in_speech = False
+                                initial_silence_elapsed = 0.0
+                                end_silence_elapsed = 0.0
+                                speech_consec_chunks = 0
 
                         if not in_speech:
                             if is_speech:
@@ -1221,6 +1236,12 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                                     rtt_ms,
                                     partial_text,
                                 )
+                                if (
+                                    eval_state is not None
+                                    and target_wake_word
+                                    and is_wake_and_pause_turn(partial_text, target_wake_word, all_aliases)
+                                ):
+                                    eval_state["reset_command_vad"] = True
                                 verified_event.set()
                                 if sat_id and partial_text:
                                     self._verified_wake_transcripts[sat_id] = (
@@ -1246,6 +1267,16 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                             _LOGGER.warning(
                                 "[Speculative STT] Speculative classification check failed: %s",
                                 err,
+                            )
+                    elif partial_text is not None:
+                        _LOGGER.info(
+                            "[Speculative STT] Partial slice (%dms) contained no speech for '%s'",
+                            int(last_eval_len * 1000 / max(1, bytes_per_second)),
+                            target_wake_word or "assistant",
+                        )
+                        if eval_state is not None:
+                            eval_state["completed_count"] = (
+                                int(eval_state.get("completed_count", 0)) + 1
                             )
                 finally:
                     if eval_state is not None:
