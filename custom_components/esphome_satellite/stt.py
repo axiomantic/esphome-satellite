@@ -299,10 +299,10 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         num_channels = int(getattr(channels, "value", channels))
         bytes_per_sec = max(1, rate_hz * bytes_per_sample * num_channels)
 
-        chunk_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=128)
+        chunk_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=512)
         verified_event = asyncio.Event()
         unverified_abort_event = asyncio.Event()
-        eval_state: dict[str, int | bool] = {"in_flight": False, "completed_count": 0}
+        eval_state: dict[str, int | float | bool] = {"in_flight": False, "completed_count": 0}
         captured_chunks: list[bytes] = []
 
         sat_id, target_ww = self._resolve_active_satellite_context()
@@ -1071,6 +1071,7 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
         max_speculative_bytes = int(bytes_per_second * 3.6)  # Stop speculative partial STT after 3.6s (at most 2 post-preroll slices)
         last_eval_len = 0
         full_preroll_evaluated = False
+        post_preroll_tail_evaluated = False
 
         sat_id, target_wake_word = self._resolve_active_satellite_context()
         _LOGGER.debug(
@@ -1124,17 +1125,22 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                     pcm_accumulator.extend(extra)
 
             # Once the full 2.0s pre-roll has been evaluated, only re-evaluate if post-wake
-            # audio contains actual speech above the adaptive speech threshold, preventing continuous
+            # audio contains actual speech above the adaptive speech threshold (or one post-preroll
+            # tail check if the pre-roll itself contained high-energy wake speech), preventing continuous
             # re-evaluation of post-wake silence or HVAC noise from starving can_fast_abort_unverified.
             has_new_speech = True
+            effective_rms_thresh = float(
+                eval_state.get("speech_rms_threshold", SPEECH_RMS_THRESHOLD)
+                if eval_state is not None
+                else SPEECH_RMS_THRESHOLD
+            )
             if full_preroll_evaluated and len(pcm_accumulator) > last_eval_len:
                 new_slice = bytes(pcm_accumulator[last_eval_len:])
-                effective_rms_thresh = float(
-                    eval_state.get("speech_rms_threshold", SPEECH_RMS_THRESHOLD)
-                    if eval_state is not None
-                    else SPEECH_RMS_THRESHOLD
-                )
                 has_new_speech = self._calculate_pcm_rms(new_slice) >= effective_rms_thresh
+                if not has_new_speech and not post_preroll_tail_evaluated:
+                    preroll_slice = bytes(pcm_accumulator[: min(len(pcm_accumulator), pre_roll_bytes)])
+                    if self._calculate_pcm_rms(preroll_slice) >= effective_rms_thresh * 1.35:
+                        has_new_speech = True
 
             should_eval_full_preroll = (
                 not full_preroll_evaluated
@@ -1156,6 +1162,8 @@ class ESPHomeSatelliteSpeculativeSTT(SpeechToTextEntity):
                 )
                 and len(pcm_accumulator) <= max_speculative_bytes
             ):
+                if full_preroll_evaluated:
+                    post_preroll_tail_evaluated = True
                 last_eval_len = len(pcm_accumulator)
                 if last_eval_len >= pre_roll_bytes or eof_seen:
                     full_preroll_evaluated = True

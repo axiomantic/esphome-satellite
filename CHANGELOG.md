@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-11-07
+
+### Fixed
+- **Speculative Pre-Roll `chunk_queue` Burst Capacity (`stt.py`)**: Increased `chunk_queue` capacity from `128` to `512` chunks (`5.12s` of 10ms `MicroVadSpeexEnhancer` frames) so synchronous 200-chunk (`2.0s`, `64,000`-byte) pre-roll bursts arriving from Home Assistant's `AssistPipeline` never hit `QueueFull` at chunk `128` (`1.28s`) and drop the wake word before `_speculative_verification_loop` begins draining the queue.
+- **Post-Preroll Tail Verification for Wake-and-Pause Turns (`stt.py`)**: Enabled a single post-preroll speculative evaluation (`2.8s`) when the `2.0s` pre-roll contained high-energy speech (`>= 1.35x` speech RMS threshold) even if the user immediately pauses into silence after the wake word.
+
 ## [0.8.3] - 2026-11-02
 
 ### Fixed

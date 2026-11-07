@@ -2983,6 +2983,79 @@ class TestDynamicPhoneticWakeGate(unittest.IsolatedAsyncioTestCase):
             # Oldest recording from older_pool was pruned instead
             self.assertFalse(oldest_wav.exists())
 
+    async def test_preroll_200_10ms_chunks_burst_does_not_overflow_chunk_queue(self):
+        """A synchronous burst of 200 x 10ms (320-byte) pre-roll chunks must not drop the wake word via QueueFull."""
+        from custom_components.esphome_satellite.stt import ESPHomeSatelliteSpeculativeSTT
+        from homeassistant.components.stt import (
+            SpeechMetadata,
+            SpeechResult,
+            SpeechResultState,
+        )
+
+        mock_satellite_state = MagicMock()
+        mock_satellite_state.entity_id = "assist_satellite.kitchen"
+        mock_satellite_state.state = "listening"
+        mock_satellite_state.attributes = {"wake_word": "Mr. Clemens"}
+        self.mock_hass.states.async_all = MagicMock(return_value=[mock_satellite_state])
+
+        speculative_slice_lengths: list[int] = []
+
+        async def downstream_burst_handler(metadata, stream):
+            chunks = []
+            async for chunk in stream:
+                chunks.append(chunk)
+            total_bytes = sum(len(c) for c in chunks)
+            if len(chunks) == 1:
+                speculative_slice_lengths.append(total_bytes)
+                # Ensure all 200 pre-roll chunks (64,000 bytes) reached the first speculative slice without QueueFull drops
+                if total_bytes >= 64000 and b"\xaa\x05" in chunks[0][40960:64000]:
+                    return SpeechResult(text="Mr. Clemens.", result=SpeechResultState.SUCCESS)
+                return SpeechResult(text="Mr. Clinton.", result=SpeechResultState.SUCCESS)
+            return SpeechResult(text="Mr. Clemens.", result=SpeechResultState.SUCCESS)
+
+        mock_downstream = MagicMock()
+        mock_downstream.async_process_audio_stream = AsyncMock(side_effect=downstream_burst_handler)
+        self.mock_hass.data["stt"] = MagicMock()
+        self.mock_hass.data["stt"].get_entity = MagicMock(return_value=mock_downstream)
+
+        async def classify_side_effect(text, **kwargs):
+            if "Clemens" in text:
+                return (CHOICE_ADDRESSED, 1.0, 10.0)
+            return (CHOICE_AMBIENT, 0.0, 10.0)
+
+        self.mock_client.classify_addressing = AsyncMock(side_effect=classify_side_effect)
+
+        stt_proxy = ESPHomeSatelliteSpeculativeSTT(
+            self.mock_hass,
+            self.mock_entry,
+            self.mock_client,
+            speculative_chunk_ms=500,
+        )
+
+        # Yield 200 x 10ms (320B) chunks synchronously without awaiting between chunks (simulating MicroVadSpeexEnhancer burst),
+        # where chunks 128..199 (bytes 40,960..64,000) contain the wake word marker b"\xaa\x05"
+        async def preroll_10ms_burst_stream():
+            for idx in range(200):
+                if idx >= 128:
+                    yield b"\xaa\x05" * 160  # 320 bytes (10ms) wake word region
+                else:
+                    yield b"\xc8\x00" * 160  # 320 bytes (10ms) pre-wake floor
+            # Followed by 1.3s of post-wake pause (130 x 10ms chunks)
+            for _ in range(130):
+                yield b"\x64\x00" * 160
+                await asyncio.sleep(0.001)
+
+        metadata = SpeechMetadata()
+        with patch.object(stt_proxy, "_async_save_recorded_audio", new_callable=AsyncMock), \
+             patch.object(stt_proxy, "_notify_satellite_verified", new_callable=AsyncMock) as mock_notify:
+            res = await stt_proxy.async_process_audio_stream(metadata, preroll_10ms_burst_stream())
+
+        self.assertEqual(res.result, SpeechResultState.SUCCESS)
+        self.assertEqual(res.text, "Mr. Clemens.")
+        self.assertGreaterEqual(len(speculative_slice_lengths), 1)
+        self.assertGreaterEqual(speculative_slice_lengths[0], 64000)
+        mock_notify.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
